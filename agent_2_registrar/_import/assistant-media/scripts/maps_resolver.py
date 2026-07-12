@@ -37,6 +37,59 @@ COMPLEX_REGEXES = [
 # Центр Phuket для location bias
 PHUKET_BIAS = "circle:45000@7.8804,98.3923"
 
+# Центроиды районов Пхукета — офлайн-определение района по координатам объявления
+PHUKET_DISTRICT_CENTROIDS: dict[str, tuple[float, float]] = {
+    "Mai Khao": (8.1440, 98.3070),
+    "Nai Yang": (8.0910, 98.3010),
+    "Thalang": (8.0330, 98.3390),
+    "Layan": (8.0170, 98.2960),
+    "Bang Tao": (7.9925, 98.2957),
+    "Laguna": (7.9887, 98.2997),
+    "Choeng Thale": (7.9800, 98.3050),
+    "Surin": (7.9770, 98.2790),
+    "Kamala": (7.9530, 98.2830),
+    "Kathu": (7.9174, 98.3324),
+    "Patong": (7.8965, 98.2966),
+    "Phuket Town": (7.8804, 98.3923),
+    "Karon": (7.8460, 98.2940),
+    "Chalong": (7.8264, 98.3390),
+    "Kata": (7.8200, 98.2980),
+    "Cape Panwa": (7.8060, 98.4030),
+    "Rawai": (7.7717, 98.3269),
+    "Nai Harn": (7.7770, 98.3050),
+}
+
+# Generic-значения района, которые можно перекрывать районом из координат
+_GENERIC_DISTRICTS = {"phuket", "phuket, thailand", "пхукет"}
+
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    import math
+
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def district_from_coords(lat: float, lng: float, max_km: float = 25.0) -> str | None:
+    """Ближайший район Пхукета по координатам. None — если точка слишком далеко."""
+    best_name, best_dist = None, float("inf")
+    for name, (clat, clng) in PHUKET_DISTRICT_CENTROIDS.items():
+        d = _haversine_km(lat, lng, clat, clng)
+        if d < best_dist:
+            best_name, best_dist = name, d
+    if best_dist > max_km:
+        return None
+    return best_name
+
+
+def coords_point_url(lat: float, lng: float) -> str:
+    """Ссылка на точку в Google Maps по координатам."""
+    return f"https://www.google.com/maps?q={lat:.6f},{lng:.6f}"
+
 
 @dataclass
 class MapsResult:
@@ -281,9 +334,18 @@ def resolve_google_maps(
     *,
     known_projects: list[str] | None = None,
     api_key: str | None = None,
+    coords: tuple[float, float] | None = None,
 ) -> MapsResult:
     complex_name = extract_complex_name(description, known_projects)
     location_line = extract_location_line(description)
+
+    # Координаты с карты объявления (Airbnb/FB) — самый надёжный источник:
+    # точка на карте + район по ближайшему центроиду.
+    if coords:
+        coord_district = district_from_coords(*coords)
+        if coord_district:
+            district = coord_district
+
     query = build_search_query(
         complex_name=complex_name,
         district=district,
@@ -293,6 +355,9 @@ def resolve_google_maps(
 
     method = "search_url"
     url = _search_url(query)
+    if coords:
+        url = coords_point_url(*coords)
+        method = "coords_point"
     place_name = None
     place_address = None
     place_id = None

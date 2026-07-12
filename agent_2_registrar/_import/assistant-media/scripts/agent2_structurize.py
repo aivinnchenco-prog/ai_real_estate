@@ -55,6 +55,30 @@ def extract_source_url(source: str) -> str | None:
     return m.group(0).rstrip(".,)") if m else None
 
 
+def load_parsed_meta(session_path: Path) -> dict:
+    """parsed.json сессии от Агента 1 (source, координаты, владелец и т.д.)."""
+    parsed_path = session_path / "parsed.json"
+    if parsed_path.exists():
+        try:
+            return json.loads(parsed_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+    return {}
+
+
+def extract_coords(meta: dict) -> tuple[float, float] | None:
+    """Координаты объявления из parsed.json (карта Airbnb/FB)."""
+    loc = meta.get("location") or {}
+    lat = loc.get("latitude", meta.get("latitude"))
+    lng = loc.get("longitude", meta.get("longitude"))
+    try:
+        if lat is not None and lng is not None:
+            return float(lat), float(lng)
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
 def detect_source_prefix(session_id: str, source: str, session_path: Path) -> str:
     """F (Facebook) / A (Airbnb) — из parsed.json сессии, ID сессии или строки источника."""
     parsed_path = session_path / "parsed.json"
@@ -204,12 +228,17 @@ def main() -> int:
             source=args.source,
             fx=cfg.get("fx"),
         )
+        parsed_meta = load_parsed_meta(session_path)
         maps = resolve_google_maps(
             description,
             draft.district,
             draft.title,
             known_projects=cfg.get("known_projects"),
+            coords=extract_coords(parsed_meta),
         )
+        # Район из координат карты (Google Maps) приоритетнее текстового
+        if maps.district:
+            draft.district = maps.district
         draft.housing_type = detect_housing_type(
             description,
             title=draft.title,
