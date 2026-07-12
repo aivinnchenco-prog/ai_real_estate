@@ -132,6 +132,14 @@ export function pageObjectId(page, fields) {
   return page.properties?.[fields.object_id]?.rich_text?.[0]?.plain_text?.trim() || null;
 }
 
+// «Статус для Агент_3»: ДА/НЕТ — брать ли объект на монтаж. Пусто = ДА.
+export function pageMontageEnabled(page, fields) {
+  if (!fields.montage) return true;
+  const value = readSelect(page, fields.montage);
+  if (!value) return true;
+  return !["НЕТ", "NO", "NET"].includes(value.trim().toUpperCase());
+}
+
 export async function queryLatestPages(fields, { limit = 20 } = {}) {
   const sorts = fields.created_at
     ? [{ property: fields.created_at, direction: "descending" }]

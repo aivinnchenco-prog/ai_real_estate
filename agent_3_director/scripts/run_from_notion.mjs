@@ -20,6 +20,7 @@ import {
   pageSeedanceUrl,
   pageTitle,
   pageObjectId,
+  pageMontageEnabled,
   pageVideoOverlayMeta,
   setSeedanceUrl,
   setError,
@@ -94,6 +95,10 @@ async function resolvePage(fields, { objectId, latest }) {
   for (const page of pages) {
     const id = pageObjectId(page, fields);
     if (!id) continue;
+    if (!pageMontageEnabled(page, fields)) {
+      console.warn(`Skip ${id}: Статус для Агент_3 = НЕТ (монтаж выключен)`);
+      continue;
+    }
     const prefix = `${id}/photos/`;
     const keys = await listKeys(prefix);
     const photoKeys = keys.filter((k) => /\.(jpe?g|png|webp)$/i.test(k));
@@ -116,6 +121,11 @@ async function main() {
   const allowedStatuses = notionCfg.statuses?.allowed || ["ready_for_video", "ready_to_post", "video_failed"];
 
   const { page, objectId } = await resolvePage(fields, lookup);
+
+  if (!pageMontageEnabled(page, fields)) {
+    console.log(`Skip ${objectId}: «Статус для Агент_3» = НЕТ — объект только для базы, монтаж и Seedance не нужны.`);
+    process.exit(0);
+  }
 
   console.log(`\n=== Seedance Agent: ${objectId} ===\n`);
 

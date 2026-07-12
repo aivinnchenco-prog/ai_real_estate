@@ -11,7 +11,8 @@
     "price_yearly": "Цена за год",
     "district": "Район",
     "video_seedance": "video_url_Seedance",
-    "last_error": "last_error"
+    "last_error": "last_error",
+    "montage": "Статус для Агент_3"
   },
   "overlay_fields": {
     "housing_type": "Тип жилья",
