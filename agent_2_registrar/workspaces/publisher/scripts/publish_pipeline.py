@@ -357,7 +357,7 @@ def publish_one(
     video_url, video_field = pick_video_url(page, fields, platform, mapping)
     caption = build_caption(page, fields, platform, config)
 
-    photo_field = fields.get("photo", "Фото ")
+    photo_field = fields.get("photo", "Фото")
     gallery_url = get_prop(page, photo_field, "url")
     carousel_cfg = config.get("carousel", {})
     carousel_urls: list[str] = []
