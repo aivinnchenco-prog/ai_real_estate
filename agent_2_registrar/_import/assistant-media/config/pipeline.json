@@ -4,6 +4,11 @@
     "example": "F_20260712_001",
     "description": "Префикс источника (F — Facebook, A — Airbnb) + год + месяц + день + порядковый номер объекта за день"
   },
+  "fx": {
+    "usd_to_thb": 36.0,
+    "eur_to_thb": 39.0,
+    "description": "Курсы для конвертации залога/цен в THB, обновлять вручную по необходимости"
+  },
   "batch_wait_seconds": 150,
   "min_video_seconds": 15,
   "frame_duration_seconds": 2.5,

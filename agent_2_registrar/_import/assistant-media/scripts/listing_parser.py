@@ -78,15 +78,27 @@ def extract_district(description: str, districts: list[str]) -> str:
     return "Phuket, Thailand"
 
 
-def _parse_deposit(text: str) -> float | None:
+# Курсы по умолчанию; переопределяются блоком "fx" в config/pipeline.json
+DEFAULT_FX = {"usd_to_thb": 36.0, "eur_to_thb": 39.0}
+
+
+def _parse_deposit(text: str, fx: dict | None = None) -> float | None:
+    """Залог всегда в THB. Если в описании сумма в USD/EUR — конвертируем по курсу."""
     m = re.search(
-        r"(?:deposit|депозит|залог)\s*[:\s]*(\d[\d\s,]*)\s*(?:usd|\$|eur|€|thb|฿|бат|rub|₽)?",
+        r"(?:deposit|депозит|залог)\s*[:\s]*([$€฿]?)\s*(\d[\d\s,]*)\s*(usd|\$|eur|€|thb|฿|бат|baht)?",
         text,
         re.I,
     )
-    if m:
-        return float(m.group(1).replace(" ", "").replace(",", ""))
-    return None
+    if not m:
+        return None
+    amount = float(m.group(2).replace(" ", "").replace(",", ""))
+    currency = ((m.group(1) or "") + (m.group(3) or "")).strip().lower()
+    rates = {**DEFAULT_FX, **(fx or {})}
+    if currency in ("usd", "$"):
+        return float(round(amount * float(rates["usd_to_thb"]), -2))
+    if currency in ("eur", "€"):
+        return float(round(amount * float(rates["eur_to_thb"]), -2))
+    return amount
 
 
 def _parse_rent_type(text: str, source: str) -> str | None:
@@ -124,6 +136,7 @@ def parse_listing(
     known_projects: list[str] | None = None,
     complex_name: str | None = None,
     source: str = "",
+    fx: dict | None = None,
 ) -> ListingDraft:
     title = extract_title(description)
     district = extract_district(description, districts)
@@ -160,7 +173,7 @@ def parse_listing(
         area=area,
         price_monthly=price_monthly,
         price_yearly=price_yearly,
-        deposit=_parse_deposit(description),
+        deposit=_parse_deposit(description, fx=fx),
         housing_type=housing_type,
         view=_parse_view(description),
         rent_type=_parse_rent_type(description, source),

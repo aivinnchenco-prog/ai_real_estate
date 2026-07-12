@@ -202,6 +202,7 @@ def main() -> int:
             districts=cfg["phuket_districts"],
             known_projects=cfg.get("known_projects"),
             source=args.source,
+            fx=cfg.get("fx"),
         )
         maps = resolve_google_maps(
             description,
