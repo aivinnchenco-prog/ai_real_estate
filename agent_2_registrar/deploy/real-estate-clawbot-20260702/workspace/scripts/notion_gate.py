@@ -18,12 +18,10 @@ class NotionListing:
     gallery_url: str | None
     video_vertical: str | None
     video_seedance: str | None
-    video_square: str | None
-    video_wide: str | None
 
     @property
     def has_videos(self) -> bool:
-        return bool(self.video_vertical or self.video_seedance or self.video_square or self.video_wide)
+        return bool(self.video_vertical or self.video_seedance)
 
 
 def _rich_text(prop: dict) -> str:
@@ -51,8 +49,6 @@ def parse_listing_page(page: dict[str, Any], fields: dict[str, str]) -> NotionLi
         gallery_url=(props.get(fields["photo"], {}) or {}).get("url"),
         video_vertical=(props.get(fields["video_vertical"], {}) or {}).get("url"),
         video_seedance=(props.get(fields["video_seedance"], {}) or {}).get("url"),
-        video_square=(props.get(fields["video_square"], {}) or {}).get("url"),
-        video_wide=(props.get(fields["video_wide"], {}) or {}).get("url"),
     )
 
 

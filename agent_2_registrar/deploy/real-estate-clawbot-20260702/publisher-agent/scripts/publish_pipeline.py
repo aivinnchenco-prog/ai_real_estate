@@ -26,8 +26,6 @@ PUBLORA_BASE = "https://api.publora.com/api/v1"
 
 VIDEO_FIELDS = {
     "vertical": "video_url_vertical",
-    "square": "video_url_square",
-    "wide": "video_url_wide",
 }
 
 PLATFORM_ENV = {

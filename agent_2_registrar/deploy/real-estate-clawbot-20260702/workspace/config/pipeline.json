@@ -54,8 +54,6 @@
       "price_yearly": "Цена за год",
       "video_vertical": "video_url_vertical",
       "video_seedance": "video_url_Seedance",
-      "video_square": "video_url_square",
-      "video_wide": "video_url_wide",
       "last_error": "last_error"
     },
     "statuses": {

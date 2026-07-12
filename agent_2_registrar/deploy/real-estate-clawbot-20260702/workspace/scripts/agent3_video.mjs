@@ -218,9 +218,7 @@ async function main() {
     const properties = {
       [fields.status]: { status: { name: statuses.video_done } },
     };
-    if (videoUrls["1x1"]) properties[fields.video_square] = { url: videoUrls["1x1"] };
     if (videoUrls["9x16"]) properties[fields.video_vertical] = { url: videoUrls["9x16"] };
-    if (videoUrls["3x4"]) properties[fields.video_wide] = { url: videoUrls["3x4"] };
 
     await notionUpdatePage(page.id, properties);
 
