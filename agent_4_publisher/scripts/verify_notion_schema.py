@@ -33,7 +33,7 @@ EXPECTED_TYPES: dict[str, str] = {
     "caption": "rich_text",
     "caption_social": "rich_text",
     "caption_telegram": "rich_text",
-    "video_url_seedance": "url",
+    "video_url_Seedance": "url",
     "video_url_vertical": "url",
     "metricool_post_id": "rich_text",
     "agent6_locked": "checkbox",

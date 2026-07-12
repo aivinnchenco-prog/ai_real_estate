@@ -32,7 +32,7 @@ METRICOOL_BASE = "https://app.metricool.com/api"
 
 VIDEO_FIELDS = {
     "vertical": "video_url_vertical",
-    "seedance": "video_url_seedance",
+    "seedance": "video_url_Seedance",
 }
 
 PLATFORM_NETWORK = {
@@ -311,7 +311,7 @@ def network_for(platform: str) -> str:
 
 def pick_video_url(page: dict[str, Any], fields: dict[str, str], platform: str, mapping: dict[str, str]) -> tuple[str, str]:
     fmt = mapping.get(platform, "seedance")
-    field_key = VIDEO_FIELDS.get(fmt, "video_url_seedance")
+    field_key = VIDEO_FIELDS.get(fmt, "video_url_Seedance")
     field_name = fields.get(field_key, field_key)
     url = get_prop(page, field_name, "url")
     if not url and fmt == "seedance":

@@ -29,7 +29,7 @@ PUBLORA_BASE = "https://api.publora.com/api/v1"
 
 VIDEO_FIELDS = {
     "vertical": "video_url_vertical",
-    "seedance": "video_url_seedance",
+    "seedance": "video_url_Seedance",
 }
 
 PLATFORM_ENV = {
@@ -188,7 +188,7 @@ def notion_update_fields(page_id: str, fields: dict[str, Any]) -> None:
 
 def pick_video_url(page: dict[str, Any], fields: dict[str, str], platform: str, mapping: dict[str, str]) -> tuple[str, str]:
     fmt = mapping.get(platform, "seedance")
-    field_key = VIDEO_FIELDS.get(fmt, "video_url_seedance")
+    field_key = VIDEO_FIELDS.get(fmt, "video_url_Seedance")
     field_name = fields.get(field_key, field_key)
     url = get_prop(page, field_name, "url")
     if not url and fmt == "seedance":
