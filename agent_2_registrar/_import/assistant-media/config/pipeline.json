@@ -9,6 +9,7 @@
     "eur_to_thb": 39.0,
     "description": "Курсы для конвертации залога/цен в THB, обновлять вручную по необходимости"
   },
+  "price_months_ahead": 12,
   "batch_wait_seconds": 150,
   "min_video_seconds": 15,
   "frame_duration_seconds": 2.5,
@@ -59,7 +60,12 @@
       "price_yearly": "Цена за год",
       "video_vertical": "video_url_vertical",
       "video_seedance": "video_url_Seedance",
-      "last_error": "last_error"
+      "last_error": "last_error",
+      "owner": "Владелец / Агент",
+      "telegram_contact": "Telegram контакт",
+      "whatsapp_contact": "WhatsApp контакт",
+      "calendar": "Календарь",
+      "monthly_prices": "monthly_prices"
     },
     "statuses": {
       "after_structurize": "ready_for_video",

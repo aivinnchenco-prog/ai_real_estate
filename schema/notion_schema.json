@@ -73,6 +73,7 @@
 
     {"exact_name": "last_error", "type": "rich_text", "writers": ["agent_2_registrar", "agent_3_director", "agent_4_publisher"], "readers": ["manual"]},
     {"exact_name": "error_count", "type": "number", "writers": ["agent_3_director", "agent_4_publisher"], "readers": ["agent_3_director"]},
+    {"exact_name": "monthly_prices", "type": "rich_text", "writers": ["agent_2_registrar"], "readers": ["agent_6_qualifier"], "$comment": "JSON: {\"2026-09\": {\"price\": 107100, \"status\": \"monthly|prorated|insufficient_data\", ...}}"},
     {"exact_name": "publisher_locked", "type": "checkbox", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
     {"exact_name": "publisher_taken_at", "type": "date", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
     {"exact_name": "publisher_mode", "type": "select", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},

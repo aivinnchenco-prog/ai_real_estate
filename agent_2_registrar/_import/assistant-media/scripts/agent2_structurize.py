@@ -118,6 +118,44 @@ def resolve_object_id(
     return object_id
 
 
+def format_owner_line(owner: dict) -> str:
+    """«Владелец / Агент»: имя хозяина, компания и найденные контакты."""
+    parts = []
+    if owner.get("host_name"):
+        parts.append(owner["host_name"])
+    if owner.get("company"):
+        src = owner.get("company_source", "")
+        parts.append(f"Компания: {owner['company']}" + (f" ({src})" if src else ""))
+    contacts = owner.get("contacts") or {}
+    if contacts.get("phones"):
+        parts.append("Тел: " + ", ".join(contacts["phones"][:3]))
+    if contacts.get("emails"):
+        parts.append("Email: " + ", ".join(contacts["emails"][:2]))
+    if contacts.get("links"):
+        parts.append("Сайт: " + ", ".join(contacts["links"][:2]))
+    return " | ".join(parts)[:1900]
+
+
+def apply_parsed_meta(properties: dict, parsed_meta: dict, nf: dict) -> None:
+    """Данные Airbnb-парсера (parsed.json): владелец, календарь, цены по месяцам."""
+    if not parsed_meta:
+        return
+
+    owner = parsed_meta.get("owner") or {}
+    owner_line = format_owner_line(owner)
+    if owner_line and nf.get("owner"):
+        properties[nf["owner"]] = NotionCRM.build_text(owner_line)
+
+    calendar_url = parsed_meta.get("calendar_url") or parsed_meta.get("source_url")
+    if calendar_url and nf.get("calendar"):
+        properties[nf["calendar"]] = NotionCRM.build_url(calendar_url)
+
+    monthly = parsed_meta.get("monthly_prices") or {}
+    if monthly and nf.get("monthly_prices"):
+        blob = json.dumps(monthly, ensure_ascii=False, separators=(",", ":"))
+        properties[nf["monthly_prices"]] = NotionCRM.build_text(blob[:1900])
+
+
 def build_notion_properties(
     *,
     draft,
@@ -312,6 +350,7 @@ def main() -> int:
             caption_fb=caption_fb,
             source=args.source,
         )
+        apply_parsed_meta(properties, parsed_meta, nf)
 
         result = {
             "object_id": object_id,
