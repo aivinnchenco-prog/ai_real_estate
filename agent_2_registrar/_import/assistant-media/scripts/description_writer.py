@@ -141,6 +141,7 @@ def build_context(
     contacts: dict,
     parsed_meta: dict | None = None,
     complex_name: str | None = None,
+    region: str = "Пхукет",
 ) -> dict:
     """Все подстановки для обоих промптов."""
     max_guests, guests_explicit = resolve_max_guests(draft, parsed_meta)
@@ -150,7 +151,8 @@ def build_context(
         "property_type": draft.housing_type or "Жильё",
         "rooms": draft.rooms or "",
         "bathrooms": "",
-        "district": draft.district or "Пхукет",
+        "region": region,
+        "district": draft.district or region,
         "price_monthly": f"{draft.price_monthly:,.0f}".replace(",", " ") if draft.price_monthly else "",
         "price_yearly": f"{draft.price_yearly:,.0f}".replace(",", " ") if draft.price_yearly else "",
         "deposit": f"{draft.deposit:,.0f} ฿".replace(",", " ") if draft.deposit else "нет данных",
@@ -193,7 +195,8 @@ def template_long(ctx: dict) -> str:
 
 
 def template_social(ctx: dict) -> str:
-    parts = [f"{ctx['property_type']} в Аренду, Пхукет!"]
+    region = ctx.get("region", "Пхукет")
+    parts = [f"{ctx['property_type']} в Аренду, {region}!"]
     if ctx["project_name"]:
         hook = str(ctx["project_name"]).upper()
         if ctx["rooms"]:
@@ -201,7 +204,10 @@ def template_social(ctx: dict) -> str:
         if ctx["view"]:
             hook += f" с видом: {ctx['view']}"
         parts.append(hook + " 🌴")
-    parts.append(f"{ctx['district']}, Пхукет.")
+    if ctx["district"] != region:
+        parts.append(f"{ctx['district']}, {region}.")
+    else:
+        parts.append(f"{region}.")
     if ctx["rooms"]:
         parts.append(f"{ctx['rooms']} спальни, до {ctx['max_guests']} гостей.")
     if ctx["top_amenity"]:

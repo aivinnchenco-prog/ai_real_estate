@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import date
+from pathlib import Path
 
 import requests
 
@@ -16,30 +17,69 @@ from .models import Availability, Listing
 _API = "https://api.notion.com/v1"
 _VERSION = "2022-06-28"
 
-# Notion property -> наше поле
-PROP_TITLE = "Название объекта"
-PROP_OBJECT_ID = "Объект ID"
-PROP_DISTRICT = "Район"
-PROP_TYPE = "Тип жилья"
-PROP_ROOMS = "Количество комнат"
-PROP_PRICE_MONTH = "Цена за месяц"
-PROP_PETS = "Можно с питомцами"
-PROP_PHOTOS = "Фото"
-PROP_TG_POST = "post_url_telegram"
-PROP_SOURCE = "Источник объявления"
-PROP_CALENDAR = "Календарь"  # URL проверки доступности: Airbnb / календарь УК / «ручной»
-PROP_OWNER = "Владелец / Агент"
-PROP_OWNER_WA = "WhatsApp контакт"
-PROP_OWNER_TG = "Telegram контакт"
-# Новые колонки availability (создать в базе, см. AGENT_SPEC.md раздел 6)
-PROP_AVAILABILITY = "availability_status"
-PROP_BUSY_UNTIL = "Занято до"
-PROP_FUTURE_BOOKINGS = "Будущие брони"
-PROP_AVAIL_CHECKED = "availability_checked_at"
-# Чекбокс для внешнего агента-актуализатора: галочка = доступность подтверждена
-PROP_FREE_FLAG = "Свободно"
-# JSON цен по месяцам от Агента 1/2: {"2026-09": {"price": ..., "status": ...}}
-PROP_MONTHLY_PRICES = "monthly_prices"
+# Имена колонок Notion. Дефолты — живая схема базы; при переименовании
+# колонок достаточно переопределить нужные в config/notion_fields.json
+# (ключи как в _DEFAULT_FIELDS), код не трогать.
+_DEFAULT_FIELDS = {
+    "title": "Название объекта",
+    "object_id": "Объект ID",
+    "district": "Район",
+    "type": "Тип жилья",
+    "rooms": "Количество комнат",
+    "price_month": "Цена за месяц",
+    "pets": "Можно с питомцами",
+    "photos": "Фото",
+    "tg_post": "post_url_telegram",
+    "source": "Источник объявления",
+    # URL проверки доступности: Airbnb / календарь УК / «ручной»
+    "calendar": "Календарь",
+    "owner": "Владелец / Агент",
+    "owner_wa": "WhatsApp контакт",
+    "owner_tg": "Telegram контакт",
+    "availability": "availability_status",
+    "busy_until": "Занято до",
+    "future_bookings": "Будущие брони",
+    "avail_checked": "availability_checked_at",
+    # Чекбокс для внешнего агента-актуализатора: галочка = доступность подтверждена
+    "free_flag": "Свободно",
+    # JSON цен по месяцам от Агента 1/2: {"2026-09": {"price": ..., "status": ...}}
+    "monthly_prices": "monthly_prices",
+}
+
+
+def _load_fields() -> dict:
+    override = Path(__file__).resolve().parents[2] / "config" / "notion_fields.json"
+    fields = dict(_DEFAULT_FIELDS)
+    if override.exists():
+        try:
+            fields.update(json.loads(override.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            pass
+    return fields
+
+
+_F = _load_fields()
+
+PROP_TITLE = _F["title"]
+PROP_OBJECT_ID = _F["object_id"]
+PROP_DISTRICT = _F["district"]
+PROP_TYPE = _F["type"]
+PROP_ROOMS = _F["rooms"]
+PROP_PRICE_MONTH = _F["price_month"]
+PROP_PETS = _F["pets"]
+PROP_PHOTOS = _F["photos"]
+PROP_TG_POST = _F["tg_post"]
+PROP_SOURCE = _F["source"]
+PROP_CALENDAR = _F["calendar"]
+PROP_OWNER = _F["owner"]
+PROP_OWNER_WA = _F["owner_wa"]
+PROP_OWNER_TG = _F["owner_tg"]
+PROP_AVAILABILITY = _F["availability"]
+PROP_BUSY_UNTIL = _F["busy_until"]
+PROP_FUTURE_BOOKINGS = _F["future_bookings"]
+PROP_AVAIL_CHECKED = _F["avail_checked"]
+PROP_FREE_FLAG = _F["free_flag"]
+PROP_MONTHLY_PRICES = _F["monthly_prices"]
 
 
 def _headers() -> dict:

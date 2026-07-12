@@ -249,6 +249,15 @@
       "Название объекта"
     ]
   },
+  "publish_platforms": [
+    "instagram",
+    "tiktok",
+    "x",
+    "linkedin",
+    "facebook",
+    "youtube",
+    "threads"
+  ],
   "video_format_by_platform": {
     "instagram": "seedance",
     "tiktok": "seedance",

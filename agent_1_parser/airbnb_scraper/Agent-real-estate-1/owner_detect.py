@@ -19,6 +19,7 @@ import base64
 import json
 import re
 import urllib.request
+from pathlib import Path
 
 import config
 from CustomLogger import logger
@@ -143,7 +144,17 @@ def company_from_avatar(avatar_url: str) -> str | None:
     return None
 
 
-def search_company_contacts(company: str, region: str = "Phuket", max_results: int = 8) -> dict:
+def project_region() -> str:
+    """Регион для поисковых запросов — из общего config/project.json монорепы."""
+    candidate = Path(__file__).resolve().parents[3] / "config" / "project.json"
+    try:
+        data = json.loads(candidate.read_text(encoding="utf-8"))
+        return (data.get("region") or {}).get("search_en") or "Phuket"
+    except (OSError, ValueError):
+        return "Phuket"
+
+
+def search_company_contacts(company: str, region: str | None = None, max_results: int = 8) -> dict:
     """Веб-поиск контактов компании: телефоны, email, сайты (DuckDuckGo)."""
     contacts: dict = {"phones": [], "emails": [], "links": []}
     try:
@@ -155,7 +166,7 @@ def search_company_contacts(company: str, region: str = "Phuket", max_results: i
         logger.warning("owner_detect: ddgs/duckduckgo_search не установлен — веб-поиск пропущен")
         return contacts
 
-    query = f"{company} {region} contact"
+    query = f"{company} {region or project_region()} contact"
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))

@@ -50,7 +50,7 @@ PLATFORM_NETWORK = {
     "linkedin": "linkedin",
 }
 
-ALL_PUBLISH_PLATFORMS = [
+_DEFAULT_PUBLISH_PLATFORMS = [
     "instagram",
     "tiktok",
     "x",
@@ -96,6 +96,18 @@ def load_config() -> dict[str, Any]:
     config_path = package_root() / "config" / "publisher.json"
     with config_path.open(encoding="utf-8") as f:
         return json.load(f)
+
+
+def _publish_platforms_from_config() -> list[str]:
+    try:
+        platforms = load_config().get("publish_platforms")
+    except (OSError, json.JSONDecodeError):
+        platforms = None
+    return list(platforms) if platforms else list(_DEFAULT_PUBLISH_PLATFORMS)
+
+
+# Полный список платформ для публикации/синка URL; правится в config/publisher.json
+ALL_PUBLISH_PLATFORMS = _publish_platforms_from_config()
 
 
 def load_dotenv() -> None:

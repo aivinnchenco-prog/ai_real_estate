@@ -26,6 +26,7 @@ ROOT_ENV = ROOT / ".env"
 AGENT_ENV_MAP: dict[str, dict[str, str]] = {
     "agent_1_parser/airbnb_scraper/Agent-real-estate-1/.env": {
         "TG_BOT_TOKEN": "TG_BOT_TOKEN_AGENT1",
+        "ADMIN_TG_IDS": "ADMIN_TG_IDS",
         "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
         "ANTHROPIC_MODEL": "ANTHROPIC_MODEL",
         "CURSOR_API_KEY": "CURSOR_API_KEY",

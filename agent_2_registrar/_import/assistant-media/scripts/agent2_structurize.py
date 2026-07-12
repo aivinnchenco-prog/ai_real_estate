@@ -51,7 +51,19 @@ def load_dotenv() -> None:
 
 def load_config() -> dict:
     with (ROOT / "config" / "pipeline.json").open(encoding="utf-8") as f:
-        return json.load(f)
+        cfg = json.load(f)
+    # Общий config/project.json монорепы (контакты, регион) приоритетнее pipeline.json
+    for candidate in (ROOT.parents[2] / "config" / "project.json",):
+        if candidate.exists():
+            try:
+                project = json.loads(candidate.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                break
+            cfg["contacts"] = {**cfg.get("contacts", {}), **project.get("contacts", {})}
+            if project.get("region"):
+                cfg["region"] = project["region"]
+            break
+    return cfg
 
 
 def extract_source_url(source: str) -> str | None:
@@ -332,6 +344,7 @@ def main() -> int:
             contacts=cfg.get("contacts", {}),
             parsed_meta=parsed_meta,
             complex_name=maps.complex_name,
+            region=(cfg.get("region") or {}).get("name_ru", "Пхукет"),
         )
         caption_long = generate_long_description(desc_ctx)
         caption_tg = caption_long

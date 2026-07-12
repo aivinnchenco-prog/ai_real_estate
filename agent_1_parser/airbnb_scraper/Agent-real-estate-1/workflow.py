@@ -53,6 +53,7 @@ def _collect_prices(parser, url: str, timings: dict) -> dict:
         lambda check_in, check_out: parser.fetch_price_for_period(url, check_in, check_out),
         availability,
         months_ahead=months,
+        min_segment_days=config.PRICE_MIN_SEGMENT_DAYS,
     )
     timings['prices_sec'] = round(time.perf_counter() - t0, 1)
     ok = sum(1 for v in prices.values() if v.get('price'))

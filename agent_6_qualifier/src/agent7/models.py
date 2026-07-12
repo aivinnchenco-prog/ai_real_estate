@@ -1,10 +1,14 @@
 """Модели данных Agent 7 / Agent 8."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
 from typing import Optional
+
+# Допуск по бюджету клиента по умолчанию, % (env BUDGET_TOLERANCE_PCT)
+DEFAULT_BUDGET_TOLERANCE_PCT = float(os.getenv("BUDGET_TOLERANCE_PCT", "10"))
 
 
 class Availability(str, Enum):
@@ -129,7 +133,7 @@ class LeadProfile:
     check_out: Optional[date] = None
     stay_months: Optional[float] = None
     budget: Optional[float] = None
-    budget_tolerance_pct: float = 10.0     # по умолчанию ±10%; можно уточнить у клиента
+    budget_tolerance_pct: float = DEFAULT_BUDGET_TOLERANCE_PCT  # ±%, можно уточнить у клиента
     districts: list[str] = field(default_factory=list)
     guests: Optional[int] = None
     pets: Optional[bool] = None

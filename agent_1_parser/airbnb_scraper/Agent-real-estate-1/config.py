@@ -18,9 +18,9 @@ def _load_dotenv():
 _load_dotenv()
 
 TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN', '')
-# TG_CHAT_ID = 940592625
+# Telegram ID админов бота, через запятую (ADMIN_TG_IDS=111,222)
 ADMIN_IDS = [
-    5041767749,
+    int(x) for x in os.getenv('ADMIN_TG_IDS', '5041767749').replace(' ', '').split(',') if x
 ]
 
 GOOGLE_CREDENTIALS_FILE = os.getenv(
@@ -100,6 +100,8 @@ AGENT2_AUTORUN = os.getenv('AGENT2_AUTORUN', 'true').lower() in ('1', 'true', 'y
 # Сколько месяцев вперёд собирать цены (None = взять из pipeline.json Агента 2, дефолт 12)
 _pma = os.getenv('PRICE_MONTHS_AHEAD', '').strip()
 PRICE_MONTHS_AHEAD = int(_pma) if _pma else None
+# Минимальный непрерывный доступный отрезок (дней) для экстраполяции цены месяца
+PRICE_MIN_SEGMENT_DAYS = int(os.getenv('PRICE_MIN_SEGMENT_DAYS', '5'))
 
 # Распознавание владельца/агентства и веб-поиск контактов
 OWNER_DETECT_ENABLED = os.getenv('OWNER_DETECT_ENABLED', 'true').lower() in ('1', 'true', 'yes')
