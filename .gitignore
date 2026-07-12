@@ -32,8 +32,13 @@ __pycache__/
 .DS_Store
 **/.DS_Store
 
-# Airbnb scraper — отдельные git-репозитории, мигрируем отдельной задачей
-agent_1_parser/airbnb_scraper/
+# Airbnb scraper: канон — Agent-real-estate-1, остальное (старые дубликаты) игнорим
+agent_1_parser/airbnb_scraper/*
+!agent_1_parser/airbnb_scraper/Agent-real-estate-1/
+# Runtime-данные бота (логи активности, очередь задач)
+agent_1_parser/airbnb_scraper/Agent-real-estate-1/data/
+**/temp_images/
+**/Error.html
 
 # Архив локальной git-истории Seedance-агента
 .git-archived/

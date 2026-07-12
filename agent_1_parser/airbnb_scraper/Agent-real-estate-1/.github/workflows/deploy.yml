@@ -1,0 +1,69 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.repository == 'bvinnchenco-cmyk/Agent-real-estate'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build deploy archive
+        run: |
+          tar czf deploy.tgz \
+            --exclude='./.git' \
+            --exclude='./.env' \
+            --exclude='./credentials' \
+            --exclude='./data' \
+            --exclude='./.venv' \
+            --exclude='./Logs' \
+            --exclude='./temp_images' \
+            --exclude='./temp_voice' \
+            --exclude='./__pycache__' \
+            -C . .
+
+      - name: Deploy to server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$SSH_PRIVATE_KEY"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+          scp -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes \
+            deploy.tgz "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/deploy.tgz"
+
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" <<'EOF'
+          set -euo pipefail
+          INSTALL_DIR=/opt/agent-real-estate
+          mkdir -p "$INSTALL_DIR"
+          tar xzf /tmp/deploy.tgz -C "$INSTALL_DIR"
+          rm -f /tmp/deploy.tgz
+          cd "$INSTALL_DIR"
+          chmod +x deploy/*.sh
+          if [[ ! -x .venv/bin/pip ]]; then
+            python3 -m venv .venv
+            .venv/bin/pip install -U pip wheel
+          fi
+          .venv/bin/pip install -r requirements.txt -q
+          systemctl restart airbnb-bot
+          systemctl is-active --quiet airbnb-bot
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .last_github_deploy
+          echo "Deploy OK: airbnb-bot running"
+          EOF
