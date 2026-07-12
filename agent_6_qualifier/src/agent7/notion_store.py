@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 from datetime import date
 
@@ -37,6 +38,8 @@ PROP_FUTURE_BOOKINGS = "Будущие брони"
 PROP_AVAIL_CHECKED = "availability_checked_at"
 # Чекбокс для внешнего агента-актуализатора: галочка = доступность подтверждена
 PROP_FREE_FLAG = "Свободно"
+# JSON цен по месяцам от Агента 1/2: {"2026-09": {"price": ..., "status": ...}}
+PROP_MONTHLY_PRICES = "monthly_prices"
 
 
 def _headers() -> dict:
@@ -85,6 +88,15 @@ def _to_listing(page: dict) -> Listing:
             pets = False
     rooms_raw = _plain(p.get(PROP_ROOMS))
     price_raw = _plain(p.get(PROP_PRICE_MONTH))
+    monthly_prices: dict = {}
+    monthly_raw = _plain(p.get(PROP_MONTHLY_PRICES)).strip()
+    if monthly_raw:
+        try:
+            parsed = json.loads(monthly_raw)
+            if isinstance(parsed, dict):
+                monthly_prices = parsed
+        except ValueError:
+            pass
     avail_raw = _plain(p.get(PROP_AVAILABILITY))
     busy_raw = (p.get(PROP_BUSY_UNTIL) or {}).get("date") or {}
 
@@ -116,6 +128,7 @@ def _to_listing(page: dict) -> Listing:
         owner_telegram=_plain(p.get(PROP_OWNER_TG)),
         availability=availability,
         busy_until=date.fromisoformat(busy_raw["start"]) if busy_raw.get("start") else None,
+        monthly_prices=monthly_prices,
     )
 
 

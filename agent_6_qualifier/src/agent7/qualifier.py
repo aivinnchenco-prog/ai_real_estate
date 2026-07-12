@@ -220,7 +220,7 @@ class Qualifier:
             return Turn(reply_draft=CLIENT_WAITING_OWNER, events=events, skip_polish=True)
 
         if chosen is not None and not session.asked_core:
-            parts.append(self._confirm_object_line(chosen))
+            parts.append(self._confirm_object_line(chosen, lead.check_in))
 
         # Обязательная квалификация: сначала только даты и гости.
         if not (lead.check_in and lead.guests):
@@ -313,7 +313,7 @@ class Qualifier:
 
         lines = ["Вот что могу предложить:"]
         for l in candidates:
-            lines.append(client_offer_line(l))
+            lines.append(client_offer_line(l, check_in=session.lead.check_in))
             events.append(f"Предложена альтернатива {l.object_id}")
         lines.append("Какой-то из вариантов интересен? Могу уточнить детали у владельца.")
         return Turn(reply_draft="\n\n".join(lines), events=events)
@@ -330,12 +330,13 @@ class Qualifier:
         return None
 
     @staticmethod
-    def _confirm_object_line(listing: Listing) -> str:
+    def _confirm_object_line(listing: Listing, check_in=None) -> str:
         bits = [f"Вы про «{listing.title or listing.object_id}»"]
         if listing.district:
             bits.append(f"район {listing.district}")
-        if listing.price_month:
-            bits.append(f"{listing.price_month:,.0f}/мес".replace(",", " "))
+        quote = listing.price_quote(check_in)
+        if quote:
+            bits.append(quote)
         return ", ".join(bits) + " — отличный выбор!"
 
     @staticmethod

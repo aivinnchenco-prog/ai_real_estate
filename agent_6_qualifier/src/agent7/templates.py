@@ -118,13 +118,18 @@ def client_object_partial(
     )
 
 
-def client_offer_line(listing: Listing, reason: str = "") -> str:
-    """Одна строка оффера: почему подходит + цена/район + ссылки (TG-пост, фото R2)."""
+def client_offer_line(listing: Listing, reason: str = "", check_in=None) -> str:
+    """Одна строка оффера: почему подходит + цена/район + ссылки (TG-пост, фото R2).
+
+    check_in (date) — месяц заезда клиента: цена берётся из monthly_prices,
+    prorated озвучивается как ориентировочная.
+    """
     parts = [listing.title or listing.object_id]
     if listing.district:
         parts.append(f"район {listing.district}")
-    if listing.price_month:
-        parts.append(f"{listing.price_month:,.0f}/мес".replace(",", " "))
+    quote = listing.price_quote(check_in)
+    if quote:
+        parts.append(quote)
     if reason:
         parts.append(reason)
     line = " — ".join(parts)

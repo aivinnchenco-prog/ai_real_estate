@@ -49,8 +49,9 @@ def build_knowledge(session: Session) -> str:
         bits = [c.title or c.object_id]
         if c.district:
             bits.append(f"район {c.district}")
-        if c.price_month:
-            bits.append(f"{c.price_month:,.0f} THB/мес".replace(",", " "))
+        quote = c.price_quote(lead.check_in)
+        if quote:
+            bits.append(quote)
         lines.append(f"Выбранный объект: {', '.join(bits)}")
     if lead.check_in:
         lines.append(

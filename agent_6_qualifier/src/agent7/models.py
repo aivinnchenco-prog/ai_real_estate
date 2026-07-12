@@ -41,6 +41,49 @@ class Listing:
     owner_telegram: str = ""
     availability: Availability = Availability.UNKNOWN
     busy_until: Optional[date] = None
+    # Цены по месяцам от Агента 1/2 (колонка monthly_prices, JSON):
+    # {"2026-09": {"price": 107100, "status": "monthly|prorated|insufficient_data", ...}}
+    monthly_prices: dict = field(default_factory=dict)
+
+    def get_price_for_month(self, month: date | str | None = None) -> tuple[Optional[float], str]:
+        """Цена для месяца заезда клиента: (price, status).
+
+        status: "monthly" — точная месячная цена Airbnb;
+                "prorated" — экстраполяция с доступного отрезка (ориентировочная);
+                "insufficient_data" — по этому месяцу данных мало;
+                "base" — данных по месяцу нет, взята «Цена за месяц» из таблицы;
+                "none" — цены нет вообще.
+        """
+        key: Optional[str] = None
+        if isinstance(month, date):
+            key = f"{month.year:04d}-{month.month:02d}"
+        elif isinstance(month, str) and month:
+            key = month[:7]
+
+        if key and self.monthly_prices:
+            entry = self.monthly_prices.get(key)
+            if entry:
+                price = entry.get("price")
+                status = entry.get("status") or "monthly"
+                if price:
+                    return float(price), status
+                if self.price_month:
+                    return self.price_month, "insufficient_data"
+                return None, "insufficient_data"
+
+        if self.price_month:
+            return self.price_month, "base"
+        return None, "none"
+
+    def price_quote(self, check_in: date | str | None = None) -> str:
+        """Формулировка цены для клиента. Prorated — как ориентировочная."""
+        price, status = self.get_price_for_month(check_in)
+        if price is None:
+            return ""
+        text = f"{price:,.0f} THB/мес".replace(",", " ")
+        if status in ("prorated", "insufficient_data"):
+            return f"ориентировочно {text}, точную цену на ваши даты уточню у владельца"
+        return text
 
     @property
     def source_is_airbnb(self) -> bool:
