@@ -35,10 +35,19 @@ class ListingParserTests(unittest.TestCase):
     def test_deposit_and_amenities(self):
         d = parse_listing(LEGENDARY, districts=["Choeng Thale"], source="Airbnb https://x.com")
         self.assertEqual(d.rooms, 2)
-        self.assertEqual(d.deposit, 200.0)
+        # Залог всегда в THB: 200 USD × 36 (fx по умолчанию) = 7200
+        self.assertEqual(d.deposit, 7200.0)
         self.assertEqual(d.rent_type, "Краткосрочная")
         self.assertIn("Бассейн", d.amenities)
         self.assertEqual(d.view, "Бассейн")
+
+    def test_max_guests_from_text(self):
+        d = parse_listing("Вилла 3BR, до 6 гостей, бассейн", districts=["Rawai"])
+        self.assertEqual(d.max_guests, 6)
+        d2 = parse_listing("Condo 2BR, sleeps 4", districts=["Rawai"])
+        self.assertEqual(d2.max_guests, 4)
+        d3 = parse_listing("Вилла без вместимости, в 10 минутах от пляжа", districts=["Rawai"])
+        self.assertIsNone(d3.max_guests)
 
 class ChainGateTests(unittest.TestCase):
     def test_agent3_requires_gallery(self):

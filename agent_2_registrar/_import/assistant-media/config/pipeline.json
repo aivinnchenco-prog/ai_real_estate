@@ -9,6 +9,11 @@
     "eur_to_thb": 39.0,
     "description": "Курсы для конвертации залога/цен в THB, обновлять вручную по необходимости"
   },
+  "contacts": {
+    "whatsapp": "+66625124002",
+    "telegram": "ТГ",
+    "description": "Контакты для описаний: whatsapp — номер брони, telegram — как называть ТГ-канал/бота в постах. Меняются здесь, не в коде."
+  },
   "price_months_ahead": 12,
   "batch_wait_seconds": 150,
   "min_video_seconds": 15,
@@ -65,7 +70,9 @@
       "telegram_contact": "Telegram контакт",
       "whatsapp_contact": "WhatsApp контакт",
       "calendar": "Календарь",
-      "monthly_prices": "monthly_prices"
+      "monthly_prices": "monthly_prices",
+      "caption_social": "Описание соц.сети",
+      "max_guests": "Вместимость гостей"
     },
     "statuses": {
       "after_structurize": "ready_for_video",

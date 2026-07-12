@@ -20,9 +20,13 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from real_estate_handler import (  # noqa: E402
     CloudflareR2,
-    DescriptionGenerator,
     NotionCRM,
     ObjectIDGenerator,
+)
+from description_writer import (  # noqa: E402
+    build_context,
+    generate_long_description,
+    generate_social_description,
 )
 from maps_resolver import resolve_google_maps  # noqa: E402
 from gallery_html import build_gallery_html  # noqa: E402
@@ -319,24 +323,20 @@ def main() -> int:
         else:
             gallery_url = r2.get_public_url(f"{gallery_base}/index.html")
 
-        caption_tg = DescriptionGenerator.telegram(
-            title=draft.title,
+        # Описания: LLM по промптам (config/prompts/) + обязательный
+        # валидатор длины. Один длинный текст для TG и FB, короткий — соц.сети.
+        desc_ctx = build_context(
+            draft=draft,
             description=description,
-            price_monthly=draft.price_monthly,
-            price_yearly=draft.price_yearly,
-            rooms=draft.rooms,
-            area=draft.area,
             object_id=object_id,
+            contacts=cfg.get("contacts", {}),
+            parsed_meta=parsed_meta,
+            complex_name=maps.complex_name,
         )
-        caption_fb = DescriptionGenerator.facebook(
-            title=draft.title,
-            description=description,
-            price_monthly=draft.price_monthly,
-            rooms=draft.rooms,
-            area=draft.area,
-            type_housing=draft.housing_type,
-            object_id=object_id,
-        )
+        caption_long = generate_long_description(desc_ctx)
+        caption_tg = caption_long
+        caption_fb = caption_long
+        caption_social = generate_social_description(desc_ctx)
 
         properties = build_notion_properties(
             draft=draft,
@@ -351,6 +351,13 @@ def main() -> int:
             source=args.source,
         )
         apply_parsed_meta(properties, parsed_meta, nf)
+
+        if nf.get("caption_social"):
+            properties[nf["caption_social"]] = NotionCRM.build_text(caption_social)
+        # «Вместимость гостей» — только явное число от хозяина;
+        # формула комнаты×2+1 живёт лишь внутри текстов, в таблицу не пишется.
+        if nf.get("max_guests") and desc_ctx["max_guests_explicit"]:
+            properties[nf["max_guests"]] = NotionCRM.build_number(desc_ctx["max_guests"])
 
         result = {
             "object_id": object_id,

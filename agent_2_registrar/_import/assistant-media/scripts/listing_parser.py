@@ -58,6 +58,9 @@ class ListingDraft:
     rent_type: str | None = None
     amenities: list[str] = field(default_factory=list)
     source_note: str | None = None
+    # Вместимость гостей, явно указанная хозяином в тексте («до 5 гостей»,
+    # «sleeps 6»). None = в тексте не указано (фолбэк-формула — в description_validator).
+    max_guests: int | None = None
 
 
 def extract_title(description: str) -> str:
@@ -99,6 +102,27 @@ def _parse_deposit(text: str, fx: dict | None = None) -> float | None:
     if currency in ("eur", "€"):
         return float(round(amount * float(rates["eur_to_thb"]), -2))
     return amount
+
+
+_MAX_GUESTS_RES = [
+    re.compile(r"(?:до|max\.?|maximum|up\s+to)\s+(\d{1,2})\s+(?:гост|guest|человек|чел\b|people|persons?)", re.I),
+    re.compile(r"sleeps\s+(\d{1,2})", re.I),
+    re.compile(r"accommodates?\s+(?:up\s+to\s+)?(\d{1,2})", re.I),
+    re.compile(r"(?:вмеща\w+|размеща\w+)\s+(?:до\s+)?(\d{1,2})", re.I),
+    re.compile(r"(?:гостей|guests|вместимость)\s*[:—-]?\s*(\d{1,2})", re.I),
+    re.compile(r"(\d{1,2})\s+(?:гост(?:я|ей)|guests)\b", re.I),
+]
+
+
+def _parse_max_guests(text: str) -> int | None:
+    """Вместимость гостей, только если хозяин указал её явно в тексте."""
+    for pattern in _MAX_GUESTS_RES:
+        m = pattern.search(text)
+        if m:
+            n = int(m.group(1))
+            if 1 <= n <= 30:
+                return n
+    return None
 
 
 def _parse_rent_type(text: str, source: str) -> str | None:
@@ -179,4 +203,5 @@ def parse_listing(
         rent_type=_parse_rent_type(description, source),
         amenities=_parse_amenities(description),
         source_note=source_note,
+        max_guests=_parse_max_guests(description),
     )
