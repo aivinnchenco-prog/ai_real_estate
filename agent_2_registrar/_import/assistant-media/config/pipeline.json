@@ -1,8 +1,8 @@
 {
   "object_id": {
-    "format": "YYYYMMDD_NNN",
-    "example": "20260701_001",
-    "description": "Год + месяц + день + порядковый номер объекта за день"
+    "format": "{S}_YYYYMMDD_NNN",
+    "example": "F_20260712_001",
+    "description": "Префикс источника (F — Facebook, A — Airbnb) + год + месяц + день + порядковый номер объекта за день"
   },
   "batch_wait_seconds": 150,
   "min_video_seconds": 15,

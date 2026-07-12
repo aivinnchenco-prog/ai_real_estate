@@ -55,13 +55,41 @@ def extract_source_url(source: str) -> str | None:
     return m.group(0).rstrip(".,)") if m else None
 
 
-def resolve_object_id(session_id: str, crm: NotionCRM, force_new: bool = False) -> str:
+def detect_source_prefix(session_id: str, source: str, session_path: Path) -> str:
+    """F (Facebook) / A (Airbnb) — из parsed.json сессии, ID сессии или строки источника."""
+    parsed_path = session_path / "parsed.json"
+    if parsed_path.exists():
+        try:
+            src = str(json.loads(parsed_path.read_text(encoding="utf-8")).get("source", "")).upper()
+            if src.startswith("A"):
+                return "A"
+            if src.startswith("F"):
+                return "F"
+        except (OSError, ValueError):
+            pass
+    sid = session_id.upper()
+    if sid.startswith("A"):
+        return "A"
+    if sid.startswith("F"):
+        return "F"
+    low = (source or "").lower()
+    if "airbnb" in low:
+        return "A"
+    return "F"
+
+
+def resolve_object_id(
+    session_id: str,
+    crm: NotionCRM,
+    force_new: bool = False,
+    source: str = "F",
+) -> str:
     """Strictly one object_id per session."""
     if not force_new:
         existing = get_object_id(session_id)
         if existing:
             return existing
-    object_id = ObjectIDGenerator.generate(crm)
+    object_id = ObjectIDGenerator.generate(crm, source=source)
     bind_object_id(session_id, object_id)
     return object_id
 
@@ -163,7 +191,10 @@ def main() -> int:
     notion_page_id: str | None = load_session(args.session).get("notion_page_id")
 
     try:
-        object_id = resolve_object_id(args.session, crm, force_new=args.force_new_id)
+        source_prefix = detect_source_prefix(args.session, args.source, session_path)
+        object_id = resolve_object_id(
+            args.session, crm, force_new=args.force_new_id, source=source_prefix
+        )
         log_event(object_id, "agent2", "start", session=args.session, photos=len(photos))
 
         draft = parse_listing(

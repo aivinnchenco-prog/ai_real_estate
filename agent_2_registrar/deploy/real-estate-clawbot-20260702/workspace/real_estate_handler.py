@@ -81,16 +81,17 @@ class NotionCRM:
         return results[0] if results else None
 
     def list_object_ids_for_date(self, date_prefix: str) -> List[str]:
-        """Все Объект ID за день: YYYYMMDD_001, YYYYMMDD_002, …"""
+        """Все Объект ID за день: F_YYYYMMDD_001, A_YYYYMMDD_002, … (и легаси без префикса)."""
         url = f'{NOTION_API_URL}/databases/{self.db_id}/query'
-        prefix = f'{date_prefix}_'
+        # contains, а не starts_with: ID теперь начинаются с префикса источника (F_/A_).
+        needle = f'{date_prefix}_'
         ids: List[str] = []
         start_cursor = None
         while True:
             payload: Dict[str, Any] = {
                 'filter': {
                     'property': 'Объект ID',
-                    'rich_text': {'starts_with': prefix},
+                    'rich_text': {'contains': needle},
                 },
                 'page_size': 100,
             }
@@ -295,9 +296,10 @@ class CloudflareR2:
 
 
 class ObjectIDGenerator:
-    """Генератор уникальных ID: YYYYMMDD_NNN (например 20260701_001)."""
+    """Генератор уникальных ID: F_YYYYMMDD_NNN (Facebook) / A_YYYYMMDD_NNN (Airbnb)."""
 
-    ID_PATTERN = re.compile(r'^(\d{8})_(\d{3,})$')
+    # Легаси-ID без префикса источника (YYYYMMDD_NNN) тоже учитываются в нумерации дня.
+    ID_PATTERN = re.compile(r'^(?:([FA])_)?(\d{8})_(\d{3,})$')
 
     @staticmethod
     def date_prefix(when: Optional[datetime] = None) -> str:
@@ -305,24 +307,33 @@ class ObjectIDGenerator:
         return dt.strftime('%Y%m%d')
 
     @staticmethod
+    def source_prefix(source: Optional[str]) -> str:
+        s = (source or '').strip().upper()
+        if s.startswith('A'):
+            return 'A'
+        return 'F'
+
+    @staticmethod
     def next_sequence(crm: NotionCRM, date_prefix: str) -> int:
         max_seq = 0
         for oid in crm.list_object_ids_for_date(date_prefix):
             m = ObjectIDGenerator.ID_PATTERN.match(oid)
-            if m and m.group(1) == date_prefix:
-                max_seq = max(max_seq, int(m.group(2)))
+            if m and m.group(2) == date_prefix:
+                max_seq = max(max_seq, int(m.group(3)))
         return max_seq + 1
 
     @staticmethod
-    def generate(crm: NotionCRM, when: Optional[datetime] = None) -> str:
+    def generate(crm: NotionCRM, when: Optional[datetime] = None, source: str = 'F') -> str:
         """
-        Формат: YYYYMMDD_NNN
+        Формат: F_YYYYMMDD_NNN / A_YYYYMMDD_NNN
+        - F/A — источник объявления (Facebook / Airbnb)
         - YYYY MM DD — дата добавления (UTC)
-        - NNN — порядковый номер объекта за этот день (001, 002, …)
+        - NNN — порядковый номер объекта за этот день (001, 002, …), сквозной по источникам
         """
+        src = ObjectIDGenerator.source_prefix(source)
         prefix = ObjectIDGenerator.date_prefix(when)
         seq = ObjectIDGenerator.next_sequence(crm, prefix)
-        return f'{prefix}_{seq:03d}'
+        return f'{src}_{prefix}_{seq:03d}'
 
 
 class DescriptionGenerator:

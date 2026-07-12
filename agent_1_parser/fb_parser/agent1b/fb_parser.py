@@ -972,6 +972,7 @@ def main() -> int:
 
     if args.save_debug_json:
         payload = {
+            "source": "FB",
             "source_type": listing.source_type,
             "source_url": listing.source_url,
             "title": listing.title,
