@@ -1,0 +1,39 @@
+# Секреты и учётные данные
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.session
+*.session-journal
+credentials/
+**/credentials/
+
+# Виртуальные окружения и зависимости
+.venv*/
+venv/
+**/.venv*/
+**/venv/
+node_modules/
+**/node_modules/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+**/.pytest_cache/
+
+# Профили браузеров и тяжёлые runtime-данные
+.fb_profile/
+**/.fb_profile/
+**/data/sessions/
+**/Logs/
+*.zip
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Airbnb scraper — отдельные git-репозитории, мигрируем отдельной задачей
+agent_1_parser/airbnb_scraper/
+
+# Архив локальной git-истории Seedance-агента
+.git-archived/

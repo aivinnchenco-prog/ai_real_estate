@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "template": "templates/hook_card.html",
+  "width": 1080,
+  "height": 1920,
+  "duration_seconds": null
+}

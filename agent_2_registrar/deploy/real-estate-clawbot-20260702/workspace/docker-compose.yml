@@ -1,0 +1,11 @@
+services:
+  curator:
+    build:
+      context: .
+      dockerfile: Dockerfile.curator
+    ports:
+      - "8077:8077"
+    environment:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+    restart: unless-stopped

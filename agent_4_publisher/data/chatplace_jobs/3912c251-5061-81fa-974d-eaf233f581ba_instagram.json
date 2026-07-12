@@ -1,0 +1,32 @@
+{
+  "page_id": "3912c251-5061-81fa-974d-eaf233f581ba",
+  "platform": "instagram",
+  "post_kind": "carousel",
+  "object_id": "20260702_001",
+  "trigger_keyword": "+",
+  "instagram_cta": "Оставьте «+» в комментарии — пришлём полную информацию об объекте в Direct.",
+  "telegram_url": "https://t.me/trip_home_phuket/12",
+  "instagram_post_url": "https://www.instagram.com/p/DagA9t2iK36/",
+  "dm_message": "Полная информация об объекте 20260702_001: https://t.me/trip_home_phuket/12",
+  "created_at_utc": "2026-07-07T18:13:02.193786+00:00",
+  "mcp_url": "https://mcp.chatplace.io/mcp",
+  "status": "completed",
+  "mcp_prompt": "Create an Instagram comment-to-DM automation in ChatPlace with these exact settings:\n- Bind to this published post: https://www.instagram.com/p/DagA9t2iK36/\n- Trigger: user comments keyword «+» under this post\n- Action: send Instagram DM with this message:\n  Полная информация об объекте 20260702_001: https://t.me/trip_home_phuket/12\n- Object reference: 20260702_001\n- Telegram link to include: https://t.me/trip_home_phuket/12\nReturn the created automation ID when done.",
+  "agent_prompt": "Create an Instagram comment-to-DM automation in ChatPlace with these exact settings:\n- Bind to this published post: https://www.instagram.com/p/DagA9t2iK36/\n- Trigger: user comments keyword «+» under this post\n- Action: send Instagram DM with this message:\n  Полная информация об объекте 20260702_001: https://t.me/trip_home_phuket/12\n- Object reference: 20260702_001\n- Telegram link to include: https://t.me/trip_home_phuket/12\nReturn the created automation ID when done.",
+  "job_file": "/Users/lifefmg/Desktop/Агенты/Real Estate Agent/agent_6_piblich_social/real-estate-agent6-publisher/data/chatplace_jobs/3912c251-5061-81fa-974d-eaf233f581ba_instagram.json",
+  "execution": "mcp_structured",
+  "mcp_tool": "automations_quick_setup",
+  "mcp_response": "{\n    \"success\": true,\n    \"steps\": {\n        \"step1\": {\n            \"result\": true,\n            \"errors\": []\n        },\n        \"step2\": {\n            \"result\": true,\n            \"errors\": []\n        },\n        \"step3\": {\n            \"result\": true,\n            \"errors\": []\n        }\n    }\n}",
+  "funnel_id": null,
+  "bot_id": "019f3cc7-9526-720d-b985-53e6798a0282",
+  "media_id": "019f3dc7-e98f-736e-bc81-682f34111920",
+  "raw": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n    \"success\": true,\n    \"steps\": {\n        \"step1\": {\n            \"result\": true,\n            \"errors\": []\n        },\n        \"step2\": {\n            \"result\": true,\n            \"errors\": []\n        },\n        \"step3\": {\n            \"result\": true,\n            \"errors\": []\n        }\n    }\n}"
+      }
+    ],
+    "isError": false
+  }
+}

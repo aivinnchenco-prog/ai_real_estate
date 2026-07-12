@@ -1,0 +1,57 @@
+
+--- spawn 2026-07-07T17:23:40.529131+00:00 page=3912c251-5061-81fa-974d-eaf233f581ba post=346596381 platform=instagram schedule=from_metricool_post:346596381 delay_min=5 ---
+
+--- spawn 2026-07-07T17:26:26.861914+00:00 page=3912c251-5061-81fa-974d-eaf233f581ba post=346596381 platform=instagram schedule=from_metricool_post:346596381 delay_min=5 ---
+{
+  "page_id": "3912c251-5061-81fa-974d-eaf233f581ba",
+  "post_id": "346596381",
+  "platform": "instagram",
+  "post_kind": "carousel",
+  "url": "https://www.instagram.com/p/DagA9t2iK36/",
+  "url_field": "post_url_instagram_carousel",
+  "updated": true,
+  "attempt": 1,
+  "sync_at_utc": "2026-07-07T17:43:06.776758+00:00"
+}
+Traceback (most recent call last):
+  File "/Users/lifefmg/Desktop/Агенты/Real Estate Agent/agent_6_piblich_social/real-estate-agent6-publisher/scripts/publish_pipeline.py", line 164, in req
+    with urllib.request.urlopen(request, timeout=120) as resp:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 493, in open
+    response = meth(req, response)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 602, in http_response
+    response = self.parent.error(
+        'http', request, response, code, msg, hdrs)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 531, in error
+    return self._call_chain(*args)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 464, in _call_chain
+    result = func(*args)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 611, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 400: Bad Request
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/lifefmg/Desktop/Агенты/Real Estate Agent/agent_6_piblich_social/real-estate-agent6-publisher/scripts/deferred_post_url_sync.py", line 118, in <module>
+    print(json.dumps(last_result or {}, indent=2, ensure_ascii=False))
+             ^^^^^^
+  File "/Users/lifefmg/Desktop/Агенты/Real Estate Agent/agent_6_piblich_social/real-estate-agent6-publisher/scripts/deferred_post_url_sync.py", line 98, in main
+    wait_until(target)
+    
+    ...<4 lines>...
+        last_result = sync_post_url_to_notion(
+        ^
+  File "/Users/lifefmg/Desktop/Агенты/Real Estate Agent/agent_6_piblich_social/real-estate-agent6-publisher/scripts/sync_post_urls.py", line 50, in sync_post_url_to_notion
+    post_id: str,
+        ^^^^^^^^^
+  File "/Users/lifefmg/Desktop/Агенты/Real Estate Agent/agent_6_piblich_social/real-estate-agent6-publisher/scripts/publish_pipeline.py", line 302, in notion_update_fields
+    req("PATCH", f"https://api.notion.com/v1/pages/{page_id}", notion_headers(), payload)
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lifefmg/Desktop/Агенты/Real Estate Agent/agent_6_piblich_social/real-estate-agent6-publisher/scripts/publish_pipeline.py", line 174, in req
+    raise RuntimeError(f"HTTP {e.code} {url}: {err_body}") from e
+RuntimeError: HTTP 400 https://api.notion.com/v1/pages/3912c251-5061-81fa-974d-eaf233f581ba: {"object":"error","status":400,"code":"validation_error","message":"post_url_instagram is not a property that exists.","request_id":"f6682090-980c-42d5-8be3-76a7a73a3100"}

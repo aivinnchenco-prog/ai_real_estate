@@ -1,0 +1,356 @@
+{
+  "object_id": {
+    "format": "YYYYMMDD_NNN",
+    "example": "20260701_001"
+  },
+  "metricool": {
+    "timezone": "Asia/Bangkok",
+    "planner_calendar_url": "https://app.metricool.com/planning/calendar",
+    "post_search_days_back": 14,
+    "post_search_days_ahead": 2,
+    "url_sync_delay_minutes": 5,
+    "url_sync_retries": 3,
+    "url_sync_retry_interval_minutes": 3,
+    "docs": "https://app.metricool.com/resources/apidocs/index.html",
+    "min_hours_between_posts": 3,
+    "default_video_gap_hours": 4,
+    "seo": {
+      "adapt_caption_per_platform": true,
+      "max_hashtags": 30,
+      "hashtag_randomize": {
+        "enabled": true,
+        "pick_min": 10,
+        "pick_max": 18,
+        "always_include": ["#TripHomePhuket", "#Phuket"],
+        "pool_pick": {
+          "location": 3,
+          "rent": 3,
+          "property": 2,
+          "lifestyle": 2,
+          "ru": 2,
+          "en": 2
+        },
+        "pools": {
+          "location": [
+            "#BangTao", "#ChoengThale", "#PhuketThailand", "#LagunaPhuket",
+            "#SurinBeach", "#LayanBeach", "#CherngTalay", "#Thalang"
+          ],
+          "rent": [
+            "#PhuketRent", "#RentPhuket", "#PhuketRental", "#PhuketProperty",
+            "#ThailandRent", "#LongTermRent", "#ShortTermRent", "#VacationRent"
+          ],
+          "property": [
+            "#CondoPhuket", "#VillaPhuket", "#PoolView", "#BeachLife",
+            "#LuxuryCondo", "#TropicalLiving", "#RealEstatePhuket", "#InvestmentProperty"
+          ],
+          "lifestyle": [
+            "#IslandLife", "#ExpatLife", "#DigitalNomad", "#TravelThailand",
+            "#WorkFromParadise", "#TropicalVibes", "#BeachVibes", "#SunsetLovers"
+          ],
+          "ru": [
+            "#АрендаПхукет", "#НедвижимостьПхукет", "#Пхукет", "#АрендаТаиланд",
+            "#ЖильеПхукет", "#КвартираПхукет", "#ВиллаПхукет", "#ОтдыхТаиланд"
+          ],
+          "en": [
+            "#PhuketLife", "#ThailandProperty", "#RentInThailand", "#PhuketCondo",
+            "#PhuketVilla", "#PropertyForRent", "#HolidayHome", "#SeaView"
+          ]
+        }
+      },
+      "hashtag_placement": {
+        "instagram": "first_comment",
+        "tiktok": "caption",
+        "facebook": "caption",
+        "twitter": "caption",
+        "x": "caption",
+        "linkedin": "caption",
+        "threads": "caption"
+      },
+      "platform_limits": {
+        "instagram": 2200,
+        "tiktok": 2200,
+        "x": 280,
+        "twitter": 280,
+        "threads": 500,
+        "linkedin": 3000
+      },
+      "platform_adapters": {
+        "x": { "strip_urls": true, "max_hashtags_in_caption": 5 },
+        "twitter": { "strip_urls": true, "max_hashtags_in_caption": 5 },
+        "threads": { "strip_urls": true, "max_hashtags_in_caption": 8 },
+        "linkedin": { "strip_urls": false },
+        "instagram": {},
+        "tiktok": {},
+        "facebook": {}
+      },
+      "location_search": {
+        "enabled": true,
+        "networks": ["instagram", "facebook"],
+        "query_fields": ["district", "address"],
+        "fallback_query": "Phuket, Thailand",
+        "fallback_locations": [
+          {
+            "district_match": ["Choeng Thale", "Bang Tao", "Бангтао", "Bangtao"],
+            "location": {
+              "name": "Bang Tao Beach, Phuket",
+              "id": "100957738648887",
+              "link": "https://www.facebook.com/100957738648887",
+              "location": {
+                "latitude": 7.98474,
+                "longitude": 98.29499,
+                "city": "Phuket",
+                "country": "Thailand",
+                "street": "Bang Tao, Choeng Thale",
+                "zip": "83110"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "agent6": {
+    "count_force_as_quota": false,
+    "default_mode": "auto",
+    "workflow_order": ["telegram", "metricool", "chatplace"],
+    "chain_metricool_after_telegram": true,
+    "per_network_daily_limit": {
+      "carousel_max": 1,
+      "video_max": 2,
+      "video_only_networks": {
+        "youtube": { "video_max": 3, "carousel_max": 0 }
+      }
+    }
+  },
+  "notion": {
+    "database_url": "https://app.notion.com/p/e817ce50e78849928b86c9c9fc1fbcf7",
+    "database_title": "Аренда недвижимости",
+    "fields": {
+      "title": "Название объекта",
+      "object_id": "Объект ID",
+      "status": "Статус",
+      "photo": "Фото",
+      "description": "Описание",
+      "caption": "Описание сец.сети",
+      "caption_social": "Описание сец.сети",
+      "caption_telegram": "Описание для Telegram",
+      "caption_instagram_cta": "CTA Instagram",
+      "district": "Район",
+      "address": "Адрес",
+      "location": "Локация",
+      "housing_type": "Тип жилья",
+      "view": "Вид",
+      "google_maps": "Google Maps",
+      "video_url_seedance": "video_url_Seedance",
+      "video_url_vertical": "video_url_vertical",
+      "metricool_post_id": "metricool_post_id",
+      "agent6_locked": "agent6_locked",
+      "agent6_carousel_done": "agent6_carousel_done",
+      "agent6_video_done": "agent6_video_done",
+      "agent6_taken_at": "agent6_taken_at",
+      "agent6_mode": "agent6_mode",
+      "agent6_log": "agent6_log",
+      "caption_instagram_cta": "CTA Instagram",
+    "chatplace_funnel_done": "chatplace_funnel_done",
+    "chatplace_funnel_id": "chatplace_funnel_id",
+    "chatplace_funnel_carousel_done": "chatplace_funnel_carousel_done",
+    "chatplace_funnel_reel_done": "chatplace_funnel_reel_done",
+    "chatplace_funnel_carousel_id": "chatplace_funnel_carousel_id",
+    "chatplace_funnel_reel_id": "chatplace_funnel_reel_id",
+      "publish_error": "last_error",
+      "error_count": "error_count"
+    },
+    "published_url_fields": {
+      "instagram_carousel": "post_url_instagram_carousel",
+      "instagram_reel": "post_url_instagram_reel",
+      "tiktok": "post_url_tiktok",
+      "x": "post_url_x",
+      "twitter": "post_url_x",
+      "linkedin": "post_url_linkedin",
+      "facebook": "post_url_facebook",
+      "youtube": "post_url_youtube",
+      "threads": "post_url_threads",
+      "telegram": "post_url_telegram"
+    },
+    "statuses": {
+      "ready": "ready_to_post",
+      "taken": "video_in_progress",
+      "scheduled": "ready_to_post",
+      "failed": "video_failed"
+    },
+    "caption_by_platform": {
+      "instagram": "caption_social",
+      "tiktok": "caption_social",
+      "facebook": "caption_social",
+      "twitter": "caption_social",
+      "x": "caption_social",
+      "linkedin": "caption_social",
+      "youtube": "caption_social",
+      "threads": "caption_social",
+      "telegram": "caption_telegram"
+    },
+    "status_notes": {
+      "ready": "Очередь — готов к публикации Agent 6",
+      "taken": "video_in_progress + agent6_locked=true (в работе)",
+      "scheduled": "ready_to_post после успеха; повтор блокирует agent6_locked",
+      "failed": "video_failed + last_error"
+    },
+    "schema_column_order": [
+      "Статус",
+      "Тип аренды",
+      "Описание для Telegram",
+      "agent6_taken_at",
+      "Источник объявления",
+      "video_url_Seedance",
+      "Цена за год",
+      "Можно с питомцами",
+      "last_error",
+      "post_url_telegram",
+      "Дата добавления",
+      "Площадь участка (м²)",
+      "Описание сец.сети",
+      "metricool_post_group_id",
+      "Google Maps",
+      "Количество сан.узлов",
+      "Удобства",
+      "post_url_youtube",
+      "Описание",
+      "Описание для FB Marketplace",
+      "Количество комнат",
+      "agent6_video_done",
+      "post_url_linkedin",
+      "Адрес",
+      "Цена за месяц",
+      "post_url_x",
+      "WhatsApp контакт",
+      "Залог",
+      "Фото",
+      "agent6_carousel_done",
+      "post_url_facebook",
+      "Объект ID",
+      "Локация",
+      "Этаж",
+      "post_url_threads",
+      "agent6_mode",
+      "Год постройки",
+      "Вид",
+      "agent6_log",
+      "video_url_vertical",
+      "post_url_tiktok",
+      "Владелец / Агент",
+      "metricool_post_id",
+      "Тип жилья",
+      "Район",
+      "error_count",
+      "post_url_instagram_carousel",
+      "post_url_instagram_reel",
+      "agent6_locked",
+      "Telegram контакт",
+      "Название объекта"
+    ]
+  },
+  "video_format_by_platform": {
+    "instagram": "seedance",
+    "tiktok": "seedance",
+    "facebook": "seedance",
+    "twitter": "seedance",
+    "x": "seedance",
+    "linkedin": "seedance",
+    "threads": "seedance"
+  },
+  "carousel": {
+    "enabled": true,
+    "max_images": 10,
+    "max_images_by_platform": {
+      "instagram": 10,
+      "facebook": 10,
+      "tiktok": 20,
+      "twitter": 4,
+      "x": 4,
+      "linkedin": 9,
+      "threads": 10
+    },
+    "min_images_by_platform": {
+      "facebook": 2,
+      "tiktok": 2,
+      "instagram": 2
+    },
+    "diverse_images": true,
+    "max_per_category": 1,
+    "platforms": ["instagram", "tiktok", "facebook", "x", "linkedin", "threads"],
+    "image_only_when_carousel": ["instagram", "twitter", "x", "linkedin", "facebook", "threads"]
+  },
+  "video_post": {
+    "enabled": true,
+    "source_field": "video_url_Seedance",
+    "platforms": ["instagram", "tiktok", "facebook", "x", "linkedin", "threads"]
+  },
+  "platform_capabilities": {
+    "instagram": { "carousel": true, "video": true },
+    "tiktok": { "carousel": true, "video": true },
+    "facebook": { "carousel": true, "video": true },
+    "twitter": { "carousel": true, "video": true },
+    "x": { "carousel": true, "video": true },
+    "linkedin": { "carousel": true, "video": true },
+    "threads": { "carousel": true, "video": true },
+    "youtube": { "carousel": false, "video": true }
+  },
+  "metricool_platform_settings": {
+    "instagram": { "showReelOnFeed": true },
+    "facebook": {},
+    "tiktok": {
+      "privacyOption": "PUBLIC_TO_EVERYONE",
+      "autoAddMusic": true,
+      "photoCoverIndex": 0,
+      "disableComment": false,
+      "disableDuet": false,
+      "disableStitch": false
+    },
+    "youtube": {
+      "type": "short",
+      "privacy": "public",
+      "madeForKids": false
+    },
+    "twitter": { "tags": [] },
+    "threads": {},
+    "linkedin": { "type": "post" }
+  },
+  "telegram": {
+    "channel": "@trip_home_phuket",
+    "media": "images_only",
+    "source_field": "photo",
+    "caption_field": "Описание для Telegram",
+    "max_images": 10,
+    "publish_video": false,
+    "diverse_images": true,
+    "max_per_category": 1,
+    "strip_urls": true,
+    "strip_url_patterns": [
+      "airbnb",
+      "booking.com",
+      "agoda",
+      "vrbo",
+      "tripadvisor",
+      "facebook.com/marketplace"
+    ],
+    "append_object_hashtag": false,
+    "append_contact_phone": false,
+    "chain_metricool_after_telegram": true
+  },
+  "chatplace": {
+    "enabled": false,
+    "execution": "mcp",
+    "use_structured_mcp": true,
+    "mcp_url": "https://mcp.chatplace.io/mcp",
+    "delay_minutes_after_publish": 15,
+    "platforms": ["instagram"],
+    "instagram_post_kinds": ["carousel", "reel"],
+    "instagram_comment_trigger": "commentAnyValue",
+    "trigger_keyword": "+",
+    "default_instagram_cta": "Оставьте «+» в комментарии — пришлём полную информацию об объекте в Direct.",
+    "dm_message_template": "Полная информация об объекте {object_id}: {telegram_url}",
+    "funnel_name_template": "{object_id}",
+    "trigger_keyword_from": "object_id",
+    "funnel_action": "send_telegram_post_link"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "metricool": {
+      "command": "/Users/lifefmg/.local/bin/uvx",
+      "args": ["mcp-metricool@latest"],
+      "envFile": "${workspaceFolder}/agent_4_publisher/.env"
+    },
+    "chatplace": {
+      "url": "https://mcp.chatplace.io/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:CHATPLACE_API_KEY}"
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+[Unit]
+Description=Real Estate Agent chain watcher (Notion → Agent 3/4)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=REPLACE_USER
+WorkingDirectory=REPLACE_WORKSPACE
+Environment=PATH=/home/REPLACE_USER/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=REPLACE_WORKSPACE/scripts/chain_watcher.sh run
+Restart=always
+RestartSec=15
+StandardOutput=append:REPLACE_WORKSPACE/data/logs/chain_watcher.log
+StandardError=append:REPLACE_WORKSPACE/data/logs/chain_watcher.log
+
+[Install]
+WantedBy=multi-user.target

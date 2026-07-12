@@ -1,0 +1,21 @@
+{
+  "name": "higgsfield-seedance-agent",
+  "version": "1.0.0",
+  "description": "Agent 5 — Seedance 2.0 video from Notion CRM + R2 photos",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "video": "node scripts/run_from_notion.mjs --latest",
+    "video:dry": "node scripts/run_from_notion.mjs --latest --dry-run",
+    "test:overlay": "node scripts/test_title_overlay.mjs",
+    "test:providers": "node scripts/test_higgsfield_providers.mjs",
+    "test:unit": "node scripts/test_seedance_unit.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.750.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@higgsfield/client": "^0.2.1",
+    "axios": "^1.8.0",
+    "playwright": "^1.52.0"
+  }
+}

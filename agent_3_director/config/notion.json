@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "title": "Название объекта",
+    "object_id": "Объект ID",
+    "status": "Статус",
+    "photo": "Фото ",
+    "created_at": "Дата добавления",
+    "housing_type": "Тип жилья",
+    "rooms": "Количество комнат",
+    "price_monthly": "Цена за месяц",
+    "price_yearly": "Цена за год",
+    "district": "Район",
+    "video_seedance": "video_url_Seedance",
+    "last_error": "last_error"
+  },
+  "overlay_fields": {
+    "housing_type": "Тип жилья",
+    "rooms": "Количество комнат",
+    "price": "Цена за месяц",
+    "price_fallback": "Цена за год",
+    "district": "Район"
+  },
+  "statuses": {
+    "allowed": ["ready_for_video", "ready_to_post", "video_failed"]
+  }
+}

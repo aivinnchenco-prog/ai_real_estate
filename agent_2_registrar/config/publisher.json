@@ -1,0 +1,87 @@
+{
+  "object_id": {
+    "format": "YYYYMMDD_NNN",
+    "example": "20260701_001"
+  },
+  "notion": {
+    "database_url": "https://app.notion.com/p/e817ce50e78849928b86c9c9fc1fbcf7",
+    "database_title": "Аренда недвижимости",
+    "fields": {
+      "title": "Название объекта",
+      "object_id": "Объект ID",
+      "status": "Статус",
+      "photo": "Фото ",
+      "caption": "Описание для Telegram",
+      "caption_fb": "Описание для FB Marketplace",
+      "description": "Описание",
+      "video_url_vertical": "video_url_vertical",
+      "video_url_seedance": "video_url_Seedance",
+      "publora_post_group_id": "publora_post_group_id",
+      "publish_error": "last_error",
+      "error_count": "error_count"
+    },
+    "statuses": {
+      "ready": "ready_to_post",
+      "taken": "posting_in_progress",
+      "scheduled": "published",
+      "failed": "video_failed"
+    },
+    "caption_by_platform": {
+      "instagram": "caption",
+      "instagram_feed": "caption",
+      "tiktok": "caption",
+      "youtube": "caption",
+      "youtube_shorts": "caption",
+      "facebook": "caption_fb",
+      "facebook_square": "caption_fb",
+      "twitter": "caption",
+      "x": "caption",
+      "threads": "caption",
+      "linkedin": "caption"
+    },
+    "status_notes": {
+      "ready": "Очередь — видео готово, ждёт публикации",
+      "taken": "Добавь posting_in_progress в Notion UI (пока можно video_in_progress)",
+      "scheduled": "Добавь published в Notion UI после успеха в Publora",
+      "failed": "video_failed + last_error"
+    }
+  },
+  "video_format_by_platform": {
+    "instagram": "seedance",
+    "tiktok": "seedance",
+    "youtube_shorts": "seedance",
+    "youtube": "seedance",
+    "facebook": "seedance",
+    "facebook_square": "seedance",
+    "instagram_feed": "seedance",
+    "twitter": "seedance",
+    "x": "seedance",
+    "threads": "seedance",
+    "linkedin": "seedance"
+  },
+    "carousel": {
+    "enabled": true,
+    "max_images": 10,
+    "platforms": [
+      "instagram",
+      "tiktok",
+      "facebook",
+      "twitter",
+      "x",
+      "threads",
+      "linkedin"
+    ],
+    "image_only_when_carousel": [
+      "instagram",
+      "threads",
+      "twitter",
+      "x",
+      "linkedin"
+    ]
+  },
+  "publora_platform_settings": {
+    "instagram": { "videoType": "REELS" },
+    "youtube": { "privacy": "public", "madeForKids": false },
+    "tiktok": { "viewerSetting": "PUBLIC_TO_EVERYONE", "allowComments": true }
+  }
+}

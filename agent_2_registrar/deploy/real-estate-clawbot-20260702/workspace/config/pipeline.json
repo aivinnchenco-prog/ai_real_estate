@@ -1,0 +1,104 @@
+{
+  "object_id": {
+    "format": "YYYYMMDD_NNN",
+    "example": "20260701_001",
+    "description": "Год + месяц + день + порядковый номер объекта за день"
+  },
+  "batch_wait_seconds": 150,
+  "min_video_seconds": 15,
+  "frame_duration_seconds": 2.5,
+  "min_frames_for_video": 6,
+  "curator_top_k": 6,
+  "curator_url": "http://127.0.0.1:8077/select",
+  "curator_health_url": "http://127.0.0.1:8077/health",
+  "curator_fallback": true,
+  "music_prefix": "music/",
+  "music_tracks": ["music/track_001.mp3", "music/track_002.mp3", "music/track_003.mp3"],
+  "phuket_districts": [
+    "Choeng Thale", "Bang Tao", "Laguna", "Si Sunthon", "Rawai", "Kathu",
+    "Patong", "Karon", "Kata", "Chalong", "Phuket Town", "Cherng Talay",
+    "Чоенг Тале", "Банг Тао", "Лагуна", "Равай", "Пхукет", "Сисон", "Си Сунтон"
+  ],
+  "known_projects": [
+    "Clover", "The Title Legendary", "The Title Serenity", "The Title Residence",
+    "Legendary Residence Title", "Skypark Celeste", "Skypark", "MontAzure",
+    "Angsana", "Botanica", "Andara", "Trichada", "Sunshine Beach"
+  ],
+  "google_maps": {
+    "use_places_api": true,
+    "fallback": "search_url",
+    "note": "Set GOOGLE_MAPS_API_KEY in .env for precise pin links"
+  },
+  "notion": {
+    "database_id": "e817ce50-e788-4992-8b86-c9c9fc1fbcf7",
+    "fields": {
+      "title": "Название объекта",
+      "object_id": "Объект ID",
+      "status": "Статус",
+      "address": "Адрес",
+      "district": "Район",
+      "google_maps": "Google Maps",
+      "source": "Источник объявления",
+      "photo": "Фото ",
+      "description": "Описание",
+      "caption_tg": "Описание для Telegram",
+      "caption_fb": "Описание для FB Marketplace",
+      "housing_type": "Тип жилья",
+      "view": "Вид",
+      "rent_type": "Тип аренды",
+      "amenities": "Удобства",
+      "deposit": "Залог",
+      "rooms": "Количество комнат",
+      "area": "Площадь участка (м²)",
+      "price_monthly": "Цена за месяц",
+      "price_yearly": "Цена за год",
+      "video_vertical": "video_url_vertical",
+      "video_seedance": "video_url_Seedance",
+      "video_square": "video_url_square",
+      "video_wide": "video_url_wide",
+      "last_error": "last_error"
+    },
+    "statuses": {
+      "after_structurize": "ready_for_video",
+      "video_start": "video_in_progress",
+      "video_done": "ready_to_post",
+      "video_failed": "video_failed"
+    }
+  },
+  "video_format_map": {
+    "9x16": "video_url_vertical",
+    "seedance": "video_url_Seedance"
+  },
+  "seedance": {
+    "enabled": true,
+    "provider": "auto",
+    "mcp_url": "https://mcp.higgsfield.ai/mcp",
+    "cli_bin": "higgsfield",
+    "model": "seedance_2_0",
+    "image_count": 13,
+    "max_images_per_request": 9,
+    "max_per_category": 2,
+    "max_similarity": 0.88,
+    "mmr_lambda": 0.6,
+    "aspect_ratio": "9:16",
+    "duration_seconds": 12,
+    "batch_duration_seconds": 12,
+    "resolution": "720p",
+    "mode": "std",
+    "genre": "auto",
+    "cli_wait_timeout": "20m",
+    "cli_wait_interval": "5s",
+    "poll_interval_seconds": 10,
+    "timeout_seconds": 1200,
+    "curator_diverse_url": "http://127.0.0.1:8077/select-diverse",
+    "prompt_template": "Cinematic luxury Phuket property tour for Instagram Reels, vertical 9:16. Multi-shot real estate walkthrough using references {tags}. Smooth camera movement, bright professional lighting, magazine quality interiors, no people. Upbeat ambient background music."
+  },
+  "chain": {
+    "poll_interval_seconds": 30,
+    "auto_continue_after_agent2": true,
+    "auto_agent6": false,
+    "auto_agent4": false,
+    "publish_platforms": ["instagram"],
+    "publisher_script": null
+  }
+}

@@ -1,0 +1,68 @@
+// OpenClaw multi-agent config — Real Estate Pipeline
+// Скопируй в ~/.openclaw/openclaw.json и замени пути через scripts/setup.sh
+
+{
+  agents: {
+    defaults: {
+      model: {
+        primary: "anthropic/claude-sonnet-4-20250514",
+      },
+      subagents: {
+        maxConcurrent: 4,
+        maxSpawnDepth: 2,
+        runTimeoutSeconds: 900,
+      },
+      workspace: "/path/to/real-estate-agent/workspaces/coordinator",
+    },
+    list: [
+      {
+        id: "coordinator",
+        default: true,
+        workspace: "/path/to/real-estate-agent/workspaces/coordinator",
+        subagents: {
+          allowAgents: ["parser", "crm", "video", "publisher"],
+        },
+      },
+      {
+        id: "parser",
+        workspace: "/path/to/real-estate-agent/workspaces/parser",
+        subagents: {
+          maxSpawnDepth: 1,
+        },
+      },
+      {
+        id: "crm",
+        workspace: "/path/to/real-estate-agent/workspaces/crm",
+        subagents: {
+          maxSpawnDepth: 1,
+        },
+      },
+      {
+        id: "video",
+        workspace: "/path/to/real-estate-agent/workspaces/video",
+        subagents: {
+          runTimeoutSeconds: 900,
+          maxSpawnDepth: 1,
+        },
+      },
+      {
+        id: "publisher",
+        workspace: "/path/to/real-estate-agent/workspaces/publisher",
+        subagents: {
+          runTimeoutSeconds: 600,
+          maxSpawnDepth: 1,
+        },
+      },
+    ],
+  },
+
+  tools: {
+    profile: "coding",
+    alsoAllow: ["sessions_spawn", "sessions_yield", "subagents"],
+  },
+
+  // Пример: привязка Telegram-бота к coordinator
+  // bindings: [
+  //   { agentId: "coordinator", match: { channel: "telegram" } },
+  // ],
+}

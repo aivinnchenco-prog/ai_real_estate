@@ -1,0 +1,71 @@
+// OpenClaw / Clawbot — Agent 6 Publisher + Metricool MCP
+// Скопируй в ~/.openclaw/openclaw.json и замени пути workspace
+// Документация: docs/METRICOOL_MCP.md
+
+{
+  agents: {
+    defaults: {
+      model: {
+        primary: "anthropic/claude-sonnet-4-20250514",
+      },
+      subagents: {
+        maxConcurrent: 4,
+        maxSpawnDepth: 2,
+        runTimeoutSeconds: 600,
+      },
+      workspace: "/path/to/real-estate-agent6-publisher",
+    },
+    list: [
+      {
+        id: "coordinator",
+        default: true,
+        workspace: "/path/to/real-estate-agent/workspaces/coordinator",
+        subagents: {
+          allowAgents: ["parser", "crm", "video", "publisher"],
+        },
+      },
+      {
+        id: "publisher",
+        workspace: "/path/to/real-estate-agent6-publisher",
+        identity: {
+          name: "Agent 6 Publisher",
+          theme: "Notion → Telegram → Metricool → ChatPlace",
+        },
+        subagents: {
+          maxSpawnDepth: 1,
+          runTimeoutSeconds: 600,
+        },
+      },
+    ],
+  },
+
+  mcp: {
+    servers: {
+      metricool: {
+        command: "uvx",
+        args: ["--upgrade", "mcp-metricool"],
+        description: "Metricool: schedule posts, analytics, competitors",
+        env: {
+          METRICOOL_USER_TOKEN: "из_.env",
+          METRICOOL_USER_ID: "из_.env",
+        },
+      },
+      "chatplace": {
+        "url": "https://mcp.chatplace.io/mcp",
+        "description": "ChatPlace IG/TikTok funnel — enable after E2E tests",
+        "headers": {
+          "Authorization": "Bearer ${env:CHATPLACE_API_KEY}"
+        }
+      }
+    },
+  },
+
+  tools: {
+    profile: "coding",
+    alsoAllow: ["sessions_spawn", "sessions_yield", "subagents", "exec"],
+  },
+
+  // bindings: [
+  //   { agentId: "coordinator", match: { channel: "telegram" } },
+  // ],
+}

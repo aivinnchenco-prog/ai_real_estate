@@ -1,0 +1,29 @@
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-20250514"
+      },
+      "workspace": "/data/.openclaw/workspace"
+    },
+    "list": [
+      {
+        "id": "estate",
+        "default": true,
+        "workspace": "/data/.openclaw/workspace",
+        "identity": {
+          "name": "Clow AI Estate",
+          "theme": "Pipeline operator — scripts only, no browser scraping"
+        }
+      }
+    ]
+  },
+  "tools": {
+    "profile": "coding",
+    "deny": ["browser", "web_search"],
+    "alsoAllow": ["exec"]
+  },
+  "bindings": [
+    { "agentId": "estate", "match": { "channel": "telegram" } }
+  ]
+}

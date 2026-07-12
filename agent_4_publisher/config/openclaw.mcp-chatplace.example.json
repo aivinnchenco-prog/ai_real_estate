@@ -1,0 +1,16 @@
+// Фрагмент для ~/.openclaw/openclaw.json
+// Включить после успешных тестов TG + Metricool (chatplace.enabled = true в publisher.json)
+
+{
+  "mcp": {
+    "servers": {
+      "chatplace": {
+        "url": "https://mcp.chatplace.io/mcp",
+        "description": "ChatPlace — IG/TikTok воронка со ссылкой на TG-пост",
+        "headers": {
+          "Authorization": "Bearer ваш_CHATPLACE_API_KEY"
+        }
+      }
+    }
+  }
+}

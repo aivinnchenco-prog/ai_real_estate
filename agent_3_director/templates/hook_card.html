@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Villa Hook Card Template</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #d4af37;
+    --gold-soft: #e8c766;
+    --card-bg: rgba(12, 12, 12, 0.62);
+    --border-gold: rgba(212, 175, 55, 0.55);
+    --divider: rgba(212, 175, 55, 0.35);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 1080px;
+    height: 1920px;
+    background: transparent; /* important: renders as alpha PNG for compositing over video */
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+  }
+
+  /* Card is anchored bottom-left, mirrors the reference composition */
+  .card {
+    position: absolute;
+    left: 64px;
+    bottom: 340px;
+    width: fit-content;
+    min-width: 620px;
+    max-width: 940px;
+    background: var(--card-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1.5px solid var(--border-gold);
+    border-radius: 28px;
+    padding: 48px 56px 52px 56px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+
+  /* Glowing gold highlight arc at the top of the card border */
+  .card::before {
+    content: "";
+    position: absolute;
+    top: -1.5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 240px;
+    height: 3px;
+    background: radial-gradient(ellipse at center, var(--gold-soft) 0%, rgba(232,199,102,0) 80%);
+    filter: blur(1px);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .divider {
+    height: 1px;
+    width: 100%;
+    background: var(--divider);
+    margin: 26px 0;
+  }
+
+  /* --- Title row: icon + "{{TITLE_PHRASE}} | {{BEDROOMS}} br" (wraps if long) --- */
+  .title-row { align-items: flex-start; }
+  .title-row .icon-box { margin-top: 8px; }
+  .title-row .icon-box svg { width: 58px; height: 58px; }
+
+  .title-text {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 58px;
+    line-height: 1.18;
+    letter-spacing: 0.2px;
+    color: #ffffff;
+    white-space: normal;
+    max-width: 620px;
+  }
+  .title-text .sep { color: rgba(255,255,255,0.5); font-weight: 700; margin: 0 6px; }
+  .title-text .accent { color: var(--gold-soft); }
+
+  /* --- District row: pin icon + "Район — {{DISTRICT}}" --- */
+  .district-row .icon-box svg { width: 44px; height: 44px; }
+
+  .district-text {
+    font-size: 42px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.75);
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .district-text .value {
+    font-weight: 800;
+    color: #ffffff;
+    margin-left: 4px;
+  }
+
+  /* --- Price row: ฿ box + amount + period --- */
+  .price-row .currency-box {
+    width: 84px;
+    height: 84px;
+    border: 2px solid var(--gold-soft);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .currency-box span {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 40px;
+    color: var(--gold-soft);
+  }
+
+  .price-text {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 78px;
+    color: #ffffff;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .price-period {
+    font-size: 34px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.85);
+    margin-left: 16px;
+    align-self: flex-end;
+    margin-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="card">
+
+    <div class="row title-row">
+      <div class="icon-box">
+        <!-- palm + house icon -->
+        <svg viewBox="0 0 64 64" fill="none" stroke="#ffffff" stroke-width="2.2">
+          <path d="M8 30c4-10 14-14 14-14s-2 8-8 12" stroke-linecap="round"/>
+          <path d="M22 16c-2-6-10-8-10-8s2 8 8 10" stroke-linecap="round"/>
+          <path d="M22 16c4-4 12-3 12-3" stroke-linecap="round"/>
+          <path d="M20 20L20 34" stroke-linecap="round"/>
+          <rect x="26" y="26" width="30" height="24" rx="1.5"/>
+          <path d="M24 26 L41 14 L58 26" stroke-linejoin="round"/>
+          <rect x="36" y="34" width="10" height="16"/>
+        </svg>
+      </div>
+      <div class="title-text">{{TITLE_PHRASE}}<span class="sep">|</span><span class="accent">{{BEDROOMS}} br</span></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row price-row">
+      <div class="currency-box"><span>฿</span></div>
+      <div class="price-text">{{PRICE}}</div>
+      <div class="price-period">{{PERIOD}}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row district-row">
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8">
+          <path d="M12 22s7-7.58 7-13a7 7 0 1 0-14 0c0 5.42 7 13 7 13z"/>
+          <circle cx="12" cy="9" r="2.6"/>
+        </svg>
+      </div>
+      <div class="district-text">Район <span class="value">— {{DISTRICT}}</span></div>
+    </div>
+
+  </div>
+
+  <script>
+    // Safety net: if a row still overflows the card even after it grew to max-width,
+    // scale that row down proportionally instead of letting text spill past the border.
+    window.addEventListener('load', () => {
+      const card = document.querySelector('.card');
+      const innerWidth = card.clientWidth - 112; // minus left+right padding
+      document.querySelectorAll('.row').forEach(row => {
+        const natural = row.scrollWidth;
+        if (natural > innerWidth) {
+          const ratio = innerWidth / natural;
+          row.style.transform = `scale(${ratio})`;
+          row.style.transformOrigin = 'left center';
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>

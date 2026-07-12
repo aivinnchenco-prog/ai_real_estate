@@ -1,0 +1,8 @@
+# Agent 7 Qualifier
+python-dotenv>=1.0
+requests>=2.32
+telethon>=1.36          # личный TG-аккаунт (MTProto), не бот
+google-genai>=1.0       # Gemini 2.5 Flash
+playwright>=1.45        # Airbnb calendar pre-check (Agent 8)
+openpyxl>=3.1           # календарь УК в Google Sheets (xlsx-экспорт с заливками)
+pytest>=8.0

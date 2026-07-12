@@ -1,0 +1,18 @@
+// Фрагмент для ~/.openclaw/openclaw.json (OpenClaw / Clawbot / Hermes)
+// Скопируй блок "mcp" или используй: openclaw mcp add (см. docs/METRICOOL_MCP.md)
+
+{
+  "mcp": {
+    "servers": {
+      "metricool": {
+        "command": "uvx",
+        "args": ["--upgrade", "mcp-metricool"],
+        "description": "Metricool API — аналитика, планирование постов, конкуренты",
+        "env": {
+          "METRICOOL_USER_TOKEN": "ваш_userToken",
+          "METRICOOL_USER_ID": "ваш_userId"
+        }
+      }
+    }
+  }
+}

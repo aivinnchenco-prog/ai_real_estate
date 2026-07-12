@@ -1,0 +1,27 @@
+# systemd unit for Agent 1B Telegram bot (Linux server).
+#
+# Install:
+#   1. Edit WorkingDirectory/ExecStart/User below to match the server paths.
+#   2. sudo cp deploy/agent1b-bot.service /etc/systemd/system/
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now agent1b-bot
+#
+# Logs:  journalctl -u agent1b-bot -f
+
+[Unit]
+Description=Agent 1B FB Marketplace Parser Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/agent1b
+ExecStart=/opt/agent1b/run_bot.sh
+Restart=always
+RestartSec=10
+# Playwright/Chromium needs a writable HOME.
+Environment=HOME=/home/ubuntu
+
+[Install]
+WantedBy=multi-user.target

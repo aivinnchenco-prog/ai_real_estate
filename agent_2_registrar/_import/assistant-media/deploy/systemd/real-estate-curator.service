@@ -1,0 +1,16 @@
+[Unit]
+Description=Real Estate CLIP curator (Docker)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=REPLACE_USER
+WorkingDirectory=REPLACE_WORKSPACE
+ExecStart=/usr/bin/docker compose up -d curator
+ExecStop=/usr/bin/docker compose stop curator
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+{
+  "enabled": true,
+  "provider": "cli",
+  "api_model": "dop-turbo",
+  "mcp_url": "https://mcp.higgsfield.ai/mcp",
+  "cli_bin": "higgsfield",
+  "model": "seedance_2_0",
+  "image_count": 9,
+  "max_images_per_request": 9,
+  "max_per_category": 1,
+  "max_similarity": 0.88,
+  "mmr_lambda": 0.6,
+  "aspect_ratio": "9:16",
+  "duration_seconds": 14,
+  "batch_duration_seconds": 14,
+  "resolution": "480p",
+  "api_resolution": "480p",
+  "mode": "std",
+  "genre": "auto",
+  "generate_audio": false,
+  "cli_wait_timeout": "20m",
+  "cli_wait_interval": "5s",
+  "poll_interval_seconds": 10,
+  "timeout_seconds": 1200,
+  "curator_diverse_url": "http://127.0.0.1:8077/select-diverse",
+  "title_overlay": {
+    "enabled": true,
+    "config": "config/title-overlay.json"
+  },
+  "prompt_template": "Vertical 9:16 real estate walkthrough using references {tags}. Smooth, soft, stabilized forward camera dolly only — steady constant speed, no acceleration, no speed ramps, no zoom, no object animation, no moving furniture, no people. Only the camera glides forward through the space. Bright natural lighting, cinematic but calm."
+}

@@ -1,0 +1,53 @@
+# AGENTS.md — Higgsfield Seedance Video Agent
+
+Ты агент по монтажу вертикальных роликов через **Higgsfield Seedance 2.0**.
+
+## Задача
+
+Из набора фото объекта недвижимости сгенерировать **9:16 видео** (`video_seedance_9x16.mp4`) и загрузить в R2.
+
+## Не делать
+
+- Не использовать API key для Seedance 2.0 multi-ref (не работает)
+- Не блокировать работу если credits закончились — сообщить пользователю
+- Не смешивать с FFmpeg reel (это отдельный агент)
+
+## Порядок работы
+
+```
+CRM → фото R2 → Higgsfield Seedance → hook-card → upload R2 → Notion
+```
+
+Оверлей **всегда** между Seedance и R2 (в R2 попадает видео уже с карточкой).
+
+1. `node scripts/check_higgsfield_auth.mjs`
+2. Если не authed → `higgsfield auth login`
+3. `node scripts/run_from_notion.mjs --latest` или `--object-id {id}`
+   - `--force` — перегенерировать
+   - `--skip-overlay` — только отладка, без карточки
+4. Карточка: `templates/hook_card.html` — **Тип жилья**, **Комнаты**, **Цена**, **Район**
+
+**9 фото для Seedance:** 1-й — экстерьер/вид, max **1 кадр на локацию**, без похожих дублей.
+
+`test_title_overlay.mjs` — отдельно, только чтобы быстро проверить шаблон на готовом видео.
+
+## Провайдеры
+
+| Env | Значение |
+|-----|----------|
+| `SEEDANCE_PROVIDER=api` | **Рекомендуется** — API Key с cloud.higgsfield.ai (DoP, без OAuth) |
+| `SEEDANCE_PROVIDER=cli` | Seedance 2.0 multi-ref (нужен `higgsfield auth login`) |
+| `SEEDANCE_PROVIDER=mcp` | + `HIGGSFIELD_MCP_ACCESS_TOKEN` |
+| `SEEDANCE_PROVIDER=auto` | CLI → MCP → API |
+
+**Важно:** Seedance 2.0 multi-ref (до 9 фото → **один** ролик) доступен только через OAuth (CLI/MCP). API Key — DoP, 1 фото → 1 клип.
+
+## Конфиг
+
+`config/seedance.json` — model, prompt, duration, max 9 images, resolution.
+
+## Документация
+
+- `README.md` — setup
+- [Higgsfield](https://higgsfield.ai/)
+- MCP URL: `https://mcp.higgsfield.ai/mcp`

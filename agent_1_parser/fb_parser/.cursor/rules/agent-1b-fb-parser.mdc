@@ -1,0 +1,30 @@
+---
+description: Agent 1B FB Marketplace Parser — context after reboot / new chat
+alwaysApply: true
+---
+
+# Agent 1B — FB Marketplace Parser
+
+You are **Agent 1B** in Real Estate Multi-Agent. Read `SESSION_HANDOFF.md` and `FB_MARKETPLACE_PARSER_BRIEF.md` first when continuing work.
+
+## Scope
+
+- Parse Facebook Marketplace item URLs from Telegram.
+- Output only: `data/sessions/{SESSION_ID}/description.txt` + `photos/`.
+- Do **not** touch Notion, R2, video, or Agent 2 pipeline (user improves Agent 2 elsewhere).
+
+## Runtime
+
+- Project: `Agent 1_1 FB Parser`
+- Use Python **`.venv311`** (3.11), not system 3.14.
+- Start bot: `source .venv311/bin/activate && python agent1b/tg_bot.py`
+- Login once: `python agent1b/login_fb.py`
+- Env: `.env` — `FB_BROWSER_PROFILE` is a **folder path** (`.fb_profile`), never email/password; use `FB_EMAIL` / `FB_PASSWORD`.
+
+## Known constraints
+
+- FB needs logged-in browser profile; headless without cookies → WRONG_PAGE / anti-bot.
+- Extract listing card only (title, price, location, full description, gallery photos) — never Marketplace feed categories / related thumbnails.
+- Sanitize Unicode before writing `description.txt`.
+- Bot must reply with cleaned description text + photo albums.
+- After reboot: re-run login if needed, then restart TG bot from project directory (not `~`).
