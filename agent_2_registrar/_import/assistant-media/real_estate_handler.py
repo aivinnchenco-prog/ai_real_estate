@@ -425,9 +425,35 @@ class DescriptionGenerator:
         return '\n'.join(lines)
 
 
+def run_schema_check(skip: bool) -> None:
+    """Валидация живой схемы Notion против schema/notion_schema.json (общий контракт репо)."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    if skip or os.environ.get('SKIP_SCHEMA_CHECK') == '1':
+        print('[schema] проверка схемы пропущена (--skip-schema-check)')
+        return
+    for parent in Path(__file__).resolve().parents:
+        validator = parent / 'schema' / 'validate_schema.py'
+        if validator.exists():
+            proc = subprocess.run([sys.executable, str(validator)])
+            if proc.returncode != 0:
+                print(
+                    '[schema] Схема Notion не совпадает с контрактом. '
+                    'Исправь таблицу/контракт или запусти с --skip-schema-check.',
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            return
+    print('[schema] validate_schema.py не найден — проверка схемы пропущена', file=sys.stderr)
+
+
 # Main exports
 if __name__ == '__main__':
     import sys
+
+    run_schema_check('--skip-schema-check' in sys.argv)
 
     if len(sys.argv) > 1 and sys.argv[1] == '--next-id':
         if not NOTION_API_KEY or not NOTION_DB_ID:
@@ -441,4 +467,4 @@ if __name__ == '__main__':
     print(f'  Notion DB: {(NOTION_DB_ID or "")[:8]}...')
     print(f'  Cloudflare Bucket: {CLOUDFLARE_BUCKET}')
     print(f'  Contact: {CONTACT_PHONE}')
-    print(f'  Object ID format: YYYYMMDD_NNN (example: {ObjectIDGenerator.date_prefix()}_001)')
+    print(f'  Object ID format: F_YYYYMMDD_NNN / A_YYYYMMDD_NNN (example: F_{ObjectIDGenerator.date_prefix()}_001)')

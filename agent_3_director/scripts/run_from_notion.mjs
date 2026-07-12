@@ -8,8 +8,8 @@
  *   node scripts/run_from_notion.mjs --latest --dry-run
  *   node scripts/run_from_notion.mjs --object-id 20260701_001 --force
  */
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { existsSync, readFileSync } from "fs";
+import { dirname, join, resolve } from "path";
 import { spawnSync } from "child_process";
 import { loadEnv, ROOT } from "../env.mjs";
 import {
@@ -32,9 +32,40 @@ function loadSeedanceConfig() {
   return JSON.parse(readFileSync(resolve(ROOT, "config/seedance.json"), "utf8"));
 }
 
+function runSchemaCheck(skip) {
+  // Валидация живой схемы Notion против schema/notion_schema.json (общий контракт репо).
+  if (skip || process.env.SKIP_SCHEMA_CHECK === "1") {
+    console.log("[schema] проверка схемы пропущена (--skip-schema-check)");
+    return;
+  }
+  let dir = resolve(ROOT);
+  while (true) {
+    const validator = join(dir, "schema", "validate_schema.py");
+    if (existsSync(validator)) {
+      const proc = spawnSync("python3", [validator], { stdio: "inherit" });
+      if (proc.error) {
+        console.warn(`[schema] не удалось запустить python3 — проверка схемы пропущена: ${proc.error.message}`);
+        return;
+      }
+      if (proc.status !== 0) {
+        console.error(
+          "[schema] Схема Notion не совпадает с контрактом. " +
+            "Исправь таблицу/контракт или запусти с --skip-schema-check."
+        );
+        process.exit(2);
+      }
+      return;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  console.warn("[schema] validate_schema.py не найден — проверка схемы пропущена");
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
-  const out = { objectId: null, latest: false, dryRun: false, force: false, skipOverlay: false };
+  const out = { objectId: null, latest: false, dryRun: false, force: false, skipOverlay: false, skipSchemaCheck: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--object-id") out.objectId = args[++i];
@@ -42,6 +73,7 @@ function parseArgs() {
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--force") out.force = true;
     else if (a === "--skip-overlay") out.skipOverlay = true;
+    else if (a === "--skip-schema-check") out.skipSchemaCheck = true;
   }
   if (!out.objectId && !out.latest) out.latest = true;
   if (out.objectId && out.latest) {
@@ -78,7 +110,8 @@ async function main() {
   loadEnv();
   const notionCfg = loadNotionConfig();
   const seedanceCfg = loadSeedanceConfig();
-  const { dryRun, force, skipOverlay, ...lookup } = parseArgs();
+  const { dryRun, force, skipOverlay, skipSchemaCheck, ...lookup } = parseArgs();
+  runSchemaCheck(skipSchemaCheck);
   const fields = notionCfg.fields;
   const allowedStatuses = notionCfg.statuses?.allowed || ["ready_for_video", "ready_to_post", "video_failed"];
 

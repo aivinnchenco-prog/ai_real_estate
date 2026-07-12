@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 from telethon import TelegramClient, events, functions, types
@@ -42,6 +44,26 @@ def load_env() -> None:
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
                 os.environ.setdefault(k, v.strip())
+
+
+def run_schema_check(skip: bool) -> None:
+    """Валидация живой схемы Notion против schema/notion_schema.json (общий контракт репо)."""
+    if skip or os.environ.get("SKIP_SCHEMA_CHECK") == "1":
+        print("[schema] проверка схемы пропущена (--skip-schema-check)")
+        return
+    for parent in Path(__file__).resolve().parents:
+        validator = parent / "schema" / "validate_schema.py"
+        if validator.exists():
+            proc = subprocess.run([sys.executable, str(validator)])
+            if proc.returncode != 0:
+                print(
+                    "[schema] Схема Notion не совпадает с контрактом. "
+                    "Исправь таблицу/контракт или запусти с --skip-schema-check.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            return
+    print("[schema] validate_schema.py не найден — проверка схемы пропущена", file=sys.stderr)
 
 
 def make_client() -> TelegramClient:
@@ -234,6 +256,7 @@ def ensure_amo_lead(amo: AmoClient | None, session: Session, sender) -> None:
 
 async def main() -> None:
     load_env()
+    run_schema_check("--skip-schema-check" in sys.argv)
     client = make_client()
     qualifier = Qualifier(
         find_by_id=notion_store.find_by_object_id,

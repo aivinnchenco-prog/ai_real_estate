@@ -117,6 +117,26 @@ def load_dotenv() -> None:
             break
 
 
+def run_schema_check(skip: bool) -> None:
+    """Валидация живой схемы Notion против schema/notion_schema.json (общий контракт репо)."""
+    if skip or os.environ.get("SKIP_SCHEMA_CHECK") == "1":
+        print("[schema] проверка схемы пропущена (--skip-schema-check)")
+        return
+    for parent in Path(__file__).resolve().parents:
+        validator = parent / "schema" / "validate_schema.py"
+        if validator.exists():
+            proc = subprocess.run([sys.executable, str(validator)])
+            if proc.returncode != 0:
+                print(
+                    "[schema] Схема Notion не совпадает с контрактом. "
+                    "Исправь таблицу/контракт или запусти с --skip-schema-check.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            return
+    print("[schema] validate_schema.py не найден — проверка схемы пропущена", file=sys.stderr)
+
+
 def metricool_credentials() -> dict[str, str]:
     token = os.environ.get("METRICOOL_USER_TOKEN") or os.environ.get("METRICOOL_API_TOKEN")
     user_id = os.environ.get("METRICOOL_USER_ID")
@@ -1024,7 +1044,14 @@ def main() -> int:
         default="auto",
         help="carousel=photos only, video=Seedance reel only, auto=per platform rules",
     )
+    parser.add_argument(
+        "--skip-schema-check",
+        action="store_true",
+        help="Skip Notion schema validation on start",
+    )
     args = parser.parse_args()
+
+    run_schema_check(args.skip_schema_check)
 
     post_mode = None if args.mode == "auto" else args.mode
 
