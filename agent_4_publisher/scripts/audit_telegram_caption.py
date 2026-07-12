@@ -17,6 +17,7 @@ from publish_telegram import (  # noqa: E402
     telegram_caption_field_name,
 )
 from publish_pipeline import get_prop, load_config, load_dotenv, notion_get_page  # noqa: E402
+import notion_fields as nfc  # noqa: E402
 
 URL_IN_TEXT = re.compile(r"https?://\S+")
 
@@ -37,7 +38,7 @@ def main() -> int:
     final = build_telegram_caption(page, fields, config)
 
     other_fields = {}
-    for name in ("Описание", "Источник объявления", "Описание для FB Marketplace"):
+    for name in (nfc.DESCRIPTION, nfc.SOURCE_URL, nfc.DESCRIPTION_FB_MARKETPLACE):
         if name == field_name:
             continue
         prop = page.get("properties", {}).get(name, {})
@@ -48,7 +49,7 @@ def main() -> int:
 
     report = {
         "page_id": args.page_id,
-        "object_id": get_prop(page, fields.get("object_id", "Объект ID"), "rich_text"),
+        "object_id": get_prop(page, fields.get("object_id", nfc.OBJECT_ID), "rich_text"),
         "caption_source_field": field_name,
         "agent6_reads_only_this_field": field_name == raw_field,
         "urls_in_caption_source_field": URL_IN_TEXT.findall(raw_text),

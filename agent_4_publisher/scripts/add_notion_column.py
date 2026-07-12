@@ -11,33 +11,36 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import notion_fields as nfc  # noqa: E402
+
 NOTION_VERSION = "2022-06-28"
 
 PUBLISHED_URL_COLUMNS = [
-    "post_url_instagram_carousel",
-    "post_url_instagram_reel",
-    "post_url_tiktok",
-    "post_url_x",
-    "post_url_linkedin",
-    "post_url_facebook",
-    "post_url_youtube",
-    "post_url_threads",
-    "post_url_telegram",
+    nfc.POST_URL_INSTAGRAM_CAROUSEL,
+    nfc.POST_URL_INSTAGRAM_REEL,
+    nfc.POST_URL_TIKTOK,
+    nfc.POST_URL_X,
+    nfc.POST_URL_LINKEDIN,
+    nfc.POST_URL_FACEBOOK,
+    nfc.POST_URL_YOUTUBE,
+    nfc.POST_URL_THREADS,
+    nfc.POST_URL_TELEGRAM,
 ]
 
 AGENT6_COLUMNS = {
-    "agent6_locked": {"checkbox": {}},
-    "agent6_carousel_done": {"checkbox": {}},
-    "agent6_video_done": {"checkbox": {}},
-    "agent6_taken_at": {"date": {}},
-    "chatplace_funnel_done": {"checkbox": {}},
-    "chatplace_funnel_id": {"rich_text": {}},
-    "chatplace_funnel_carousel_done": {"checkbox": {}},
-    "chatplace_funnel_reel_done": {"checkbox": {}},
-    "chatplace_funnel_carousel_id": {"rich_text": {}},
-    "chatplace_funnel_reel_id": {"rich_text": {}},
-    "CTA Instagram": {"rich_text": {}},
-    "agent6_mode": {
+    nfc.AGENT6_LOCKED: {"checkbox": {}},
+    nfc.AGENT6_CAROUSEL_DONE: {"checkbox": {}},
+    nfc.AGENT6_VIDEO_DONE: {"checkbox": {}},
+    nfc.AGENT6_TAKEN_AT: {"date": {}},
+    nfc.CHATPLACE_FUNNEL_DONE: {"checkbox": {}},
+    nfc.CHATPLACE_FUNNEL_ID: {"rich_text": {}},
+    nfc.CHATPLACE_FUNNEL_CAROUSEL_DONE: {"checkbox": {}},
+    nfc.CHATPLACE_FUNNEL_REEL_DONE: {"checkbox": {}},
+    nfc.CHATPLACE_FUNNEL_CAROUSEL_ID: {"rich_text": {}},
+    nfc.CHATPLACE_FUNNEL_REEL_ID: {"rich_text": {}},
+    nfc.CTA_INSTAGRAM: {"rich_text": {}},
+    nfc.AGENT6_MODE: {
         "select": {
             "options": [
                 {"name": "auto", "color": "blue"},
@@ -46,18 +49,18 @@ AGENT6_COLUMNS = {
             ]
         }
     },
-    "agent6_log": {"rich_text": {}},
+    nfc.AGENT6_LOG: {"rich_text": {}},
 }
 
 COLUMNS = {
-    "metricool_post_id": {"rich_text": {}},
+    nfc.METRICOOL_POST_ID: {"rich_text": {}},
     "publora_post_group_id": {"rich_text": {}},
-    "Описание сец.сети": {"rich_text": {}},
+    nfc.DESCRIPTION_SOCIAL: {"rich_text": {}},
     **{name: {"url": {}} for name in PUBLISHED_URL_COLUMNS},
     **AGENT6_COLUMNS,
 }
 
-DEFAULT_COLUMNS = ["metricool_post_id", *PUBLISHED_URL_COLUMNS, *AGENT6_COLUMNS.keys()]
+DEFAULT_COLUMNS = [nfc.METRICOOL_POST_ID, *PUBLISHED_URL_COLUMNS, *AGENT6_COLUMNS.keys()]
 
 
 def package_root() -> Path:

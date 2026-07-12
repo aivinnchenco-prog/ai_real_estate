@@ -32,6 +32,7 @@ from publish_pipeline import (  # noqa: E402
     published_url_field,
 )
 from sync_post_urls import sync_post_url_to_notion  # noqa: E402
+import notion_fields as nfc  # noqa: E402
 
 
 def notion_checkbox_property(value: bool) -> dict[str, Any]:
@@ -79,18 +80,18 @@ def is_chatplace_kind_done(
         if get_prop(page, chatplace_done_field(fields, post_kind), "checkbox"):
             return True
         if post_kind == "carousel" and get_prop(
-            page, fields.get("chatplace_funnel_done", "chatplace_funnel_done"), "checkbox"
+            page, fields.get("chatplace_funnel_done", nfc.CHATPLACE_FUNNEL_DONE), "checkbox"
         ):
             return True
         return False
-    return get_prop(page, fields.get("chatplace_funnel_done", "chatplace_funnel_done"), "checkbox")
+    return get_prop(page, fields.get("chatplace_funnel_done", nfc.CHATPLACE_FUNNEL_DONE), "checkbox")
 
 
 def all_chatplace_kinds_done(page: dict[str, Any], config: dict[str, Any], platform: str) -> bool:
     if platform != "instagram":
         fields = config["notion"]["fields"]
         return bool(
-            get_prop(page, fields.get("chatplace_funnel_done", "chatplace_funnel_done"), "checkbox")
+            get_prop(page, fields.get("chatplace_funnel_done", nfc.CHATPLACE_FUNNEL_DONE), "checkbox")
         )
     return all(
         is_chatplace_kind_done(page, config, platform, kind)
@@ -201,7 +202,7 @@ def prepare_chatplace_job(
                 "skipped": True,
                 "reason": f"chatplace_funnel_{post_kind}_done",
             }
-    elif get_prop(page, fields.get("chatplace_funnel_done", "chatplace_funnel_done"), "checkbox"):
+    elif get_prop(page, fields.get("chatplace_funnel_done", nfc.CHATPLACE_FUNNEL_DONE), "checkbox"):
         return {
             "page_id": page_id,
             "platform": platform,
@@ -214,7 +215,7 @@ def prepare_chatplace_job(
         raise ValueError("post_url_telegram is empty — publish to Telegram first")
 
     object_id = object_id_from_page(page, fields) or ""
-    cta_field = fields.get("caption_instagram_cta", "CTA Instagram")
+    cta_field = fields.get("caption_instagram_cta", nfc.CTA_INSTAGRAM)
     instagram_cta = get_prop(page, cta_field, "rich_text") or cp.get(
         "default_instagram_cta",
         "Оставьте «+» в комментарии — пришлём полную информацию об объекте в Direct.",
@@ -286,7 +287,7 @@ def write_job_file(job: dict[str, Any], config: dict[str, Any]) -> Path:
 
 def mark_chatplace_queued(page_id: str, config: dict[str, Any], job_path: Path) -> None:
     fields = config["notion"]["fields"]
-    log_field = fields.get("agent6_log", "agent6_log")
+    log_field = fields.get("agent6_log", nfc.AGENT6_LOG)
     notion_update_fields(
         page_id,
         {
@@ -315,7 +316,7 @@ def mark_chatplace_success(
     fields = config["notion"]["fields"]
     kind_label = post_kind or platform
     updates: dict[str, Any] = {
-        fields.get("agent6_log", "agent6_log"): notion_rich_text(
+        fields.get("agent6_log", nfc.AGENT6_LOG): notion_rich_text(
             f"chatplace {kind_label} mcp ok"
             f"{f' id={funnel_id}' if funnel_id else ''}: {mcp_response[:300]}"
         ),
@@ -325,14 +326,14 @@ def mark_chatplace_success(
         if funnel_id:
             updates[chatplace_id_field(fields, post_kind)] = notion_rich_text(funnel_id)
         if post_kind == "carousel" and funnel_id:
-            updates[fields.get("chatplace_funnel_id", "chatplace_funnel_id")] = notion_rich_text(
+            updates[fields.get("chatplace_funnel_id", nfc.CHATPLACE_FUNNEL_ID)] = notion_rich_text(
                 funnel_id
             )
     elif funnel_id:
-        updates[fields.get("chatplace_funnel_id", "chatplace_funnel_id")] = notion_rich_text(
+        updates[fields.get("chatplace_funnel_id", nfc.CHATPLACE_FUNNEL_ID)] = notion_rich_text(
             funnel_id
         )
-        updates[fields.get("chatplace_funnel_done", "chatplace_funnel_done")] = (
+        updates[fields.get("chatplace_funnel_done", nfc.CHATPLACE_FUNNEL_DONE)] = (
             notion_checkbox_property(True)
         )
 
@@ -344,7 +345,7 @@ def mark_chatplace_success(
             notion_update_fields(
                 page_id,
                 {
-                    fields.get("chatplace_funnel_done", "chatplace_funnel_done"): (
+                    fields.get("chatplace_funnel_done", nfc.CHATPLACE_FUNNEL_DONE): (
                         notion_checkbox_property(True)
                     ),
                 },

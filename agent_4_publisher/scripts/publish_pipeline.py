@@ -26,13 +26,14 @@ from zoneinfo import ZoneInfo
 
 from image_selection import sanitize_telegram_caption, select_diverse_images
 from metricool_seo import build_metricool_caption_bundle
+import notion_fields as nfc
 
 NOTION_VERSION = "2022-06-28"
 METRICOOL_BASE = "https://app.metricool.com/api"
 
 VIDEO_FIELDS = {
-    "vertical": "video_url_vertical",
-    "seedance": "video_url_Seedance",
+    "vertical": nfc.VIDEO_URL_VERTICAL,
+    "seedance": nfc.VIDEO_URL_SEEDANCE,
 }
 
 PLATFORM_NETWORK = {
@@ -331,11 +332,11 @@ def network_for(platform: str) -> str:
 
 def pick_video_url(page: dict[str, Any], fields: dict[str, str], platform: str, mapping: dict[str, str]) -> tuple[str, str]:
     fmt = mapping.get(platform, "seedance")
-    field_key = VIDEO_FIELDS.get(fmt, "video_url_Seedance")
+    field_key = VIDEO_FIELDS.get(fmt, nfc.VIDEO_URL_SEEDANCE)
     field_name = fields.get(field_key, field_key)
     url = get_prop(page, field_name, "url")
     if not url and fmt == "seedance":
-        field_key = "video_url_vertical"
+        field_key = nfc.VIDEO_URL_VERTICAL
         field_name = fields.get(field_key, field_key)
         url = get_prop(page, field_name, "url")
     if not url:
@@ -702,7 +703,7 @@ def notion_url_property(url: str) -> dict[str, Any]:
 
 
 def post_id_field_name(fields: dict[str, str]) -> str:
-    return fields.get("metricool_post_id") or fields.get("publora_post_group_id", "metricool_post_id")
+    return fields.get("metricool_post_id") or fields.get("publora_post_group_id", nfc.METRICOOL_POST_ID)
 
 
 def default_schedule_time(minutes_ahead: int = 30) -> str:
@@ -874,7 +875,7 @@ def publish_one(
     )
     caption = caption_bundle["text"]
 
-    photo_field = fields.get("photo", "Фото")
+    photo_field = fields.get("photo", nfc.PHOTO)
     gallery_url = get_prop(page, photo_field, "url")
     carousel_cfg = config.get("carousel", {})
     carousel_urls: list[str] = []
@@ -962,7 +963,7 @@ def publish_one(
         url_to_save = published_url or planner_url
 
         pg_field = post_id_field_name(fields)
-        err_field = fields.get("publish_error", "last_error")
+        err_field = fields.get("publish_error", nfc.LAST_ERROR)
         notion_props: dict[str, Any] = {
             fields["status"]: {"status": {"name": status_scheduled}},
             pg_field: {"rich_text": [{"text": {"content": post_id}}]},
@@ -1013,7 +1014,7 @@ def publish_one(
         return result
 
     except Exception as e:
-        err_field = fields.get("publish_error", "last_error")
+        err_field = fields.get("publish_error", nfc.LAST_ERROR)
         err_count_field = fields.get("error_count", "error_count")
         err_count = get_prop(page, err_count_field, "number") or 0
         notion_update_fields(

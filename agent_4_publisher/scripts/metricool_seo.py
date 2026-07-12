@@ -5,6 +5,8 @@ from __future__ import annotations
 import random
 import re
 
+import notion_fields as nfc
+
 HASHTAG_RE = re.compile(r"#\w+", re.UNICODE)
 WORD_RE = re.compile(r"[^\w]+", re.UNICODE)
 
@@ -93,15 +95,15 @@ def build_hashtags(page: dict[str, Any], fields: dict[str, str], config: dict[st
     for tag in seo.get("default_hashtags", []):
         add(str(tag))
 
-    district = get_prop(page, fields.get("district", "Район"), "rich_text")
+    district = get_prop(page, fields.get("district", nfc.DISTRICT), "rich_text")
     if district:
         add(slug_hashtag(district))
 
-    housing = get_select_prop(page, fields.get("housing_type", "Тип жилья"), get_prop)
+    housing = get_select_prop(page, fields.get("housing_type", nfc.HOUSING_TYPE), get_prop)
     if housing:
         add(slug_hashtag(housing))
 
-    obj_id = get_prop(page, fields.get("object_id", "Объект ID"), "rich_text")
+    obj_id = get_prop(page, fields.get("object_id", nfc.OBJECT_ID), "rich_text")
     if obj_id:
         add(slug_hashtag(obj_id))
 
@@ -137,15 +139,15 @@ def _build_random_hashtags(
     for tag in rnd.get("always_include", ["#TripHomePhuket"]):
         add(str(tag), force=True)
 
-    obj_id = get_prop(page, fields.get("object_id", "Объект ID"), "rich_text")
+    obj_id = get_prop(page, fields.get("object_id", nfc.OBJECT_ID), "rich_text")
     if obj_id:
         add(slug_hashtag(obj_id), force=True)
 
-    district = get_prop(page, fields.get("district", "Район"), "rich_text")
+    district = get_prop(page, fields.get("district", nfc.DISTRICT), "rich_text")
     if district:
         add(slug_hashtag(district))
 
-    housing = get_select_prop(page, fields.get("housing_type", "Тип жилья"), get_prop)
+    housing = get_select_prop(page, fields.get("housing_type", nfc.HOUSING_TYPE), get_prop)
     if housing:
         add(slug_hashtag(housing))
 
@@ -266,7 +268,7 @@ def resolve_metricool_location(
         if built:
             return built
 
-    district = (get_prop(page, fields.get("district", "Район"), "rich_text") or "").strip()
+    district = (get_prop(page, fields.get("district", nfc.DISTRICT), "rich_text") or "").strip()
     queries = []
     if district:
         queries.append(f"{district}, Phuket, Thailand")
@@ -306,12 +308,12 @@ def read_base_caption(
     """Return (field_name, text) — platform-specific Notion column or fallback."""
     caption_map = config.get("notion", {}).get("caption_by_platform", {})
     caption_key = caption_map.get(platform, "caption_social")
-    field_name = fields.get(caption_key) or fields.get("caption_social", "Описание сец.сети")
+    field_name = fields.get(caption_key) or fields.get("caption_social", nfc.DESCRIPTION_SOCIAL)
     text = get_prop(page, field_name, "rich_text") or ""
     if text.strip():
         return field_name, text.strip()
 
-    fallback = fields.get("caption_social", "Описание сец.сети")
+    fallback = fields.get("caption_social", nfc.DESCRIPTION_SOCIAL)
     if field_name != fallback:
         text = get_prop(page, fallback, "rich_text") or ""
         if text.strip():
@@ -386,7 +388,7 @@ def build_metricool_caption_bundle(
 
     hashtags = build_hashtags(page, fields, config, get_prop)
     if platform == "instagram":
-        cta_field = fields.get("caption_instagram_cta", "CTA Instagram")
+        cta_field = fields.get("caption_instagram_cta", nfc.CTA_INSTAGRAM)
         cta = (get_prop(page, cta_field, "rich_text") or "").strip()
         if not cta:
             cta = (

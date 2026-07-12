@@ -38,6 +38,7 @@ from publish_pipeline import (  # noqa: E402
 )
 
 from image_selection import sanitize_telegram_caption, select_diverse_images  # noqa: E402
+import notion_fields as nfc  # noqa: E402
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 MAX_CAPTION = 1024
@@ -50,7 +51,7 @@ def telegram_caption_field_name(fields: dict[str, str], config: dict[str, Any]) 
     return (
         fields.get("caption_telegram")
         or tg_cfg.get("caption_field")
-        or "Описание для Telegram"
+        or nfc.DESCRIPTION_TELEGRAM
     )
 
 
@@ -115,7 +116,7 @@ def build_telegram_caption(page: dict[str, Any], fields: dict[str, str], config:
 
     parts = [text]
     if tg_cfg.get("append_object_hashtag", False):
-        obj_id = get_prop(page, fields.get("object_id", "Объект ID"), "rich_text")
+        obj_id = get_prop(page, fields.get("object_id", nfc.OBJECT_ID), "rich_text")
         if obj_id:
             tag = obj_id if obj_id.startswith("#") else f"#{obj_id}"
             if tag not in text:
@@ -250,7 +251,7 @@ def publish_telegram_page(
                 result["metricool_error"] = str(e)
         return result
 
-    photo_field = fields.get("photo", tg_cfg.get("source_field", "Фото"))
+    photo_field = fields.get("photo", tg_cfg.get("source_field", nfc.PHOTO))
     gallery_url = get_prop(page, photo_field, "url")
     if not gallery_url:
         raise ValueError(f"No photo URL in Notion field {photo_field!r}")
