@@ -1137,6 +1137,7 @@ def main() -> int:
         parser.error("--platform required")
 
     if args.page_id:
+        force = args.force
         for platform in platforms:
             out = publish_one(
                 args.page_id,
@@ -1144,10 +1145,14 @@ def main() -> int:
                 scheduled,
                 args.dry_run,
                 config,
-                force=args.force,
+                force=force,
                 mode=post_mode,
             )
             print(json.dumps(out, indent=2, ensure_ascii=False))
+            # Лок ставит первый же успешный постинг этого запуска — остальные
+            # платформы в том же запуске не должны блокироваться собственным локом.
+            if not out.get("skipped") and not args.dry_run:
+                force = True
         return 0
 
     parser.error("--page-id required unless --queue")

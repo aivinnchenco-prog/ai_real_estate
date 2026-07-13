@@ -383,7 +383,7 @@ def build_metricool_caption_bundle(
     field_name, base = read_base_caption(page, fields, platform, config, get_prop)
     if not base:
         raise ValueError(
-            f"Empty caption for {platform} — fill {field_name!r} or «Описание сец.сети» in Notion"
+            f"Empty caption for {platform} — fill {field_name!r} or «Описание соц.сети» in Notion"
         )
 
     hashtags = build_hashtags(page, fields, config, get_prop)
