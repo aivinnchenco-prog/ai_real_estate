@@ -192,6 +192,7 @@ def build_context(
 # ---------- шаблонные фолбэки (без LLM) ----------
 
 def template_long(ctx: dict) -> str:
+    # Цену, залог и даты доступности в пост не пишем — обсуждаются в личке.
     lines = [f"🏠 {ctx['property_type']}, {ctx['district']}", ""]
     if ctx["rooms"]:
         guests = f", до {ctx['max_guests']} гостей" if ctx["max_guests"] else ""
@@ -201,17 +202,37 @@ def template_long(ctx: dict) -> str:
     amenities = [a.strip() for a in ctx["amenities_list"].split(",") if a.strip()]
     if amenities and ctx["amenities_list"] != "нет данных":
         lines.append(f"✨ {', '.join(amenities[:5])}")
-    if ctx["price_monthly"]:
-        lines.append(f"💰 {ctx['price_monthly']} ฿/мес")
-    elif ctx["price_yearly"]:
-        lines.append(f"💰 {ctx['price_yearly']} ฿/год")
-    if ctx["deposit"] and ctx["deposit"] != "нет данных":
-        lines.append(f"🔐 Залог: {ctx['deposit']}")
-    body = ctx["raw_description"].strip()
+    body = "\n".join(
+        ln for ln in ctx["raw_description"].strip().splitlines()
+        if not _is_price_line(ln)
+    ).strip()
     if body:
         lines.extend(["", body[:600]])
-    if ctx["whatsapp_contact"]:
-        lines.extend(["", f"📲 Бронь в WhatsApp {ctx['whatsapp_contact']}"])
+    return "\n".join(lines)
+
+
+_PRICE_LINE_RE = re.compile(
+    r"^\s*(💰|📅|Цена[:\s]|Залог[:\s])|฿\s*/?\s*мес|помесячно|Доступно с",
+    re.IGNORECASE,
+)
+
+
+def _is_price_line(line: str) -> bool:
+    return bool(_PRICE_LINE_RE.search(line))
+
+
+def finalize_long(text: str, ctx: dict) -> str:
+    """Код-гарантия правил длинного поста (LLM может ошибиться):
+    убрать строки с ценой/датами доступности, добавить CTA в конец."""
+    lines = [ln for ln in text.strip().splitlines() if not _is_price_line(ln)]
+    tag = f"#{ctx['object_id']}"
+    lines = [ln for ln in lines if tag not in ln]  # тег добавим сами в конце
+    wa = ctx.get("whatsapp_contact", "")
+    if wa:
+        cta = f"Пишите в личные сообщения WhatsApp {wa}"
+        if wa not in "\n".join(lines):
+            lines.extend(["", cta])
+    lines.extend(["", tag])
     return "\n".join(lines)
 
 
@@ -246,7 +267,7 @@ def generate_long_description(ctx: dict) -> str:
     """Длинный пост (TG/FB): LLM по промпту, иначе шаблон; всегда через валидатор."""
     prompt = fill_template(load_prompt("agent2_description_prompt.txt"), ctx)
     text = call_llm(prompt) or template_long(ctx)
-    return validate_and_fit(text, ctx["object_id"])
+    return validate_and_fit(finalize_long(text, ctx), ctx["object_id"])
 
 
 def generate_social_description(ctx: dict) -> str:
