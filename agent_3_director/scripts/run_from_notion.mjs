@@ -38,25 +38,46 @@ function loadSeedanceConfig() {
 }
 
 /**
- * Хук-обложка карусели: первое фото объекта + карточка-хук → R2 {id}/hook_cover.jpg.
- * Publisher ставит её первым слайдом карусели. Ошибка не блокирует видео.
+ * Хук-обложка карусели: первое фото объекта + карточка-хук →
+ * R2 {id}/photos/000_hook_cover.jpg (сортируется первой в галерее),
+ * после загрузки пересобираем index.html галереи. Ошибка не блокирует видео.
  */
+const HOOK_COVER_NAME = "000_hook_cover.jpg";
+
 async function makeHookCover({ objectId, firstPhotoKey, overlayMeta, seedanceCfg }) {
   const overlayCfg = loadTitleOverlayConfig(seedanceCfg);
   const tmpDir = mkdtempSync(join(tmpdir(), "hook-cover-"));
   try {
     const photoLocal = join(tmpDir, "photo.jpg");
     await downloadFromR2(firstPhotoKey, photoLocal);
-    const coverLocal = join(tmpDir, "hook_cover.jpg");
+    const coverLocal = join(tmpDir, HOOK_COVER_NAME);
     await renderHookCover({
       photoPath: photoLocal,
       outputPath: coverLocal,
       meta: overlayMeta,
       cfg: overlayCfg,
     });
-    return await uploadFileToR2(coverLocal, `${objectId}/hook_cover.jpg`, "image/jpeg");
+    const url = await uploadFileToR2(
+      coverLocal, `${objectId}/photos/${HOOK_COVER_NAME}`, "image/jpeg"
+    );
+    rebuildGallery(objectId);
+    return url;
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+function rebuildGallery(objectId) {
+  const script = resolve(ROOT, "..", "scripts", "r2_gallery_admin.py");
+  if (!existsSync(script)) {
+    console.warn("[gallery] r2_gallery_admin.py не найден — index.html не пересобран");
+    return;
+  }
+  const proc = spawnSync("python3", [script, "--rebuild", objectId], { encoding: "utf8" });
+  if (proc.status !== 0) {
+    console.warn(`[gallery] пересборка index.html не удалась: ${proc.stderr?.trim()}`);
+  } else {
+    console.log(`[gallery] index.html пересобран (${proc.stdout?.trim()})`);
   }
 }
 
@@ -128,7 +149,7 @@ async function resolvePage(fields, { objectId, latest }) {
     }
     const prefix = `${id}/photos/`;
     const keys = await listKeys(prefix);
-    const photoKeys = keys.filter((k) => /\.(jpe?g|png|webp)$/i.test(k));
+    const photoKeys = keys.filter((k) => /\.(jpe?g|png|webp)$/i.test(k) && !k.includes("hook_cover"));
     if (photoKeys.length) {
       return { page, objectId: id };
     }
@@ -179,7 +200,11 @@ async function main() {
 
   const prefix = `${objectId}/photos/`;
   const allKeys = await listKeys(prefix);
-  const photoKeys = allKeys.filter((k) => /\.(jpe?g|png|webp)$/i.test(k));
+  // hook_cover исключаем: он не должен попадать в референсы Seedance
+  // и не должен становиться базой для самого себя при --force
+  const photoKeys = allKeys.filter(
+    (k) => /\.(jpe?g|png|webp)$/i.test(k) && !k.includes("hook_cover")
+  );
   if (!photoKeys.length) {
     throw new Error(`No photos in R2 at ${prefix}`);
   }

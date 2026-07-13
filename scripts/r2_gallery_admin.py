@@ -245,7 +245,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8899)
     parser.add_argument("--object", default="", help="сразу открыть объект")
+    parser.add_argument("--rebuild", default="", metavar="OBJECT_ID",
+                        help="только пересобрать index.html галереи и выйти (для Агента 3)")
     args = parser.parse_args()
+
+    if args.rebuild:
+        count = rebuild_gallery(R2(load_env()), args.rebuild)
+        print(f"{args.rebuild}: {count} фото")
+        return
 
     Handler.r2 = R2(load_env())
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)

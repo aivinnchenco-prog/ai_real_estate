@@ -382,18 +382,19 @@ def parse_gallery_image_urls(gallery_url: str) -> list[str]:
 
 
 def hook_cover_url(gallery_url: str) -> str | None:
-    """Хук-обложка от Агента 3: {base}/{object_id}/hook_cover.jpg рядом с галереей."""
+    """Хук-обложка от Агента 3: photos/000_hook_cover.jpg (легаси: {id}/hook_cover.jpg)."""
     if not gallery_url or "/photos/" not in gallery_url:
         return None
-    candidate = gallery_url.rsplit("/photos/", 1)[0] + "/hook_cover.jpg"
-    request = urllib.request.Request(candidate, method="HEAD")
-    request.add_header("User-Agent", "real-estate-agent6-publisher/1.0")
-    try:
-        with urllib.request.urlopen(request, timeout=15) as resp:
-            if resp.status == 200:
-                return candidate
-    except (urllib.error.URLError, OSError):
-        pass
+    base = gallery_url.rsplit("/photos/", 1)[0]
+    for candidate in (f"{base}/photos/000_hook_cover.jpg", f"{base}/hook_cover.jpg"):
+        request = urllib.request.Request(candidate, method="HEAD")
+        request.add_header("User-Agent", "real-estate-agent6-publisher/1.0")
+        try:
+            with urllib.request.urlopen(request, timeout=15) as resp:
+                if resp.status == 200:
+                    return candidate
+        except (urllib.error.URLError, OSError):
+            continue
     return None
 
 
