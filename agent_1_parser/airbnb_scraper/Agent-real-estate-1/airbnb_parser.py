@@ -16,7 +16,7 @@ from airbnb_url import normalize_airbnb_url, resolve_currency
 from ai_extract import AiExtractor
 import config
 from CustomLogger import logger
-from datetime import datetime
+from datetime import date, datetime
 import traceback
 import random
 import sys
@@ -98,6 +98,29 @@ class AirbnbParser:
             page_source = sb.get_page_source()
 
         data = self._parse(page_source, url_dates)
+
+        # Airbnb иногда отдаёт SSR-JSON без автоперевода (описание на языке
+        # хозяина, например китайском). Свежая перезагрузка обычно приносит
+        # переведённую версию — пробуем один раз.
+        if self._cjk_ratio(data.get('Описание', '')) > 0.15:
+            logger.info('Описание не переведено (CJK) — перезагружаю страницу для автоперевода')
+            try:
+                self._open_listing_url(url)
+                sb.wait_for_element_visible(
+                    '//button[@data-testid="user-flag-report-button"]', timeout=self.WAIT_TIMEOUT)
+                self._close_popup()
+                if config.PARSER_PAGE_SLEEP_SEC > 0:
+                    time.sleep(config.PARSER_PAGE_SLEEP_SEC)
+                retry_source = self._wait_for_photos_page_source(self._wait_for_price_page_source())
+                retry_data = self._parse(retry_source, url_dates)
+                if self._cjk_ratio(retry_data.get('Описание', '')) <= 0.15:
+                    data, page_source = retry_data, retry_source
+                    logger.info('Автоперевод получен со второй загрузки')
+                else:
+                    logger.warning('Описание осталось без перевода — переведёт Агент 2')
+            except Exception:
+                logger.warning('Ретрай автоперевода не удался', exc_info=True)
+
         self._clear_price_fields(data)
         price_fields = self._extract_final_price(page_source, data, url_dates, url)
         if price_fields:
@@ -149,7 +172,11 @@ class AirbnbParser:
             logger.warning(f'fetch_price_for_period: не удалось открыть {check_in}/{check_out}', exc_info=True)
             return None
 
-        amount, display = self._find_price_in_json_text(page_source)
+        # Та же цепочка экстракторов, что и в process_url: HTML (aria-label)
+        # надёжнее всего — раньше его тут не было, и цены «не находились».
+        amount, display = self._extract_price_from_html(page_source)
+        if not amount:
+            amount, display = self._find_price_in_json_text(page_source)
         if not amount:
             parsed = self._extract_price_from_dom()
             amount = parsed.get('Цена', '')
@@ -157,11 +184,24 @@ class AirbnbParser:
         if not amount:
             logger.info(f'fetch_price_for_period {check_in}/{check_out}: цены нет (даты заняты?)')
             return None
-        logger.info(f'fetch_price_for_period {check_in}/{check_out}: {display}')
         try:
-            return float(amount)
+            value = float(amount)
         except ValueError:
             return None
+
+        # Airbnb для длинных стеев показывает ставку «X ฿ помесячно».
+        # Для полного месяца это и есть цена месяца; для короткого отрезка
+        # приводим ставку к стоимости отрезка (дальше monthly_pricing
+        # экстраполирует обратно к 30 дням).
+        try:
+            # Включительно, как segment_days в monthly_pricing (17..30 сент = 14)
+            days = (date.fromisoformat(str(check_out)) - date.fromisoformat(str(check_in))).days + 1
+        except ValueError:
+            days = None
+        if days and days < 27 and re.search(r'помесячно|month', str(display), re.I):
+            value = value * days / 30.0
+        logger.info(f'fetch_price_for_period {check_in}/{check_out}: {display} -> {value:.0f}')
+        return value
 
     def close(self):
         """Закрывает браузер; зависший driver.quit() не блокирует бота."""
@@ -183,6 +223,14 @@ class AirbnbParser:
         worker.join(timeout=15)
         if worker.is_alive():
             logger.warning('driver.quit() завис — оставляю Chrome умирать в фоне')
+
+    @staticmethod
+    def _cjk_ratio(text: str) -> float:
+        """Доля CJK-символов (кит./яп./кор.) в тексте."""
+        if not text:
+            return 0.0
+        cjk = sum(1 for ch in text if '\u4e00' <= ch <= '\u9fff' or '\u3040' <= ch <= '\u30ff')
+        return cjk / len(text)
 
     def _open_listing_url(self, url):
         """Открывает листинг с cookie валюты — airbnb.ru иначе показывает RUB.
