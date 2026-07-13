@@ -37,6 +37,12 @@ COMPLEX_REGEXES = [
 # Центр Phuket для location bias
 PHUKET_BIAS = "circle:45000@7.8804,98.3923"
 
+# Если у объявления есть координаты карты, результат Places API принимаем
+# только когда найденное место не дальше этого радиуса от них (Airbnb
+# размывает точку до ~500 м). Иначе поиск по названию может увести
+# ссылку на другой конец района.
+PLACE_MATCH_MAX_KM = 1.0
+
 # Центроиды районов Пхукета — офлайн-определение района по координатам объявления
 PHUKET_DISTRICT_CENTROIDS: dict[str, tuple[float, float]] = {
     "Mai Khao": (8.1440, 98.3070),
@@ -294,6 +300,9 @@ def _places_api_resolve(query: str, api_key: str) -> dict[str, Any] | None:
     if not place_id:
         return None
 
+    loc = (c.get("geometry") or {}).get("location") or {}
+    location = (loc.get("lat"), loc.get("lng")) if loc.get("lat") is not None else None
+
     # Каноническая ссылка на карточку проекта (как maps.app.goo.gl / cid=…)
     details = _place_details(place_id, api_key)
     if details and details.get("url"):
@@ -309,6 +318,7 @@ def _places_api_resolve(query: str, api_key: str) -> dict[str, Any] | None:
         "place_id": place_id,
         "place_name": place_name,
         "formatted_address": formatted_address,
+        "location": location,
     }
 
 
@@ -367,11 +377,21 @@ def resolve_google_maps(
         try:
             resolved = _places_api_resolve(query, key)
             if resolved:
-                url = resolved["url"]
-                place_name = resolved.get("place_name")
-                place_address = resolved.get("formatted_address")
-                place_id = resolved.get("place_id")
-                method = "places_api"
+                # Найденное по названию место используем только если оно
+                # рядом с координатами объявления (или координат нет вовсе);
+                # иначе точка с карты Airbnb/FB надёжнее текстового поиска.
+                place_loc = resolved.get("location")
+                near_coords = (
+                    coords is None
+                    or place_loc is None
+                    or _haversine_km(*coords, *place_loc) <= PLACE_MATCH_MAX_KM
+                )
+                if near_coords:
+                    url = resolved["url"]
+                    place_name = resolved.get("place_name")
+                    place_id = resolved.get("place_id")
+                    place_address = resolved.get("formatted_address")
+                    method = "places_api"
         except (urllib.error.URLError, RuntimeError, json.JSONDecodeError):
             pass
 
