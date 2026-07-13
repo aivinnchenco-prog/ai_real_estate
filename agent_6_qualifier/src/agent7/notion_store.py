@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import date
 from pathlib import Path
 
@@ -110,6 +111,38 @@ def _plain(prop: dict | None) -> str:
     return ""
 
 
+# Плашка Агента 2: «2026-09 · 99 200 ฿» (точная) / «2026-12 ≈ 249 500 ฿»
+# (экстраполирована с части месяца → статус prorated).
+_MONTHLY_CHIP_RE = re.compile(r"^(\d{4}-\d{2})\s*([·≈~])\s*([\d\s\u00a0]+)")
+
+
+def _parse_monthly_prices(prop: dict | None) -> dict:
+    """monthly_prices: multi_select-плашки (текущий формат) или JSON (легаси)."""
+    if not prop:
+        return {}
+    result: dict = {}
+    if prop.get("type") == "multi_select":
+        for opt in prop.get("multi_select", []):
+            m = _MONTHLY_CHIP_RE.match((opt.get("name") or "").strip())
+            if not m:
+                continue
+            digits = re.sub(r"\D", "", m.group(3))
+            if not digits:
+                continue
+            status = "monthly" if m.group(2) == "·" else "prorated"
+            result[m.group(1)] = {"price": int(digits), "status": status}
+        return result
+    raw = _plain(prop).strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                result = parsed
+        except ValueError:
+            pass
+    return result
+
+
 def _to_listing(page: dict) -> Listing:
     p = page.get("properties", {})
     photos = _plain(p.get(PROP_PHOTOS)) or _plain(p.get(PROP_PHOTOS + " "))
@@ -128,15 +161,7 @@ def _to_listing(page: dict) -> Listing:
             pets = False
     rooms_raw = _plain(p.get(PROP_ROOMS))
     price_raw = _plain(p.get(PROP_PRICE_MONTH))
-    monthly_prices: dict = {}
-    monthly_raw = _plain(p.get(PROP_MONTHLY_PRICES)).strip()
-    if monthly_raw:
-        try:
-            parsed = json.loads(monthly_raw)
-            if isinstance(parsed, dict):
-                monthly_prices = parsed
-        except ValueError:
-            pass
+    monthly_prices = _parse_monthly_prices(p.get(PROP_MONTHLY_PRICES))
     avail_raw = _plain(p.get(PROP_AVAILABILITY))
     busy_raw = (p.get(PROP_BUSY_UNTIL) or {}).get("date") or {}
 

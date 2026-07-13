@@ -176,8 +176,24 @@ def apply_parsed_meta(properties: dict, parsed_meta: dict, nf: dict) -> None:
 
     monthly = parsed_meta.get("monthly_prices") or {}
     if monthly and nf.get("monthly_prices"):
-        blob = json.dumps(monthly, ensure_ascii=False, separators=(",", ":"))
-        properties[nf["monthly_prices"]] = NotionCRM.build_text(blob[:1900])
+        options = monthly_price_options(monthly)
+        if options:
+            properties[nf["monthly_prices"]] = NotionCRM.build_multi_select(options)
+
+
+def monthly_price_options(monthly: dict) -> list[str]:
+    """Плашки multi_select «2026-09 · 99 200 ฿»; «≈» — цена экстраполирована
+    (prorated), месяцы без цены пропускаем. Этот формат парсит Qualifier."""
+    options = []
+    for month in sorted(monthly):
+        entry = monthly.get(month) or {}
+        price = entry.get("price")
+        if not price:
+            continue
+        sep = "≈" if entry.get("status") == "prorated" else "·"
+        pretty = f"{int(price):,}".replace(",", " ")
+        options.append(f"{month} {sep} {pretty} ฿")
+    return options
 
 
 def build_notion_properties(
