@@ -21,7 +21,10 @@
         "enabled": true,
         "pick_min": 10,
         "pick_max": 18,
-        "always_include": ["#TripHomePhuket", "#Phuket"],
+        "always_include": [
+          "#TripHomePhuket",
+          "#Phuket"
+        ],
         "pool_pick": {
           "location": 3,
           "rent": 3,
@@ -32,28 +35,64 @@
         },
         "pools": {
           "location": [
-            "#BangTao", "#ChoengThale", "#PhuketThailand", "#LagunaPhuket",
-            "#SurinBeach", "#LayanBeach", "#CherngTalay", "#Thalang"
+            "#BangTao",
+            "#ChoengThale",
+            "#PhuketThailand",
+            "#LagunaPhuket",
+            "#SurinBeach",
+            "#LayanBeach",
+            "#CherngTalay",
+            "#Thalang"
           ],
           "rent": [
-            "#PhuketRent", "#RentPhuket", "#PhuketRental", "#PhuketProperty",
-            "#ThailandRent", "#LongTermRent", "#ShortTermRent", "#VacationRent"
+            "#PhuketRent",
+            "#RentPhuket",
+            "#PhuketRental",
+            "#PhuketProperty",
+            "#ThailandRent",
+            "#LongTermRent",
+            "#ShortTermRent",
+            "#VacationRent"
           ],
           "property": [
-            "#CondoPhuket", "#VillaPhuket", "#PoolView", "#BeachLife",
-            "#LuxuryCondo", "#TropicalLiving", "#RealEstatePhuket", "#InvestmentProperty"
+            "#CondoPhuket",
+            "#VillaPhuket",
+            "#PoolView",
+            "#BeachLife",
+            "#LuxuryCondo",
+            "#TropicalLiving",
+            "#RealEstatePhuket",
+            "#InvestmentProperty"
           ],
           "lifestyle": [
-            "#IslandLife", "#ExpatLife", "#DigitalNomad", "#TravelThailand",
-            "#WorkFromParadise", "#TropicalVibes", "#BeachVibes", "#SunsetLovers"
+            "#IslandLife",
+            "#ExpatLife",
+            "#DigitalNomad",
+            "#TravelThailand",
+            "#WorkFromParadise",
+            "#TropicalVibes",
+            "#BeachVibes",
+            "#SunsetLovers"
           ],
           "ru": [
-            "#АрендаПхукет", "#НедвижимостьПхукет", "#Пхукет", "#АрендаТаиланд",
-            "#ЖильеПхукет", "#КвартираПхукет", "#ВиллаПхукет", "#ОтдыхТаиланд"
+            "#АрендаПхукет",
+            "#НедвижимостьПхукет",
+            "#Пхукет",
+            "#АрендаТаиланд",
+            "#ЖильеПхукет",
+            "#КвартираПхукет",
+            "#ВиллаПхукет",
+            "#ОтдыхТаиланд"
           ],
           "en": [
-            "#PhuketLife", "#ThailandProperty", "#RentInThailand", "#PhuketCondo",
-            "#PhuketVilla", "#PropertyForRent", "#HolidayHome", "#SeaView"
+            "#PhuketLife",
+            "#ThailandProperty",
+            "#RentInThailand",
+            "#PhuketCondo",
+            "#PhuketVilla",
+            "#PropertyForRent",
+            "#HolidayHome",
+            "#SeaView"
           ]
         }
       },
@@ -75,22 +114,44 @@
         "linkedin": 3000
       },
       "platform_adapters": {
-        "x": { "strip_urls": true, "max_hashtags_in_caption": 5 },
-        "twitter": { "strip_urls": true, "max_hashtags_in_caption": 5 },
-        "threads": { "strip_urls": true, "max_hashtags_in_caption": 8 },
-        "linkedin": { "strip_urls": false },
+        "x": {
+          "strip_urls": true,
+          "max_hashtags_in_caption": 5
+        },
+        "twitter": {
+          "strip_urls": true,
+          "max_hashtags_in_caption": 5
+        },
+        "threads": {
+          "strip_urls": true,
+          "max_hashtags_in_caption": 8
+        },
+        "linkedin": {
+          "strip_urls": false
+        },
         "instagram": {},
         "tiktok": {},
         "facebook": {}
       },
       "location_search": {
         "enabled": true,
-        "networks": ["instagram", "facebook"],
-        "query_fields": ["district", "address"],
+        "networks": [
+          "instagram",
+          "facebook"
+        ],
+        "query_fields": [
+          "district",
+          "address"
+        ],
         "fallback_query": "Phuket, Thailand",
         "fallback_locations": [
           {
-            "district_match": ["Choeng Thale", "Bang Tao", "Бангтао", "Bangtao"],
+            "district_match": [
+              "Choeng Thale",
+              "Bang Tao",
+              "Бангтао",
+              "Bangtao"
+            ],
             "location": {
               "name": "Bang Tao Beach, Phuket",
               "id": "100957738648887",
@@ -112,13 +173,20 @@
   "agent6": {
     "count_force_as_quota": false,
     "default_mode": "auto",
-    "workflow_order": ["telegram", "metricool", "chatplace"],
+    "workflow_order": [
+      "telegram",
+      "metricool",
+      "chatplace"
+    ],
     "chain_metricool_after_telegram": true,
     "per_network_daily_limit": {
       "carousel_max": 1,
       "video_max": 2,
       "video_only_networks": {
-        "youtube": { "video_max": 3, "carousel_max": 0 }
+        "youtube": {
+          "video_max": 3,
+          "carousel_max": 0
+        }
       }
     }
   },
@@ -150,13 +218,12 @@
       "agent6_taken_at": "agent6_taken_at",
       "agent6_mode": "agent6_mode",
       "agent6_log": "agent6_log",
-      "caption_instagram_cta": "CTA Instagram",
-    "chatplace_funnel_done": "chatplace_funnel_done",
-    "chatplace_funnel_id": "chatplace_funnel_id",
-    "chatplace_funnel_carousel_done": "chatplace_funnel_carousel_done",
-    "chatplace_funnel_reel_done": "chatplace_funnel_reel_done",
-    "chatplace_funnel_carousel_id": "chatplace_funnel_carousel_id",
-    "chatplace_funnel_reel_id": "chatplace_funnel_reel_id",
+      "chatplace_funnel_done": "chatplace_funnel_done",
+      "chatplace_funnel_id": "chatplace_funnel_id",
+      "chatplace_funnel_carousel_done": "chatplace_funnel_carousel_done",
+      "chatplace_funnel_reel_done": "chatplace_funnel_reel_done",
+      "chatplace_funnel_carousel_id": "chatplace_funnel_carousel_id",
+      "chatplace_funnel_reel_id": "chatplace_funnel_reel_id",
       "publish_error": "last_error",
       "error_count": "error_count"
     },
@@ -286,26 +353,73 @@
     },
     "diverse_images": true,
     "max_per_category": 1,
-    "platforms": ["instagram", "tiktok", "facebook", "x", "linkedin", "threads"],
-    "image_only_when_carousel": ["instagram", "twitter", "x", "linkedin", "facebook", "threads"]
+    "platforms": [
+      "instagram",
+      "tiktok",
+      "facebook",
+      "x",
+      "linkedin",
+      "threads"
+    ],
+    "image_only_when_carousel": [
+      "instagram",
+      "twitter",
+      "x",
+      "linkedin",
+      "facebook",
+      "threads"
+    ]
   },
   "video_post": {
     "enabled": true,
     "source_field": "video_url_Seedance",
-    "platforms": ["instagram", "tiktok", "facebook", "x", "linkedin", "threads"]
+    "platforms": [
+      "instagram",
+      "tiktok",
+      "facebook",
+      "x",
+      "linkedin",
+      "threads"
+    ]
   },
   "platform_capabilities": {
-    "instagram": { "carousel": true, "video": true },
-    "tiktok": { "carousel": true, "video": true },
-    "facebook": { "carousel": true, "video": true },
-    "twitter": { "carousel": true, "video": true },
-    "x": { "carousel": true, "video": true },
-    "linkedin": { "carousel": true, "video": true },
-    "threads": { "carousel": true, "video": true },
-    "youtube": { "carousel": false, "video": true }
+    "instagram": {
+      "carousel": true,
+      "video": true
+    },
+    "tiktok": {
+      "carousel": true,
+      "video": true
+    },
+    "facebook": {
+      "carousel": true,
+      "video": true
+    },
+    "twitter": {
+      "carousel": true,
+      "video": true
+    },
+    "x": {
+      "carousel": true,
+      "video": true
+    },
+    "linkedin": {
+      "carousel": true,
+      "video": true
+    },
+    "threads": {
+      "carousel": true,
+      "video": true
+    },
+    "youtube": {
+      "carousel": false,
+      "video": true
+    }
   },
   "metricool_platform_settings": {
-    "instagram": { "showReelOnFeed": true },
+    "instagram": {
+      "showReelOnFeed": true
+    },
     "facebook": {},
     "tiktok": {
       "privacyOption": "PUBLIC_TO_EVERYONE",
@@ -320,9 +434,13 @@
       "privacy": "public",
       "madeForKids": false
     },
-    "twitter": { "tags": [] },
+    "twitter": {
+      "tags": []
+    },
     "threads": {},
-    "linkedin": { "type": "post" }
+    "linkedin": {
+      "type": "post"
+    }
   },
   "telegram": {
     "channel": "@trip_home_phuket",
@@ -352,8 +470,13 @@
     "use_structured_mcp": true,
     "mcp_url": "https://mcp.chatplace.io/mcp",
     "delay_minutes_after_publish": 15,
-    "platforms": ["instagram"],
-    "instagram_post_kinds": ["carousel", "reel"],
+    "platforms": [
+      "instagram"
+    ],
+    "instagram_post_kinds": [
+      "carousel",
+      "reel"
+    ],
     "instagram_comment_trigger": "commentAnyValue",
     "trigger_keyword": "+",
     "default_instagram_cta": "Оставьте «+» в комментарии — пришлём полную информацию об объекте в Direct.",
@@ -361,5 +484,8 @@
     "funnel_name_template": "{object_id}",
     "trigger_keyword_from": "object_id",
     "funnel_action": "send_telegram_post_link"
+  },
+  "instagram": {
+    "reel_delay_hours": 4
   }
 }

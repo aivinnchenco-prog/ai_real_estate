@@ -739,6 +739,30 @@ def post_id_field_name(fields: dict[str, str]) -> str:
     return fields.get("metricool_post_id") or fields.get("publora_post_group_id", nfc.METRICOOL_POST_ID)
 
 
+def shift_schedule(scheduled_time: str, hours: float) -> str:
+    dt = parse_scheduled_time_utc(scheduled_time) + timedelta(hours=hours)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def platform_jobs(
+    platform: str, scheduled_time: str, config: dict[str, Any], mode: str | None
+) -> list[tuple[str | None, str]]:
+    """Список публикаций (mode, scheduled_time) для платформы.
+
+    Instagram в auto-режиме получает ДВА поста: карусель в назначенное время
+    и рил через instagram.reel_delay_hours (по умолчанию 4 ч) — Metricool
+    не может выложить их одним постом, а вместе в один момент их постить
+    не стоит (алгоритм IG режет охват одновременных публикаций).
+    """
+    if network_for(platform) == "instagram" and mode is None:
+        delay_hours = float((config.get("instagram") or {}).get("reel_delay_hours", 4))
+        return [
+            ("carousel", scheduled_time),
+            ("video", shift_schedule(scheduled_time, delay_hours)),
+        ]
+    return [(mode, scheduled_time)]
+
+
 def default_schedule_time(minutes_ahead: int = 30) -> str:
     dt = datetime.now(timezone.utc) + timedelta(minutes=minutes_ahead)
     return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
@@ -902,7 +926,13 @@ def publish_one(
         }
 
     current_status = get_prop(page, fields["status"], "status")
-    video_url, video_field = pick_video_url(page, fields, platform, mapping)
+    try:
+        video_url, video_field = pick_video_url(page, fields, platform, mapping)
+    except ValueError:
+        if mode != "carousel":
+            raise
+        # Для чисто карусельного поста видео не обязательно
+        video_url, video_field = None, None
     caption_bundle = build_metricool_caption_bundle(
         page, fields, platform, config, get_prop, metricool_search_locations
     )
@@ -921,6 +951,15 @@ def publish_one(
             raise ValueError(
                 f"{platform} needs at least {min_img} images, got {len(carousel_urls)} (max {max_img})"
             )
+
+    if mode == "carousel" and not carousel_urls:
+        return {
+            "page_id": page_id,
+            "platform": platform,
+            "mode": mode,
+            "skipped": True,
+            "reason": "no_carousel_images",
+        }
 
     if mode == "carousel":
         upload_video = False
@@ -1111,16 +1150,22 @@ def main() -> int:
             pid = page["id"]
             print(f"\n--- Processing {pid} ---")
             try:
-                out = publish_one(
-                    pid,
-                    args.platform,
-                    scheduled,
-                    args.dry_run,
-                    config,
-                    force=args.force,
-                    mode=post_mode,
-                )
-                print(json.dumps(out, indent=2, ensure_ascii=False))
+                force = args.force
+                for job_mode, job_time in platform_jobs(
+                    args.platform, scheduled, config, post_mode
+                ):
+                    out = publish_one(
+                        pid,
+                        args.platform,
+                        job_time,
+                        args.dry_run,
+                        config,
+                        force=force,
+                        mode=job_mode,
+                    )
+                    print(json.dumps(out, indent=2, ensure_ascii=False))
+                    if not out.get("skipped") and not args.dry_run:
+                        force = True
             except Exception as e:
                 print(f"ERROR {pid}: {e}", file=sys.stderr)
         return 0
@@ -1138,22 +1183,29 @@ def main() -> int:
 
     if args.page_id:
         force = args.force
+        exit_code = 0
         for platform in platforms:
-            out = publish_one(
-                args.page_id,
-                platform,
-                scheduled,
-                args.dry_run,
-                config,
-                force=force,
-                mode=post_mode,
-            )
-            print(json.dumps(out, indent=2, ensure_ascii=False))
-            # Лок ставит первый же успешный постинг этого запуска — остальные
-            # платформы в том же запуске не должны блокироваться собственным локом.
-            if not out.get("skipped") and not args.dry_run:
-                force = True
-        return 0
+            for job_mode, job_time in platform_jobs(platform, scheduled, config, post_mode):
+                try:
+                    out = publish_one(
+                        args.page_id,
+                        platform,
+                        job_time,
+                        args.dry_run,
+                        config,
+                        force=force,
+                        mode=job_mode,
+                    )
+                except Exception as e:
+                    print(f"ERROR {platform}/{job_mode or 'auto'}: {e}", file=sys.stderr)
+                    exit_code = 1
+                    continue
+                print(json.dumps(out, indent=2, ensure_ascii=False))
+                # Лок ставит первый же успешный постинг этого запуска — остальные
+                # публикации в том же запуске не должны блокироваться собственным локом.
+                if not out.get("skipped") and not args.dry_run:
+                    force = True
+        return exit_code
 
     parser.error("--page-id required unless --queue")
     return 0

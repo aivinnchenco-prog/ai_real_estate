@@ -42,3 +42,6 @@ agent_1_parser/airbnb_scraper/Agent-real-estate-1/data/
 
 # Архив локальной git-истории Seedance-агента
 .git-archived/
+
+# Состояние ротации музыки Агента 3 (runtime)
+agent_3_director/data/
