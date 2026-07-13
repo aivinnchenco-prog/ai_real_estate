@@ -24,16 +24,46 @@
   "curator_health_url": "http://127.0.0.1:8077/health",
   "curator_fallback": true,
   "music_prefix": "music/",
-  "music_tracks": ["music/track_001.mp3", "music/track_002.mp3", "music/track_003.mp3"],
+  "music_tracks": [
+    "music/track_001.mp3",
+    "music/track_002.mp3",
+    "music/track_003.mp3"
+  ],
   "phuket_districts": [
-    "Choeng Thale", "Bang Tao", "Laguna", "Si Sunthon", "Rawai", "Kathu",
-    "Patong", "Karon", "Kata", "Chalong", "Phuket Town", "Cherng Talay",
-    "Чоенг Тале", "Банг Тао", "Лагуна", "Равай", "Пхукет", "Сисон", "Си Сунтон"
+    "Choeng Thale",
+    "Bang Tao",
+    "Laguna",
+    "Si Sunthon",
+    "Rawai",
+    "Kathu",
+    "Patong",
+    "Karon",
+    "Kata",
+    "Chalong",
+    "Phuket Town",
+    "Cherng Talay",
+    "Чоенг Тале",
+    "Банг Тао",
+    "Лагуна",
+    "Равай",
+    "Пхукет",
+    "Сисон",
+    "Си Сунтон"
   ],
   "known_projects": [
-    "Clover", "The Title Legendary", "The Title Serenity", "The Title Residence",
-    "Legendary Residence Title", "Skypark Celeste", "Skypark", "MontAzure",
-    "Angsana", "Botanica", "Andara", "Trichada", "Sunshine Beach"
+    "Clover",
+    "The Title Legendary",
+    "The Title Serenity",
+    "The Title Residence",
+    "Legendary Residence Title",
+    "Skypark Celeste",
+    "Skypark",
+    "MontAzure",
+    "Angsana",
+    "Botanica",
+    "Andara",
+    "Trichada",
+    "Sunshine Beach"
   ],
   "google_maps": {
     "use_places_api": true,
@@ -114,7 +144,11 @@
     "auto_continue_after_agent2": true,
     "auto_agent6": false,
     "auto_agent4": false,
-    "publish_platforms": ["instagram"],
-    "publisher_script": null
+    "publish_platforms": [
+      "instagram"
+    ],
+    "publisher_script": null,
+    "publish_fb_groups": true,
+    "publish_fb_marketplace": true
   }
 }

@@ -87,6 +87,32 @@ def run_agent6(page_id: str, platform: str, publisher_script: Path) -> int:
     return proc.returncode
 
 
+def resolve_fb_python() -> Path | None:
+    """python3.11 с Playwright — venv FB-парсера (там же авторизованный профиль)."""
+    p = ROOT.parents[2] / "agent_1_parser" / "fb_parser" / ".venv311" / "bin" / "python"
+    return p if p.exists() else None
+
+
+def run_fb_branch(page_id: str, script_name: str) -> int:
+    """FB-ветки Агента 4 (группы / маркетплейс): свои локи (fb_*_locked),
+    «Статус» не меняют, поэтому безопасны рядом с Metricool-веткой."""
+    publisher_dir = ROOT.parents[2] / "agent_4_publisher"
+    script = publisher_dir / "scripts" / script_name
+    fb_python = resolve_fb_python()
+    if not script.exists():
+        print(f"[chain] SKIP {script_name}: not found {script}", file=sys.stderr)
+        return 0
+    if fb_python is None:
+        print(f"[chain] SKIP {script_name}: нет venv FB-парсера (.venv311)", file=sys.stderr)
+        return 0
+    print(f"\n[chain] Agent 4 FB ({script_name}) → {page_id}")
+    proc = subprocess.run(
+        [str(fb_python), str(script), "--page-id", page_id],
+        cwd=publisher_dir,
+    )
+    return proc.returncode
+
+
 def resolve_publisher_script(cfg: dict) -> Path:
     candidates: list[Path] = []
     rel = cfg.get("chain", {}).get("publisher_script")
@@ -95,8 +121,9 @@ def resolve_publisher_script(cfg: dict) -> Path:
     monorepo = ROOT.parent.parent
     estate_root = monorepo.parent
     candidates.extend([
-        monorepo / "workspaces/publisher/scripts/publish_pipeline.py",
+        # Канонический Агент 4 — первым; workspaces/publisher — старая копия
         estate_root / "agent_4_publisher/scripts/publish_pipeline.py",
+        monorepo / "workspaces/publisher/scripts/publish_pipeline.py",
         Path("/opt/real-estate-publisher/scripts/publish_pipeline.py"),
     ])
     for p in candidates:
@@ -155,8 +182,14 @@ def continue_chain(
                 log_event(listing.object_id, "chain", "agent3_failed", code=code)
                 exit_code = code
 
+    fb_branches: list[str] = []
+    if chain.get("publish_fb_groups"):
+        fb_branches.append("fb_groups_pipeline.py")
+    if chain.get("publish_fb_marketplace"):
+        fb_branches.append("fb_marketplace_pipeline.py")
+
     should_run_agent6 = chain_auto_publish(cfg) or from_agent >= 6 or bool(publish_platforms)
-    if should_run_agent6 and platforms:
+    if should_run_agent6 and (platforms or fb_branches):
         listings6: list = []
         if object_id:
             one = fetch_by_object_id(crm, object_id, nf)
@@ -176,6 +209,13 @@ def continue_chain(
                 if code6 != 0:
                     exit_code = code6
                     log_event(listing.object_id, "chain", "agent6_failed", platform=platform)
+            for script_name in fb_branches:
+                branch = script_name.replace("_pipeline.py", "")
+                log_event(listing.object_id, "chain", f"{branch}_start", page_id=listing.page_id)
+                code_fb = run_fb_branch(listing.page_id, script_name)
+                if code_fb != 0:
+                    exit_code = code_fb
+                    log_event(listing.object_id, "chain", f"{branch}_failed", code=code_fb)
 
     return exit_code
 
