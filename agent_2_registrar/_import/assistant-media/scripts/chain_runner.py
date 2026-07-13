@@ -60,10 +60,17 @@ def load_config() -> dict:
 
 
 def run_agent3(object_id: str) -> int:
-    print(f"\n[chain] Agent 3 → {object_id}")
+    """Агент 3 = Director (Seedance + хук): FFmpeg-монтаж отвязан от пайплайна,
+    код остался в scripts/agent3_video.mjs на случай возврата."""
+    director = ROOT.parents[2] / "agent_3_director"
+    entry = director / "scripts" / "run_from_notion.mjs"
+    if not entry.exists():
+        print(f"[chain] SKIP Agent 3: not found {entry}", file=sys.stderr)
+        return 1
+    print(f"\n[chain] Agent 3 (Director/Seedance) → {object_id}")
     proc = subprocess.run(
-        ["node", str(ROOT / "scripts" / "agent3_video.mjs"), "--object-id", object_id],
-        cwd=ROOT,
+        ["node", str(entry), "--object-id", object_id],
+        cwd=director,
     )
     return proc.returncode
 

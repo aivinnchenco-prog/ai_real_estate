@@ -464,7 +464,9 @@ def main() -> int:
                 print(f"WARN: chain_runner exited {chain_rc}", file=sys.stderr)
 
         result["notion_page_id"] = notion_page_id
-        result["next"] = f"node scripts/agent3_video.mjs --object-id {object_id}"
+        result["next"] = (
+            f"cd agent_3_director && node scripts/run_from_notion.mjs --object-id {object_id}"
+        )
         print("READY_FOR_VIDEO")
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
