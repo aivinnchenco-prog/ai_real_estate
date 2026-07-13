@@ -1,0 +1,45 @@
+{
+  "$comment": "Ветка публикации Агента_4: постинг в группы Facebook браузерной автоматизацией (scripts/fb_groups_pipeline.py). Секреты — в .env (FB_EMAIL/FB_PASSWORD/FB_GROUPS_BROWSER_PROFILE), сюда только несекретные параметры.",
+  "groups_file": "config/fb_groups_list.txt",
+  "groups": [],
+  "limits": {
+    "max_groups_per_run": 3,
+    "max_posts_per_day_total": 8,
+    "min_minutes_between_posts": 45,
+    "min_minutes_between_posts_same_group": 1440
+  },
+  "media": {
+    "max_images": 10,
+    "hook_cover_first": true
+  },
+  "browser": {
+    "profile_env": "FB_GROUPS_BROWSER_PROFILE",
+    "default_profile": ".fb_profile",
+    "headless_env": "FB_HEADLESS",
+    "viewport": {"width": 1440, "height": 900},
+    "nav_timeout_ms": 90000,
+    "action_timeout_ms": 30000,
+    "upload_wait_ms": 60000,
+    "post_confirm_wait_ms": 45000,
+    "human_delay_ms": {"min": 900, "max": 2400}
+  },
+  "notion": {
+    "fields": {
+      "object_id": "Объект ID",
+      "status": "Статус",
+      "photo": "Фото",
+      "caption": "Описание для FB Marketplace",
+      "post_url_fb_groups": "post_url_fb_groups",
+      "fb_groups_locked": "fb_groups_locked",
+      "fb_groups_taken_at": "fb_groups_taken_at",
+      "fb_groups_log": "fb_groups_log",
+      "publish_error": "last_error",
+      "error_count": "error_count"
+    },
+    "statuses": {
+      "ready": "ready_to_post"
+    }
+  },
+  "state_file": "data/fb_groups/state.json",
+  "tmp_dir": "data/fb_groups/tmp"
+}

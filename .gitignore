@@ -48,3 +48,10 @@ agent_3_director/data/
 
 # Runtime-логи отложенной синхронизации Агента 4
 agent_4_publisher/data/deferred_sync/
+
+# Кит с FB-профилем и ключами для веток публикатора (секреты, вне git)
+agent_4_publisher_fb/
+
+# Runtime-данные веток FB групп/маркетплейса (state, debug-скриншоты, tmp-фото)
+agent_4_publisher/data/fb_groups/
+agent_4_publisher/data/fb_marketplace/

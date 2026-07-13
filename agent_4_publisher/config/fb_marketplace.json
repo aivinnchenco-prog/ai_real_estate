@@ -1,0 +1,69 @@
+{
+  "$comment": "Ветка публикации Агента_4: объявление в Facebook Marketplace (Homes for Rent) браузерной автоматизацией (scripts/fb_marketplace_pipeline.py). Секреты — в .env, сюда только несекретные параметры.",
+  "create_url": "https://www.facebook.com/marketplace/create/rental",
+  "selling_url": "https://www.facebook.com/marketplace/you/selling",
+  "listing": {
+    "rent_or_sale": "rent",
+    "property_type_by_housing": {
+      "Вилла": "house",
+      "Дом": "house",
+      "Таунхаус": "townhouse",
+      "Кондо": "apartment",
+      "Квартира": "apartment",
+      "Апартаменты": "apartment",
+      "Комната": "room",
+      "default": "house"
+    },
+    "location_source": "google_maps_reverse_geocode",
+    "location_query_fields": ["Район", "Адрес"],
+    "location_suffix": "Phuket",
+    "reverse_geocode_language": "en",
+    "promote_after_publish": false
+  },
+  "limits": {
+    "max_listings_per_day": 3,
+    "min_minutes_between_listings": 120
+  },
+  "media": {
+    "max_images": 20,
+    "hook_cover_first": true
+  },
+  "browser": {
+    "profile_env": "FB_GROUPS_BROWSER_PROFILE",
+    "default_profile": ".fb_profile",
+    "headless_env": "FB_HEADLESS",
+    "viewport": {"width": 1440, "height": 900},
+    "nav_timeout_ms": 90000,
+    "action_timeout_ms": 30000,
+    "upload_wait_ms": 120000,
+    "post_confirm_wait_ms": 60000,
+    "human_delay_ms": {"min": 900, "max": 2400}
+  },
+  "notion": {
+    "fields": {
+      "object_id": "Объект ID",
+      "status": "Статус",
+      "photo": "Фото",
+      "caption": "Описание для FB Marketplace",
+      "price_monthly": "Цена за месяц",
+      "rooms": "Количество комнат",
+      "bathrooms": "Количество сан.узлов",
+      "housing_type": "Тип жилья",
+      "district": "Район",
+      "address": "Адрес",
+      "google_maps": "Google Maps",
+      "area_sqm": "Площадь участка (м²)",
+      "post_url_fb_marketplace": "post_url_FB_marketplace",
+      "fb_marketplace_locked": "fb_marketplace_locked",
+      "fb_marketplace_taken_at": "fb_marketplace_taken_at",
+      "fb_marketplace_log": "fb_marketplace_log",
+      "publish_error": "last_error",
+      "error_count": "error_count"
+    },
+    "statuses": {
+      "ready": "ready_to_post"
+    }
+  },
+  "state_file": "data/fb_marketplace/state.json",
+  "tmp_dir": "data/fb_marketplace/tmp"
+}

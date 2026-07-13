@@ -1,0 +1,9 @@
+# Список групп Facebook для постинга (ветка fb_groups_pipeline.py).
+# Одна группа на строку — просто URL. Строки с # игнорируются.
+# Пайплайн объединяет этот список с config/fb_groups.json (дубли отбрасываются),
+# лимит групп за один запуск — limits.max_groups_per_run в fb_groups.json.
+
+https://www.facebook.com/groups/PhuketNotizie/
+https://www.facebook.com/groups/Villa.For.Rent.Phuket/
+https://www.facebook.com/groups/phuketrentsale/
+https://www.facebook.com/groups/123632110828710/
