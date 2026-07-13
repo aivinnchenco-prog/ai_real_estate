@@ -164,16 +164,45 @@ class AirbnbParser:
             return None
 
     def close(self):
-        if self.sb is not None:
+        """Закрывает браузер; зависший driver.quit() не блокирует бота."""
+        if self.sb is None:
+            return
+        import threading
+
+        sb, self.sb = self.sb, None
+
+        def _quit():
             try:
-                self.sb.close_active_tab()
-                self.sb.driver.quit()
+                sb.close_active_tab()
+                sb.driver.quit()
             except Exception:
                 pass
-            self.sb = None
+
+        worker = threading.Thread(target=_quit, daemon=True)
+        worker.start()
+        worker.join(timeout=15)
+        if worker.is_alive():
+            logger.warning('driver.quit() завис — оставляю Chrome умирать в фоне')
 
     def _open_listing_url(self, url):
-        """Открывает листинг с cookie валюты — airbnb.ru иначе показывает RUB."""
+        """Открывает листинг с cookie валюты — airbnb.ru иначе показывает RUB.
+
+        Открытие ограничено таймаутом: зависший Chrome (после долгого простоя
+        или капчи) перезапускается, попытка повторяется один раз.
+        """
+        try:
+            self._open_with_timeout(url, config.PARSER_OPEN_TIMEOUT_SEC)
+        except TimeoutError:
+            logger.warning(
+                f'Открытие страницы зависло (> {config.PARSER_OPEN_TIMEOUT_SEC}с) — '
+                'перезапускаю браузер и пробую ещё раз'
+            )
+            self.close()
+            self._open_with_timeout(url, config.PARSER_OPEN_TIMEOUT_SEC)
+
+    def _open_with_timeout(self, url, timeout_sec):
+        import threading
+
         sb = self._ensure_sb()
         currency = getattr(self, '_target_currency', None) or 'THB'
         try:
@@ -189,7 +218,24 @@ class AirbnbParser:
             ])
         except Exception:
             logger.debug('Could not set currency cookie', exc_info=True)
-        sb.open(url)
+
+        done = threading.Event()
+        errors: list = []
+
+        def _go():
+            try:
+                sb.open(url)
+            except Exception as e:  # noqa: BLE001 — пробрасываем наружу
+                errors.append(e)
+            finally:
+                done.set()
+
+        worker = threading.Thread(target=_go, daemon=True)
+        worker.start()
+        if not done.wait(timeout=timeout_sec):
+            raise TimeoutError(f'sb.open({url}) не завершился за {timeout_sec}с')
+        if errors:
+            raise errors[0]
 
     def _clear_price_fields(self, data):
         for key in self._PRICE_FIELDS:

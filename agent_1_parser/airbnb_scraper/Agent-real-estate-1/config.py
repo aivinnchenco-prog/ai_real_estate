@@ -102,6 +102,8 @@ _pma = os.getenv('PRICE_MONTHS_AHEAD', '').strip()
 PRICE_MONTHS_AHEAD = int(_pma) if _pma else None
 # Минимальный непрерывный доступный отрезок (дней) для экстраполяции цены месяца
 PRICE_MIN_SEGMENT_DAYS = int(os.getenv('PRICE_MIN_SEGMENT_DAYS', '5'))
+# Таймаут открытия страницы браузером; при зависании Chrome перезапускается
+PARSER_OPEN_TIMEOUT_SEC = int(os.getenv('PARSER_OPEN_TIMEOUT_SEC', '90'))
 
 # Распознавание владельца/агентства и веб-поиск контактов
 OWNER_DETECT_ENABLED = os.getenv('OWNER_DETECT_ENABLED', 'true').lower() in ('1', 'true', 'yes')
