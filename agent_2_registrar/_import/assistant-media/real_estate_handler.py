@@ -10,6 +10,7 @@ import mimetypes
 import os
 import json
 import re
+import sys
 import requests
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
@@ -119,6 +120,9 @@ class NotionCRM:
             'properties': properties
         }
         resp = requests.post(url, headers=self.headers, json=payload)
+        if resp.status_code >= 400:
+            # Notion в теле ответа объясняет, какое свойство не принял
+            print(f"Notion create_page error: {resp.text[:2000]}", file=sys.stderr)
         resp.raise_for_status()
         return resp.json()
     
@@ -154,8 +158,20 @@ class NotionCRM:
     
     @staticmethod
     def build_text(text: str, max_chunk: int = 2000) -> Dict:
+        # Notion меряет лимит 2000 в UTF-16 code units: эмодзи = 2 единицы,
+        # поэтому режем по UTF-16, а не по len() Python-строки
         content = text or ""
-        chunks = [content[i : i + max_chunk] for i in range(0, max(len(content), 1), max_chunk)]
+        chunks: list = []
+        cur: list = []
+        cur_len = 0
+        for ch in content:
+            ch_len = len(ch.encode('utf-16-le')) // 2
+            if cur_len + ch_len > max_chunk:
+                chunks.append(''.join(cur))
+                cur, cur_len = [], 0
+            cur.append(ch)
+            cur_len += ch_len
+        chunks.append(''.join(cur))
         return {
             'rich_text': [{'type': 'text', 'text': {'content': chunk}} for chunk in chunks]
         }

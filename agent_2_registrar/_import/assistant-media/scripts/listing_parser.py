@@ -49,6 +49,7 @@ class ListingDraft:
     title: str
     district: str
     rooms: int | None = None
+    bathrooms: int | None = None
     area: float | None = None
     price_monthly: float | None = None
     price_yearly: float | None = None
@@ -165,10 +166,15 @@ def parse_listing(
     title = extract_title(description)
     district = extract_district(description, districts)
 
-    rooms = area = price_monthly = price_yearly = None
-    m = re.search(r"(\d+)\s*(?:BR|комнат|bedroom|спален)", description, re.I)
+    rooms = bathrooms = area = price_monthly = price_yearly = None
+    # «3 спальни», «3 спален», «3 спальнями», «2BR», «2 bedrooms», «3 комнаты»
+    m = re.search(r"(\d+)\s*(?:BR\b|комнат\w*|bedroom\w*|спал\w+)", description, re.I)
     if m:
         rooms = int(m.group(1))
+    # «3 ванные», «2 bathrooms», «2 сан.узла»
+    m = re.search(r"(\d+)\s*(?:ванн\w*|bathroom\w*|сан\.?\s*узл\w*)", description, re.I)
+    if m:
+        bathrooms = int(m.group(1))
     m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:m²|m2|кв\.?\s*м|sqm)", description, re.I)
     if m:
         area = float(m.group(1).replace(",", "."))
@@ -194,6 +200,7 @@ def parse_listing(
         title=title,
         district=district,
         rooms=rooms,
+        bathrooms=bathrooms,
         area=area,
         price_monthly=price_monthly,
         price_yearly=price_yearly,

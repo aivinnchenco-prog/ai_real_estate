@@ -210,6 +210,8 @@ def build_notion_properties(
         properties[nf["photo"]] = NotionCRM.build_url(gallery_url)
     if draft.rooms is not None:
         properties[nf.get("rooms", "Количество комнат")] = NotionCRM.build_number(draft.rooms)
+    if draft.bathrooms is not None:
+        properties[nf.get("bathrooms", "Количество сан.узлов")] = NotionCRM.build_number(draft.bathrooms)
     if draft.area is not None:
         properties[nf.get("area", "Площадь участка (м²)")] = NotionCRM.build_number(draft.area)
     if draft.price_monthly is not None:
