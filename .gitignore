@@ -45,3 +45,6 @@ agent_1_parser/airbnb_scraper/Agent-real-estate-1/data/
 
 # Состояние ротации музыки Агента 3 (runtime)
 agent_3_director/data/
+
+# Runtime-логи отложенной синхронизации Агента 4
+agent_4_publisher/data/deferred_sync/
