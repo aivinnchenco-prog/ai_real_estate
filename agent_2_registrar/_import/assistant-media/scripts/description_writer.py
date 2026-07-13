@@ -116,6 +116,27 @@ def call_llm(prompt: str) -> str | None:
     return _call_gemini(prompt) or _call_anthropic(prompt)
 
 
+def cjk_ratio(text: str) -> float:
+    """Доля CJK-символов (кит./яп./кор.) в тексте."""
+    if not text:
+        return 0.0
+    cjk = sum(1 for ch in text if "\u4e00" <= ch <= "\u9fff" or "\u3040" <= ch <= "\u30ff")
+    return cjk / len(text)
+
+
+def translate_to_russian(text: str) -> str | None:
+    """Перевод описания на русский (страховка, когда Airbnb отдал оригинал
+    на языке хозяина). None — если LLM недоступен."""
+    prompt = (
+        "Переведи текст объявления об аренде жилья на русский язык.\n"
+        "Сохрани структуру строк, все числа, цены, валюты, названия мест и"
+        " HTML-теги (<b>, </b>) без изменений. Не добавляй ничего от себя,"
+        " выведи только перевод.\n\n" + text.strip()[:8000]
+    )
+    result = call_llm(prompt)
+    return result.strip() if result else None
+
+
 # ---------- контекст объекта ----------
 
 def resolve_max_guests(draft, parsed_meta: dict | None = None) -> tuple[int, bool]:

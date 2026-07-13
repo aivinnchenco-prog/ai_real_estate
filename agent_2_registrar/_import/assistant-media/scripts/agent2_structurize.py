@@ -25,8 +25,10 @@ from real_estate_handler import (  # noqa: E402
 )
 from description_writer import (  # noqa: E402
     build_context,
+    cjk_ratio,
     generate_long_description,
     generate_social_description,
+    translate_to_russian,
 )
 from maps_resolver import resolve_google_maps  # noqa: E402
 from gallery_html import build_gallery_html  # noqa: E402
@@ -93,6 +95,12 @@ def extract_coords(meta: dict) -> tuple[float, float] | None:
     except (TypeError, ValueError):
         pass
     return None
+
+
+def extract_listing_address(meta: dict) -> str:
+    """Адрес из блока «Где вы будете» Airbnb (location.subtitle в parsed.json)."""
+    loc = meta.get("location") or {}
+    return str(loc.get("subtitle") or "").strip()
 
 
 def detect_source_prefix(session_id: str, source: str, session_path: Path) -> str:
@@ -184,12 +192,14 @@ def build_notion_properties(
     caption_tg: str,
     caption_fb: str,
     source: str,
+    listing_address: str = "",
 ) -> dict:
     properties = {
         nf["title"]: NotionCRM.build_title(draft.title),
         nf["object_id"]: NotionCRM.build_text(object_id),
         nf["status"]: NotionCRM.build_status(statuses["after_structurize"]),
-        nf["address"]: NotionCRM.build_text(maps.address),
+        # Адрес: приоритет — блок «Где вы будете» из объявления Airbnb
+        nf["address"]: NotionCRM.build_text(listing_address or maps.address),
         nf["district"]: NotionCRM.build_text(draft.district),
         nf["google_maps"]: NotionCRM.build_url(maps.url),
         nf["description"]: NotionCRM.build_text(description),
@@ -262,6 +272,14 @@ def main() -> int:
         return 1
 
     description = desc_path.read_text(encoding="utf-8").strip()
+    # Страховка: Airbnb иногда отдаёт описание без автоперевода (язык хозяина,
+    # например китайский) — переводим сами, иначе регэкспы и Notion получат CJK.
+    if cjk_ratio(description) > 0.15:
+        translated = translate_to_russian(description)
+        if translated and cjk_ratio(translated) < 0.05:
+            print("NOTE: описание было не на русском — переведено LLM", file=sys.stderr)
+            description = translated
+            desc_path.write_text(description + "\n", encoding="utf-8")
     crm = NotionCRM(
         os.environ["NOTION_API_KEY"],
         os.environ.get("NOTION_DB_ID") or os.environ["NOTION_DATABASE_ID"],
@@ -364,6 +382,7 @@ def main() -> int:
             caption_tg=caption_tg,
             caption_fb=caption_fb,
             source=args.source,
+            listing_address=extract_listing_address(parsed_meta),
         )
         apply_parsed_meta(properties, parsed_meta, nf)
 
@@ -380,7 +399,7 @@ def main() -> int:
             "title": draft.title,
             "complex_name": maps.complex_name,
             "district": draft.district,
-            "address": maps.address,
+            "address": extract_listing_address(parsed_meta) or maps.address,
             "google_maps": maps.url,
             "google_maps_query": maps.query,
             "google_maps_method": maps.method,
