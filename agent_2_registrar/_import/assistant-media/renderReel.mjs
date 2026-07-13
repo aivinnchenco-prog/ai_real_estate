@@ -3,10 +3,25 @@ import {
   GetObjectCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
+import { createRequire } from "module";
 import * as fs from "fs";
 import * as path from "path";
 import { buildClipFilter } from "./reelFilters.mjs";
+
+const require = createRequire(import.meta.url);
+
+// ffmpeg из PATH, иначе бинарник из @ffmpeg-installer (как в renderSeedance)
+function resolveFfmpeg() {
+  if (spawnSync("which", ["ffmpeg"]).status === 0) return "ffmpeg";
+  try {
+    return require("@ffmpeg-installer/ffmpeg").path;
+  } catch {
+    throw new Error("ffmpeg не найден: установите ffmpeg или npm install @ffmpeg-installer/ffmpeg");
+  }
+}
+
+const FFMPEG = resolveFfmpeg();
 
 export { buildClipFilter } from "./reelFilters.mjs";
 
@@ -85,7 +100,7 @@ export async function renderReel({
       const zoomIn = i % 2 === 0;
       const clipPath = path.join(tmpDir, `clip_${fmt.suffix}_${i}.mp4`);
       const vf = buildClipFilter(zoomIn, frameDurationFrames, fmt.width, fmt.height, fps);
-      const cmd = `ffmpeg -y -loop 1 -i "${imgPaths[i]}" -vf "${vf}" -t ${frame_duration} -r ${fps} -c:v libx264 -pix_fmt yuv420p -loglevel error "${clipPath}"`;
+      const cmd = `"${FFMPEG}" -y -loop 1 -i "${imgPaths[i]}" -vf "${vf}" -t ${frame_duration} -r ${fps} -c:v libx264 -pix_fmt yuv420p -loglevel error "${clipPath}"`;
       execSync(cmd, { stdio: "inherit" });
       clipPaths.push(clipPath);
     }
@@ -95,13 +110,13 @@ export async function renderReel({
 
     const silentVideo = path.join(tmpDir, `silent_${fmt.suffix}.mp4`);
     execSync(
-      `ffmpeg -y -f concat -safe 0 -i "${concatList}" -c copy -loglevel error "${silentVideo}"`,
+      `"${FFMPEG}" -y -f concat -safe 0 -i "${concatList}" -c copy -loglevel error "${silentVideo}"`,
       { stdio: "inherit" }
     );
 
     const outputVideo = path.join(tmpDir, `reel_${fmt.suffix}.mp4`);
     execSync(
-      `ffmpeg -y -i "${silentVideo}" -i "${musicPath}" -c:v copy -c:a aac -shortest -loglevel error "${outputVideo}"`,
+      `"${FFMPEG}" -y -i "${silentVideo}" -i "${musicPath}" -c:v copy -c:a aac -shortest -loglevel error "${outputVideo}"`,
       { stdio: "inherit" }
     );
 

@@ -8,10 +8,9 @@ import { readFileSync, existsSync, appendFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { createHash } from "crypto";
-import { renderReel } from "../renderReel.mjs";
-import { renderSeedance } from "../renderSeedance.mjs";
-import { listKeys } from "../r2list.mjs";
 import { applyEnvOverrides } from "../pipelineEnv.mjs";
+// renderReel/renderSeedance/r2list читают R2-ключи на уровне модуля,
+// поэтому импортируем их динамически ПОСЛЕ loadEnv() (см. main).
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -221,6 +220,9 @@ function parseArgs() {
 
 async function main() {
   loadEnv();
+  const { renderReel } = await import("../renderReel.mjs");
+  const { renderSeedance } = await import("../renderSeedance.mjs");
+  const { listKeys } = await import("../r2list.mjs");
   const cfg = loadConfig();
   const { objectId } = parseArgs();
   const statuses = cfg.notion.statuses;
@@ -238,6 +240,13 @@ async function main() {
     throw new Error("Notion CRM: missing gallery URL in photo field — run Agent 2 first");
   }
   console.log(`Gallery (Notion): ${galleryUrl}`);
+
+  // «Статус для Агент_3»: НЕТ — объект только для базы, монтаж не нужен. Пусто = ДА.
+  const montage = page.properties?.["Статус для Агент_3"]?.select?.name;
+  if ((montage || "").trim().toUpperCase() === "НЕТ") {
+    console.log("«Статус для Агент_3» = НЕТ — монтаж и Seedance пропущены.");
+    process.exit(0);
+  }
 
   if (status === "ready_to_post") {
     console.log("Already ready_to_post — skip");
