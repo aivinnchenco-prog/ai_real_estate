@@ -21,7 +21,7 @@ export function isTitleOverlayEnabled(seedanceCfg) {
   return cfg.enabled !== false;
 }
 
-function resolveFfmpeg() {
+export function resolveFfmpeg() {
   if (spawnSync("which", ["ffmpeg"]).status === 0) return "ffmpeg";
   try {
     return require("@ffmpeg-installer/ffmpeg").path;

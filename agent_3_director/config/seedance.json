@@ -27,5 +27,9 @@
     "enabled": true,
     "config": "config/title-overlay.json"
   },
+  "music": {
+    "enabled": true,
+    "r2_prefix": "music/"
+  },
   "prompt_template": "Vertical 9:16 real estate walkthrough using references {tags}. Smooth, soft, stabilized forward camera dolly only — steady constant speed, no acceleration, no speed ramps, no zoom, no object animation, no moving furniture, no people. Only the camera glides forward through the space. Bright natural lighting, cinematic but calm."
 }

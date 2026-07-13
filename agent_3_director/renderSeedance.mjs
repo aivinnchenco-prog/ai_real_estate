@@ -2,6 +2,8 @@
  * Seedance 2.0 via Higgsfield — до 9 ref-фото → один 9:16 ролик (без склейки).
  * Providers (priority): CLI (OAuth) → MCP (OAuth Bearer) → legacy REST API.
  */
+import { execSync } from "child_process";
+import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import {
@@ -12,11 +14,13 @@ import {
 import { generateSeedanceViaCli, isCliAuthenticated } from "./higgsfieldCli.mjs";
 import { generateSeedanceViaMcp, isMcpConfigured } from "./higgsfieldMcp.mjs";
 import { generateSeedanceViaPlatform, isPlatformConfigured } from "./higgsfieldPlatform.mjs";
-import { publicUrlForKey, uploadVideoToR2 } from "./r2util.mjs";
+import { downloadFromR2, publicUrlForKey, uploadVideoToR2 } from "./r2util.mjs";
+import { listKeys } from "./r2list.mjs";
 import {
   applyTitleOverlay,
   isTitleOverlayEnabled,
   loadTitleOverlayConfig,
+  resolveFfmpeg,
 } from "./applyTitleOverlay.mjs";
 
 function resolveProvider(cfg) {
@@ -40,6 +44,49 @@ async function generateClip(provider, imageUrls, prompt, cfg) {
     return generateSeedanceViaPlatform({ imageUrls, prompt, cfg });
   }
   return generateSeedanceClip({ imageUrls, prompt, cfg });
+}
+
+/**
+ * Мини-монтаж: наложение вирусной аудиодорожки из R2 (папка music/) на готовый
+ * ролик — Metricool не даёт выбирать музыку при постинге, поэтому звук
+ * вшиваем в файл. Трек выбирается детерминированно по object_id.
+ */
+async function addMusicTrack({ objectId, videoPath, outPath, cfg, tmpDir }) {
+  const music = cfg.music || {};
+  if (music.enabled === false) return false;
+
+  const prefix = music.r2_prefix || "music/";
+  const tracks = (await listKeys(prefix)).filter((k) => /\.(mp3|m4a|aac|wav|ogg)$/i.test(k));
+  if (!tracks.length) {
+    console.warn(`Music: нет треков в R2 ${prefix} — ролик остаётся без музыки`);
+    return false;
+  }
+
+  const hash = createHash("sha256").update(objectId).digest();
+  const trackKey = tracks[hash[0] % tracks.length];
+  const trackLocal = path.join(tmpDir, `music${path.extname(trackKey)}`);
+  await downloadFromR2(trackKey, trackLocal);
+
+  const ffmpeg = resolveFfmpeg();
+  if (!ffmpeg) throw new Error("Music mix: ffmpeg not found");
+
+  execSync(
+    [
+      `"${ffmpeg}"`,
+      "-y",
+      `-i "${videoPath}"`,
+      `-i "${trackLocal}"`,
+      "-map 0:v -map 1:a",
+      "-c:v copy -c:a aac -b:a 192k",
+      "-shortest",
+      "-movflags +faststart",
+      "-loglevel error",
+      `"${outPath}"`,
+    ].join(" "),
+    { stdio: "inherit" }
+  );
+  console.log(`Step 2.5/3: музыка наложена — ${trackKey}`);
+  return true;
 }
 
 export function isSeedanceConfigured(cfg) {
@@ -111,10 +158,21 @@ export async function renderSeedance({ object_id, image_keys, cfg, overlay_meta,
       fs.copyFileSync(rawLocal, finalLocal);
     }
 
+    // Мини-монтаж: вирусная аудиодорожка из R2 (некритично при ошибке)
+    let uploadLocal = finalLocal;
+    try {
+      const withMusic = path.join(tmpDir, "video_seedance_music.mp4");
+      if (await addMusicTrack({ objectId: object_id, videoPath: finalLocal, outPath: withMusic, cfg, tmpDir })) {
+        uploadLocal = withMusic;
+      }
+    } catch (err) {
+      console.warn(`Music mix failed (non-blocking): ${err.message}`);
+    }
+
     console.log("Step 3/3: upload to R2");
 
     const r2Key = `${object_id}/video_seedance_9x16.mp4`;
-    const url = await uploadVideoToR2(finalLocal, r2Key);
+    const url = await uploadVideoToR2(uploadLocal, r2Key);
     console.log(`✓ seedance 9x16: ${url}`);
     return { "9x16": url, image_count: imageUrls.length, provider, overlay: overlayResult };
   } finally {
