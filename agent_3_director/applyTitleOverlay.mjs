@@ -104,6 +104,50 @@ async function renderHookCardPng({ templatePath, meta, outPath, width, height })
   }
 }
 
+/**
+ * Хук-обложка карусели: первое фото объекта + карточка-хук поверх.
+ * Формат 4:5 (1080×1350) — стандарт вертикального поста Instagram,
+ * карточка рендерится сразу под этот размер (она прибита к низу-левому краю).
+ */
+export async function renderHookCover({ photoPath, outputPath, meta, cfg, width = 1080, height = 1350 }) {
+  if (!meta?.title_phrase && !meta?.price && !meta?.district) {
+    throw new Error("Hook cover: empty CRM metadata");
+  }
+  const ffmpeg = resolveFfmpeg();
+  if (!ffmpeg) throw new Error("Hook cover: ffmpeg not found");
+
+  const templatePath = resolve(ROOT, cfg.template || "templates/hook_card.html");
+  if (!existsSync(templatePath)) {
+    throw new Error(`Hook cover template not found: ${templatePath}`);
+  }
+
+  const overlayPng = outputPath.replace(/\.[a-z]+$/i, "_overlay.png");
+  await renderHookCardPng({ templatePath, meta, outPath: overlayPng, width, height });
+
+  const filter =
+    `[0]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
+    `crop=${width}:${height}[bg];[1]scale=${width}:${height}[ov];` +
+    `[bg][ov]overlay=0:0:format=auto[v]`;
+
+  execSync(
+    [
+      `"${ffmpeg}"`,
+      "-y",
+      `-i "${photoPath}"`,
+      `-i "${overlayPng}"`,
+      `-filter_complex "${filter}"`,
+      '-map "[v]"',
+      "-frames:v 1",
+      "-q:v 2",
+      "-loglevel error",
+      `"${outputPath}"`,
+    ].join(" "),
+    { stdio: "inherit" }
+  );
+
+  return { cover: outputPath, meta };
+}
+
 export async function applyTitleOverlay({ inputPath, outputPath, meta, cfg }) {
   if (!meta?.title_phrase && !meta?.price && !meta?.district) {
     throw new Error("Title overlay: empty CRM metadata");

@@ -381,10 +381,30 @@ def parse_gallery_image_urls(gallery_url: str) -> list[str]:
     return urls
 
 
+def hook_cover_url(gallery_url: str) -> str | None:
+    """Хук-обложка от Агента 3: {base}/{object_id}/hook_cover.jpg рядом с галереей."""
+    if not gallery_url or "/photos/" not in gallery_url:
+        return None
+    candidate = gallery_url.rsplit("/photos/", 1)[0] + "/hook_cover.jpg"
+    request = urllib.request.Request(candidate, method="HEAD")
+    request.add_header("User-Agent", "real-estate-agent6-publisher/1.0")
+    try:
+        with urllib.request.urlopen(request, timeout=15) as resp:
+            if resp.status == 200:
+                return candidate
+    except (urllib.error.URLError, OSError):
+        pass
+    return None
+
+
 def resolve_carousel_urls(gallery_url: str, max_images: int) -> list[str]:
     if max_images <= 0:
         return []
-    return parse_gallery_image_urls(gallery_url)[:max_images]
+    urls = parse_gallery_image_urls(gallery_url)
+    cover = hook_cover_url(gallery_url)
+    if cover:
+        urls = [cover] + [u for u in urls if u != cover]
+    return urls[:max_images]
 
 
 def carousel_enabled_for(platform: str, config: dict[str, Any]) -> bool:

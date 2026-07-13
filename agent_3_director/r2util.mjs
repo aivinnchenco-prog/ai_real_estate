@@ -42,6 +42,10 @@ export async function downloadFromR2(key, outPath) {
 }
 
 export async function uploadVideoToR2(filepath, key) {
+  return uploadFileToR2(filepath, key, "video/mp4");
+}
+
+export async function uploadFileToR2(filepath, key, contentType) {
   const { client, bucket, publicBase } = r2Config();
   const data = fs.readFileSync(filepath);
   await client.send(
@@ -49,7 +53,7 @@ export async function uploadVideoToR2(filepath, key) {
       Bucket: bucket,
       Key: key,
       Body: data,
-      ContentType: "video/mp4",
+      ContentType: contentType,
     })
   );
   return `${publicBase}/${key}`;

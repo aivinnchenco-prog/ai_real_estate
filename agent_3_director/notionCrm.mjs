@@ -52,20 +52,24 @@ function readErrorCount(page) {
   return typeof n === "number" ? n : 0;
 }
 
-export async function setSeedanceUrl(page, fields, url) {
-  await updatePage(page.id, {
+export async function setSeedanceUrl(page, fields, url, statusName = null) {
+  const properties = {
     [fields.video_seedance]: { url },
     [fields.last_error]: { rich_text: [] },
-  });
+  };
+  if (statusName) properties[fields.status] = { status: { name: statusName } };
+  await updatePage(page.id, properties);
 }
 
-export async function setError(page, fields, message) {
-  await updatePage(page.id, {
+export async function setError(page, fields, message, statusName = null) {
+  const properties = {
     [fields.last_error]: {
       rich_text: [{ text: { content: String(message).slice(0, 2000) } }],
     },
     error_count: { number: readErrorCount(page) + 1 },
-  });
+  };
+  if (statusName) properties[fields.status] = { status: { name: statusName } };
+  await updatePage(page.id, properties);
 }
 
 export function pageStatus(page, fields) {

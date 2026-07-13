@@ -22,6 +22,8 @@
     "district": "Район"
   },
   "statuses": {
-    "allowed": ["ready_for_video", "ready_to_post", "video_failed"]
+    "allowed": ["ready_for_video", "ready_to_post", "video_failed"],
+    "video_done": "ready_to_post",
+    "video_failed": "video_failed"
   }
 }

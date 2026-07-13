@@ -28,9 +28,36 @@ import {
 import { listKeys } from "../r2list.mjs";
 import { selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
 import { renderSeedance, isSeedanceConfigured } from "../renderSeedance.mjs";
+import { renderHookCover, isTitleOverlayEnabled, loadTitleOverlayConfig } from "../applyTitleOverlay.mjs";
+import { downloadFromR2, uploadFileToR2 } from "../r2util.mjs";
+import { mkdtempSync, rmSync } from "fs";
+import { tmpdir } from "os";
 
 function loadSeedanceConfig() {
   return JSON.parse(readFileSync(resolve(ROOT, "config/seedance.json"), "utf8"));
+}
+
+/**
+ * Хук-обложка карусели: первое фото объекта + карточка-хук → R2 {id}/hook_cover.jpg.
+ * Publisher ставит её первым слайдом карусели. Ошибка не блокирует видео.
+ */
+async function makeHookCover({ objectId, firstPhotoKey, overlayMeta, seedanceCfg }) {
+  const overlayCfg = loadTitleOverlayConfig(seedanceCfg);
+  const tmpDir = mkdtempSync(join(tmpdir(), "hook-cover-"));
+  try {
+    const photoLocal = join(tmpDir, "photo.jpg");
+    await downloadFromR2(firstPhotoKey, photoLocal);
+    const coverLocal = join(tmpDir, "hook_cover.jpg");
+    await renderHookCover({
+      photoPath: photoLocal,
+      outputPath: coverLocal,
+      meta: overlayMeta,
+      cfg: overlayCfg,
+    });
+    return await uploadFileToR2(coverLocal, `${objectId}/hook_cover.jpg`, "image/jpeg");
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
 }
 
 function runSchemaCheck(skip) {
@@ -192,6 +219,21 @@ async function main() {
     return;
   }
 
+  // Хук-обложка карусели — до видео, чтобы она была даже при падении Seedance
+  if (!skipOverlay && isTitleOverlayEnabled(seedanceCfg)) {
+    try {
+      const coverUrl = await makeHookCover({
+        objectId,
+        firstPhotoKey: photoKeys.sort()[0],
+        overlayMeta,
+        seedanceCfg,
+      });
+      console.log(`✓ hook cover (карусель): ${coverUrl}`);
+    } catch (err) {
+      console.warn(`Hook cover failed (non-blocking): ${err.message}`);
+    }
+  }
+
   if (!isSeedanceConfigured(seedanceCfg)) {
     throw new Error("Higgsfield not configured — run: higgsfield auth login  OR set HIGGSFIELD_MCP_ACCESS_TOKEN");
   }
@@ -217,7 +259,7 @@ async function main() {
       throw new Error("Seedance returned no video URL");
     }
 
-    await setSeedanceUrl(page, fields, result["9x16"]);
+    await setSeedanceUrl(page, fields, result["9x16"], notionCfg.statuses?.video_done || "ready_to_post");
 
     const summary = {
       object_id: objectId,
@@ -227,7 +269,7 @@ async function main() {
     console.log("\nSEEDANCE_DONE");
     console.log(JSON.stringify(summary, null, 2));
   } catch (err) {
-    await setError(page, fields, err.message);
+    await setError(page, fields, err.message, notionCfg.statuses?.video_failed || "video_failed");
     throw err;
   }
 }
