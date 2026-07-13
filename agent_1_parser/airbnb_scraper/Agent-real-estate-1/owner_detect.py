@@ -4,7 +4,6 @@
   1. Профиль хозяина — «Моя профессия / Моя професія / My work: …»
      (hostHighlights из секции MEET_YOUR_HOST) и текст «о себе».
   2. Описание объявления — название компании/агентства.
-  3. Аватар хозяина — логотип/название компании (Claude vision, если есть ключ).
 
 Дальше — веб-поиск «<компания> Phuket» (DuckDuckGo) и извлечение контактов
 (телефоны, email, сайты) из сниппетов результатов.
@@ -15,13 +14,10 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import re
-import urllib.request
 from pathlib import Path
 
-import config
 from CustomLogger import logger
 
 # Явные маркеры «это компания, а не человек»
@@ -97,53 +93,6 @@ def company_from_text(text: str) -> str | None:
     return None
 
 
-def company_from_avatar(avatar_url: str) -> str | None:
-    """Логотип/название компании на аватаре хозяина (Claude vision)."""
-    if not avatar_url or not config.ANTHROPIC_API_KEY:
-        return None
-    try:
-        req = urllib.request.Request(avatar_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            raw = resp.read()
-            content_type = resp.headers.get("Content-Type", "image/jpeg").split(";")[0]
-        if len(raw) > 4_000_000:
-            return None
-
-        import anthropic
-
-        client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
-        response = client.messages.create(
-            model=config.ANTHROPIC_MODEL,
-            max_tokens=200,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {
-                        "type": "base64",
-                        "media_type": content_type,
-                        "data": base64.b64encode(raw).decode(),
-                    }},
-                    {"type": "text", "text": (
-                        "Это аватар хозяина объявления Airbnb. Если на изображении виден "
-                        "ЛОГОТИП или НАЗВАНИЕ компании/агентства недвижимости — верни JSON "
-                        '{"company": "название"}. Если это просто фото человека или '
-                        'название не читается — верни {"company": null}. Только JSON.'
-                    )},
-                ],
-            }],
-        )
-        raw_text = response.content[0].text.strip()
-        raw_text = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text)
-        candidate = (json.loads(raw_text) or {}).get("company")
-        if candidate:
-            candidate = _clean_company(str(candidate))
-            logger.info(f"owner_detect: компания с аватара — {candidate}")
-            return candidate or None
-    except Exception as e:
-        logger.warning(f"owner_detect: анализ аватара не удался: {e}")
-    return None
-
-
 def project_region() -> str:
     """Регион для поисковых запросов — из общего config/project.json монорепы."""
     candidate = Path(__file__).resolve().parents[3] / "config" / "project.json"
@@ -196,7 +145,7 @@ def search_company_contacts(company: str, region: str | None = None, max_results
 
 
 def detect_owner(description: str, host: dict, *, web_search: bool = True) -> dict:
-    """Полный проход: профиль → описание → аватар → веб-поиск контактов.
+    """Полный проход: профиль → описание → «о себе» → веб-поиск контактов.
 
     Возвращает dict для parsed.json:
     {host_name, company, company_source, contacts{phones,emails,links}, avatar_url}
@@ -217,11 +166,6 @@ def detect_owner(description: str, host: dict, *, web_search: bool = True) -> di
         candidate = company_from_text(host["about"])
         if candidate:
             company, source = candidate, "host_about"
-
-    if not company:
-        candidate = company_from_avatar(host.get("avatar_url", ""))
-        if candidate:
-            company, source = candidate, "avatar_logo"
 
     result = {
         "host_name": host.get("name", ""),
