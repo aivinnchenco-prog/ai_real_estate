@@ -32,8 +32,8 @@
     "hook_cover_first": true
   },
   "browser": {
-    "profile_env": "FB_GROUPS_BROWSER_PROFILE",
-    "default_profile": ".fb_profile",
+    "profile_env": "FB_POST_BROWSER_PROFILE",
+    "default_profile": ".fb_posting_profile",
     "headless_env": "FB_HEADLESS",
     "viewport": {
       "width": 1440,
@@ -46,7 +46,8 @@
     "human_delay_ms": {
       "min": 900,
       "max": 2400
-    }
+    },
+    "$comment_profile": "Постинг идёт с ОТДЕЛЬНОГО FB-аккаунта (не с парсингового): свой профиль браузера и свои FB_POST_EMAIL/FB_POST_PASSWORD."
   },
   "notion": {
     "fields": {

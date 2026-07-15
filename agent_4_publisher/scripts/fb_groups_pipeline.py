@@ -251,19 +251,47 @@ def acquire_profile_lock(profile: Path) -> Path:
     return lock_file
 
 
+def resolve_proxy() -> dict[str, str] | None:
+    """Прокси ПОСТИНГ-аккаунта (FB_POST_PROXY, свой, не парсинговый).
+    Формат: scheme://user:pass@host:port или host:port:user:pass."""
+    raw = os.environ.get("FB_POST_PROXY", "").strip()
+    if not raw:
+        return None
+    if "://" in raw:
+        from urllib.parse import urlparse
+        u = urlparse(raw)
+        proxy: dict[str, str] = {"server": f"{u.scheme}://{u.hostname}:{u.port}"}
+        if u.username:
+            proxy["username"] = u.username
+        if u.password:
+            proxy["password"] = u.password
+        return proxy
+    parts = raw.split(":")
+    if len(parts) == 2:
+        return {"server": f"http://{parts[0]}:{parts[1]}"}
+    if len(parts) == 4:
+        host, port, user, pw = parts
+        return {"server": f"http://{host}:{port}", "username": user, "password": pw}
+    print(f"[warn] FB_POST_PROXY нераспознан: {raw}", file=sys.stderr)
+    return None
+
+
 def open_browser(p: Any, cfg: dict[str, Any]) -> Any:
     browser = cfg.get("browser", {})
     viewport = browser.get("viewport", {"width": 1440, "height": 900})
-    context = p.chromium.launch_persistent_context(
-        str(profile_path(cfg)),
-        headless=resolve_headless(),
-        viewport={"width": int(viewport["width"]), "height": int(viewport["height"])},
-        args=[
+    launch_kwargs: dict[str, Any] = {
+        "headless": resolve_headless(),
+        "viewport": {"width": int(viewport["width"]), "height": int(viewport["height"])},
+        "args": [
             "--disable-blink-features=AutomationControlled",
             "--no-first-run",
             "--no-default-browser-check",
         ],
-    )
+    }
+    proxy = resolve_proxy()
+    if proxy:
+        launch_kwargs["proxy"] = proxy
+    context = p.chromium.launch_persistent_context(str(profile_path(cfg)), **launch_kwargs)
     context.set_default_timeout(int(browser.get("action_timeout_ms", 30000)))
     return context
 
@@ -276,11 +304,15 @@ def is_logged_in(context: Any) -> bool:
 
 
 def try_relogin(page: Any, cfg: dict[str, Any]) -> None:
-    """Запасной вариант из набора: разовый логин по FB_EMAIL/FB_PASSWORD."""
-    email = os.environ.get("FB_EMAIL", "").strip()
-    password = os.environ.get("FB_PASSWORD", "").strip()
+    """Запасной вариант: разовый логин ПОСТИНГ-аккаунта (не парсингового!)
+    по FB_POST_EMAIL/FB_POST_PASSWORD."""
+    email = os.environ.get("FB_POST_EMAIL", "").strip()
+    password = os.environ.get("FB_POST_PASSWORD", "").strip()
     if not email or not password:
-        raise RuntimeError("AUTH_REQUIRED: сессия протухла, а FB_EMAIL/FB_PASSWORD не заданы")
+        raise RuntimeError(
+            "AUTH_REQUIRED: сессия протухла, а FB_POST_EMAIL/FB_POST_PASSWORD не заданы "
+            "(постинг-аккаунт отдельный от парсингового FB_EMAIL)"
+        )
     page.goto("https://www.facebook.com/login", wait_until="domcontentloaded")
     human_delay(cfg)
     page.fill('input[name="email"], input#email', email)

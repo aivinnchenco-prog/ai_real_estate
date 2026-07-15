@@ -56,3 +56,6 @@ agent_4_publisher_fb/
 agent_4_publisher/data/fb_groups/
 agent_4_publisher/data/fb_marketplace/
 agent_4_publisher/data/fb_account/
+
+# Профиль браузера постинг-аккаунта FB (секрет, вне git)
+agent_4_publisher/.fb_posting_profile/
