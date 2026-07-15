@@ -4,10 +4,13 @@
   "groups": [],
   "limits": {
     "max_groups_per_run": 2,
-    "max_posts_per_day_total": 4,
+    "max_posts_per_day_total": 2,
     "min_minutes_between_posts": 90,
     "min_minutes_between_posts_same_group": 2880,
-    "minutes_between_groups": [8, 18]
+    "minutes_between_groups": [
+      8,
+      18
+    ]
   },
   "media": {
     "max_images": 10,
@@ -17,12 +20,18 @@
     "profile_env": "FB_GROUPS_BROWSER_PROFILE",
     "default_profile": ".fb_profile",
     "headless_env": "FB_HEADLESS",
-    "viewport": {"width": 1440, "height": 900},
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
     "nav_timeout_ms": 90000,
     "action_timeout_ms": 30000,
     "upload_wait_ms": 60000,
     "post_confirm_wait_ms": 45000,
-    "human_delay_ms": {"min": 1500, "max": 4500}
+    "human_delay_ms": {
+      "min": 1500,
+      "max": 4500
+    }
   },
   "notion": {
     "fields": {
