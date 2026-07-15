@@ -105,11 +105,13 @@ def run_fb_branch(page_id: str, script_name: str) -> int:
     if fb_python is None:
         print(f"[chain] SKIP {script_name}: нет venv FB-парсера (.venv311)", file=sys.stderr)
         return 0
+    cmd = [str(fb_python), str(script), "--page-id", page_id]
+    # На сервере без дисплея — виртуальный экран (headful палится у FB меньше)
+    import shutil
+    if not os.environ.get("DISPLAY") and shutil.which("xvfb-run"):
+        cmd = ["xvfb-run", "-a", "-s", "-screen 0 1440x900x24"] + cmd
     print(f"\n[chain] Agent 4 FB ({script_name}) → {page_id}")
-    proc = subprocess.run(
-        [str(fb_python), str(script), "--page-id", page_id],
-        cwd=publisher_dir,
-    )
+    proc = subprocess.run(cmd, cwd=publisher_dir)
     return proc.returncode
 
 
