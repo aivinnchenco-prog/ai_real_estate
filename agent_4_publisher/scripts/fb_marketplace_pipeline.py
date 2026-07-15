@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import publish_pipeline as pp
 import fb_groups_pipeline as fgg  # браузер, профиль, задержки, фото, состояние лимитов
+import fb_account_guard as guard  # общий предохранитель FB-аккаунта
 
 # Метки полей формы (EN/UK/RU — язык интерфейса аккаунта может меняться)
 LABEL_RENT_OR_SALE = re.compile(r"продаж або оренда|home for sale or rent|продажа или аренда", re.I)
@@ -525,6 +526,9 @@ def publish_marketplace(page_id: str, cfg: dict[str, Any], *, dry_run: bool, for
     result["images"] = len(image_urls)
 
     if not force:
+        guard_reason = guard.check_account_guard()
+        if guard_reason:
+            return {**result, "skipped": True, "reason": f"предохранитель: {guard_reason}"}
         reason = check_rate_limits(cfg)
         if reason:
             return {**result, "skipped": True, "reason": f"лимит: {reason}"}
@@ -568,11 +572,15 @@ def publish_marketplace(page_id: str, cfg: dict[str, Any], *, dry_run: bool, for
                     if not fgg.is_logged_in(context):
                         raise RuntimeError("AUTH_REQUIRED: логин не удался")
 
+                # «Пришёл человек»: полистать ленту до и после публикации
+                fgg.idle_scroll(bpage, cfg, (15, 40))
                 out = create_listing(bpage, listing, files, cfg)
                 submitted = True
                 fgg.record_post(cfg, "marketplace", object_id, out.get("post_url") or "")
+                fgg.idle_scroll(bpage, cfg, (10, 25))
             finally:
                 context.close()
+                guard.record_session_end(branch="fb_marketplace")
     except Exception as e:
         if not submitted:
             pp.notion_update_fields(

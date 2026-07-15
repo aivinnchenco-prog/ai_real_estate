@@ -3,10 +3,11 @@
   "groups_file": "config/fb_groups_list.txt",
   "groups": [],
   "limits": {
-    "max_groups_per_run": 3,
-    "max_posts_per_day_total": 8,
-    "min_minutes_between_posts": 45,
-    "min_minutes_between_posts_same_group": 1440
+    "max_groups_per_run": 2,
+    "max_posts_per_day_total": 4,
+    "min_minutes_between_posts": 90,
+    "min_minutes_between_posts_same_group": 2880,
+    "minutes_between_groups": [8, 18]
   },
   "media": {
     "max_images": 10,
@@ -21,7 +22,7 @@
     "action_timeout_ms": 30000,
     "upload_wait_ms": 60000,
     "post_confirm_wait_ms": 45000,
-    "human_delay_ms": {"min": 900, "max": 2400}
+    "human_delay_ms": {"min": 1500, "max": 4500}
   },
   "notion": {
     "fields": {

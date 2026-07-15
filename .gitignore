@@ -55,3 +55,4 @@ agent_4_publisher_fb/
 # Runtime-данные веток FB групп/маркетплейса (state, debug-скриншоты, tmp-фото)
 agent_4_publisher/data/fb_groups/
 agent_4_publisher/data/fb_marketplace/
+agent_4_publisher/data/fb_account/

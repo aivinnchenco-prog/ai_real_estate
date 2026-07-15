@@ -15,14 +15,17 @@
       "default": "house"
     },
     "location_source": "google_maps_reverse_geocode",
-    "location_query_fields": ["Район", "Адрес"],
+    "location_query_fields": [
+      "Район",
+      "Адрес"
+    ],
     "location_suffix": "Phuket",
     "reverse_geocode_language": "en",
     "promote_after_publish": false
   },
   "limits": {
-    "max_listings_per_day": 3,
-    "min_minutes_between_listings": 120
+    "max_listings_per_day": 2,
+    "min_minutes_between_listings": 240
   },
   "media": {
     "max_images": 20,
@@ -32,12 +35,18 @@
     "profile_env": "FB_GROUPS_BROWSER_PROFILE",
     "default_profile": ".fb_profile",
     "headless_env": "FB_HEADLESS",
-    "viewport": {"width": 1440, "height": 900},
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
     "nav_timeout_ms": 90000,
     "action_timeout_ms": 30000,
     "upload_wait_ms": 120000,
     "post_confirm_wait_ms": 60000,
-    "human_delay_ms": {"min": 900, "max": 2400}
+    "human_delay_ms": {
+      "min": 900,
+      "max": 2400
+    }
   },
   "notion": {
     "fields": {

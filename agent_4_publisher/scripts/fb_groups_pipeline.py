@@ -35,6 +35,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import publish_pipeline as pp  # чтение Notion, разбор галереи, схема, .env
+import fb_account_guard as guard  # общий предохранитель FB-аккаунта
 
 USER_AGENT_TAG = "real-estate-agent4-fb-groups/1.0"
 
@@ -181,6 +182,40 @@ def human_delay(cfg: dict[str, Any], factor: float = 1.0) -> None:
     lo = int(hd.get("min", 900)) / 1000.0
     hi = int(hd.get("max", 2400)) / 1000.0
     time.sleep(random.uniform(lo, hi) * factor)
+
+
+def idle_scroll(page: Any, cfg: dict[str, Any], seconds_range: tuple[int, int] = (15, 45)) -> None:
+    """«Полистать ленту»: человек не открывает FB и сразу не жмёт «Опубликовать».
+    Случайные скроллы вниз (изредка вверх) с паузами на «чтение»."""
+    total = random.uniform(*seconds_range)
+    deadline = time.time() + total
+    try:
+        while time.time() < deadline:
+            delta = random.randint(300, 1200)
+            if random.random() < 0.15:
+                delta = -random.randint(200, 600)
+            page.mouse.wheel(0, delta)
+            time.sleep(random.uniform(1.5, 6.0))
+    except Exception:
+        pass  # прогрев не должен ронять постинг
+
+
+def type_like_human(page: Any, text: str, cfg: dict[str, Any]) -> None:
+    """Ввод текста кусками по абзацам с паузами «на подумать» — вместо
+    мгновенной вставки всего поста одним куском."""
+    chunks = [c for c in re.split(r"(\n+)", text) if c]
+    for chunk in chunks:
+        page.keyboard.insert_text(chunk)
+        time.sleep(random.uniform(0.4, 1.6))
+
+
+def pause_between_groups(cfg: dict[str, Any]) -> None:
+    """Длинная пауза между группами (минуты): одинаковый пост в несколько
+    групп за минуту — главный маркер спам-бота."""
+    lo, hi = cfg.get("limits", {}).get("minutes_between_groups", [8, 18])
+    minutes = random.uniform(float(lo), float(hi))
+    print(f"[fb_groups] пауза перед следующей группой: {minutes:.1f} мин")
+    time.sleep(minutes * 60)
 
 
 def profile_path(cfg: dict[str, Any]) -> Path:
@@ -514,6 +549,10 @@ def post_to_group(
     nav_timeout = int(cfg.get("browser", {}).get("nav_timeout_ms", 90000))
     page.goto(group_url, wait_until="domcontentloaded", timeout=nav_timeout)
     human_delay(cfg, 2.0)
+    # Полистать ленту группы перед постингом — как живой участник
+    idle_scroll(page, cfg, (10, 30))
+    page.keyboard.press("Home")
+    human_delay(cfg)
 
     # Если аккаунт не в группе — подписываемся до постинга
     if maybe_join_group(page, cfg):
@@ -534,7 +573,7 @@ def post_to_group(
     textbox = dialog.locator('div[role="textbox"][contenteditable="true"]').first
     textbox.click()
     human_delay(cfg)
-    page.keyboard.insert_text(caption)
+    type_like_human(page, caption, cfg)
     human_delay(cfg)
 
     attach_photos(page, dialog, files, cfg)
@@ -620,6 +659,8 @@ def target_groups(cfg: dict[str, Any], override_url: str | None) -> list[dict[st
             continue
         seen.add(key)
         unique.append(g)
+    # Перемешиваем: постинг всегда в одном и том же порядке — маркер бота
+    random.shuffle(unique)
     max_groups = int(cfg.get("limits", {}).get("max_groups_per_run", 3))
     return unique[:max_groups]
 
@@ -669,6 +710,9 @@ def publish_object(
     result["image_urls_preview"] = image_urls[:3]
 
     if not force:
+        guard_reason = guard.check_account_guard()
+        if guard_reason:
+            return {**result, "skipped": True, "reason": f"предохранитель: {guard_reason}"}
         for group in groups:
             reason = check_rate_limits(cfg, group["url"])
             if reason:
@@ -721,8 +765,13 @@ def publish_object(
                     if not is_logged_in(context):
                         raise RuntimeError("AUTH_REQUIRED: логин не удался")
 
+                # «Пришёл человек»: сначала полистать главную ленту
+                idle_scroll(bpage, cfg, (15, 45))
+
                 # Ошибка в одной группе (JOIN_PENDING и т.п.) не блокирует остальные
-                for group in groups:
+                for i, group in enumerate(groups):
+                    if i > 0:
+                        pause_between_groups(cfg)
                     try:
                         out = post_to_group(bpage, group["url"], caption, files, cfg)
                         submitted = True
@@ -731,9 +780,11 @@ def publish_object(
                         record_post(cfg, group["url"], object_id, out.get("post_url") or "")
                     except Exception as e:
                         posted.append({"group_url": group["url"], "error": str(e)})
-                    human_delay(cfg, 3.0)
+                # Не закрывать браузер сразу после «Опубликовать»
+                idle_scroll(bpage, cfg, (10, 25))
             finally:
                 context.close()
+                guard.record_session_end(branch="fb_groups")
         if not submitted:
             errors = "; ".join(f"{p['group_url']}: {p.get('error')}" for p in posted)
             raise RuntimeError(f"ни в одну группу не запостилось — {errors}")
