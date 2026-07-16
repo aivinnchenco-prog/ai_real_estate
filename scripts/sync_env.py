@@ -84,10 +84,21 @@ AGENT_ENV_MAP: dict[str, dict[str, str]] = {
         "TELEGRAM_CHANNEL": "TELEGRAM_CHANNEL",
         "CHATPLACE_API_KEY": "CHATPLACE_API_KEY",
         "CHATPLACE_MCP_URL": "CHATPLACE_MCP_URL",
-        # Постинг в FB — ОТДЕЛЬНЫЙ аккаунт (не парсинговый FB_EMAIL из agent_1)
+        # Постинг в FB — ОТДЕЛЬНЫЕ аккаунты (не парсинговый FB_EMAIL из agent_1).
+        # Общий постинг-аккаунт (fallback для обеих веток):
         "FB_POST_EMAIL": "FB_POST_EMAIL",
         "FB_POST_PASSWORD": "FB_POST_PASSWORD",
-        "FB_POST_BROWSER_PROFILE": "FB_POST_BROWSER_PROFILE",
+        "FB_POST_PROXY": "FB_POST_PROXY",
+        # Аккаунт для групп (если задан — перекрывает общий):
+        "FB_GROUPS_EMAIL": "FB_GROUPS_EMAIL",
+        "FB_GROUPS_PASSWORD": "FB_GROUPS_PASSWORD",
+        "FB_GROUPS_PROXY": "FB_GROUPS_PROXY",
+        "FB_GROUPS_BROWSER_PROFILE": "FB_GROUPS_BROWSER_PROFILE",
+        # Аккаунт для Marketplace (если задан — перекрывает общий):
+        "FB_MARKETPLACE_EMAIL": "FB_MARKETPLACE_EMAIL",
+        "FB_MARKETPLACE_PASSWORD": "FB_MARKETPLACE_PASSWORD",
+        "FB_MARKETPLACE_PROXY": "FB_MARKETPLACE_PROXY",
+        "FB_MARKETPLACE_BROWSER_PROFILE": "FB_MARKETPLACE_BROWSER_PROFILE",
         "FB_HEADLESS": "FB_HEADLESS",
         "CLOUDFLARE_PUBLIC_BASE_URL": "CLOUDFLARE_PUBLIC_BASE_URL",
         "GOOGLE_MAPS_API_KEY": "GOOGLE_MAPS_API_KEY",

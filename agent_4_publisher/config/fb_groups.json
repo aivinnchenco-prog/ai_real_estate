@@ -1,5 +1,11 @@
 {
   "$comment": "Ветка публикации Агента_4: постинг в группы Facebook браузерной автоматизацией (scripts/fb_groups_pipeline.py). Секреты — в .env (FB_EMAIL/FB_PASSWORD/FB_GROUPS_BROWSER_PROFILE), сюда только несекретные параметры.",
+  "account": {
+    "$comment": "Аккаунт постинга в группы. Имена env-переменных (значения — в .env). Отдельный от парсингового FB_EMAIL и, при желании, от аккаунта маркетплейса.",
+    "email_env": "FB_GROUPS_EMAIL",
+    "password_env": "FB_GROUPS_PASSWORD",
+    "proxy_env": "FB_GROUPS_PROXY"
+  },
   "groups_file": "config/fb_groups_list.txt",
   "groups": [],
   "limits": {
@@ -18,8 +24,8 @@
   },
   "browser": {
     "$comment_profile": "Постинг идёт с ОТДЕЛЬНОГО FB-аккаунта (не с парсингового): свой профиль браузера и свои FB_POST_EMAIL/FB_POST_PASSWORD.",
-    "profile_env": "FB_POST_BROWSER_PROFILE",
-    "default_profile": ".fb_posting_profile",
+    "profile_env": "FB_GROUPS_BROWSER_PROFILE",
+    "default_profile": ".fb_groups_profile",
     "headless_env": "FB_HEADLESS",
     "viewport": {
       "width": 1440,

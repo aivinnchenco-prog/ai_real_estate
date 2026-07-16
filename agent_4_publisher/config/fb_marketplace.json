@@ -1,5 +1,11 @@
 {
   "$comment": "Ветка публикации Агента_4: объявление в Facebook Marketplace (Homes for Rent) браузерной автоматизацией (scripts/fb_marketplace_pipeline.py). Секреты — в .env, сюда только несекретные параметры.",
+  "account": {
+    "$comment": "Аккаунт постинга в Marketplace. Отдельный от парсингового и, при желании, от аккаунта групп.",
+    "email_env": "FB_MARKETPLACE_EMAIL",
+    "password_env": "FB_MARKETPLACE_PASSWORD",
+    "proxy_env": "FB_MARKETPLACE_PROXY"
+  },
   "create_url": "https://www.facebook.com/marketplace/create/rental",
   "selling_url": "https://www.facebook.com/marketplace/you/selling",
   "listing": {
@@ -32,8 +38,8 @@
     "hook_cover_first": true
   },
   "browser": {
-    "profile_env": "FB_POST_BROWSER_PROFILE",
-    "default_profile": ".fb_posting_profile",
+    "profile_env": "FB_MARKETPLACE_BROWSER_PROFILE",
+    "default_profile": ".fb_marketplace_profile",
     "headless_env": "FB_HEADLESS",
     "viewport": {
       "width": 1440,
