@@ -25,15 +25,20 @@ def make_qualifier(listings=None):
     return Qualifier(find_by_id=by_id.get, fetch_all=lambda: listings)
 
 
-def test_object_id_message_confirms_and_asks_core():
+def test_object_id_message_confirms_and_asks_bullets():
+    """Подтверждение объекта фактами из таблицы + анкета одним сообщением."""
     q = make_qualifier()
     s = Session(chat_id="1")
     turn = q.handle_message(s, "Здравствуйте! Интересует #obj_20260708_001", {})
     assert s.chosen is CHOSEN
-    assert "Вилла у моря" in turn.reply_draft            # подтверждение объекта
+    assert "вилла" in turn.reply_draft                   # тип из таблицы
+    assert "2 спальни" in turn.reply_draft               # спальни из таблицы
+    assert "Раваи" in turn.reply_draft                   # район из таблицы
+    assert "Бюджет в месяц" in turn.reply_draft          # анкета-критерии
+    assert "Дата заезда" in turn.reply_draft
+    assert "контракт на год" in turn.reply_draft         # выезд можно не указывать
     assert "t.me" not in turn.reply_draft                # ссылки НЕ в первом сообщении
-    assert "даты" in turn.reply_draft                    # мягкий вопрос: даты + гости
-    assert "бюджет" not in turn.reply_draft.lower()      # НЕ пачка вопросов сразу
+    assert "THB" not in turn.reply_draft                 # цену до дат не называем
 
 
 def test_links_sent_after_core_fields_once():
@@ -53,42 +58,47 @@ def test_links_sent_after_core_fields_once():
     assert "t.me" not in turn.reply_draft                # повторно не шлём
 
 
-def test_followup_phrase_after_core_fields():
+def test_price_quoted_after_dates():
+    """После дат клиент видит ориентировочную цену из monthly_prices/базовой."""
     q = make_qualifier()
     s = Session(chat_id="1")
     q.handle_message(s, "#20260708_001", {})
-    turn = q.handle_message(s, "с 1 августа по 1 сентября, нас двое", {
-        "check_in": "2026-08-01", "check_out": "2026-09-01", "guests": 2,
-    })
-    # добивка именно вашей фразой
-    assert "другие варианты" in turn.reply_draft
-    assert "район" in turn.reply_draft and "бюджет" in turn.reply_draft
-    assert turn.skip_polish                       # фраза уходит без переписывания Gemini
+    turn = q.handle_message(s, "с 1 августа, бюджет 55к, Раваи", {
+        "check_in": "2026-08-01", "budget": 55000, "districts": ["Раваи"]})
+    assert "50 000 THB/мес" in turn.reply_draft          # price_month из таблицы
+    # цена не повторяется в следующих сообщениях
+    assert s.price_quoted
 
 
-def test_missing_checkout_is_asked_before_owner():
-    """Названа только дата заезда — уточняем выезд, владельцу пока не пишем."""
+def test_missing_checkout_means_year_contract():
+    """Дата выезда не указана = контракт на год: не переспрашиваем, идём к владельцу."""
     q = make_qualifier()
     s = Session(chat_id="1")
     q.handle_message(s, "#20260708_001", {})
     turn = q.handle_message(s, "заеду 14 июля, нас двое", {
         "check_in": "2026-07-14", "guests": 2})
-    assert "до какой даты" in turn.reply_draft
-    assert not turn.need_owner_check
-    # клиент назвал выезд -> обычный ход: запрос владельцу
-    turn = q.handle_message(s, "до 21 июля, бюджет 70к, Бангтао", {
-        "check_out": "2026-07-21", "budget": 70000, "districts": ["Бангтао"]})
+    assert "до какой даты" not in turn.reply_draft
     assert turn.need_owner_check
+
+
+def test_dates_missing_asks_only_dates():
+    """Критерии без даты заезда — просим только дату, без повторной анкеты."""
+    q = make_qualifier()
+    s = Session(chat_id="1")
+    q.handle_message(s, "#20260708_001", {})
+    turn = q.handle_message(s, "бюджет 60к, Раваи, 2 спальни", {
+        "budget": 60000, "districts": ["Раваи"], "bedrooms": 2})
+    assert "дату заезда" in turn.reply_draft
+    assert "Бюджет в месяц" not in turn.reply_draft      # анкету не повторяем
+    assert not turn.need_owner_check
 
 
 def test_full_qualification_triggers_owner_check():
     q = make_qualifier()
     s = Session(chat_id="1")
     q.handle_message(s, "#20260708_001", {})
-    q.handle_message(s, "даты и гости", {
-        "check_in": "2026-08-01", "check_out": "2026-09-01", "guests": 2})
-    turn = q.handle_message(s, "бюджет 55к, Раваи", {
-        "budget": 55000, "districts": ["Раваи"]})
+    turn = q.handle_message(s, "с 1 августа по 1 сентября, бюджет 55к", {
+        "check_in": "2026-08-01", "check_out": "2026-09-01", "budget": 55000})
     assert turn.need_owner_check
     assert s.awaiting_alt_consent  # предложили посмотреть ещё варианты
 
@@ -134,13 +144,13 @@ def test_decline_stops_alternative_offers():
 
 
 def test_only_this_object_skips_alternatives_offer():
-    """«меня интересует только этот» — сразу к владельцу, без вопроса про варианты."""
+    """«только этот» вместе с датами — сразу к владельцу, без вопроса про варианты."""
     q = make_qualifier()
     s = Session(chat_id="1")
     q.handle_message(s, "#20260708_001", {})
-    q.handle_message(s, "…", {
-        "check_in": "2026-08-01", "check_out": "2026-09-01", "guests": 2})
-    turn = q.handle_message(s, "меня интересует только этот", {})
+    turn = q.handle_message(
+        s, "меня интересует только этот, с 1 августа по 1 сентября, нас двое", {
+            "check_in": "2026-08-01", "check_out": "2026-09-01", "guests": 2})
     assert turn.need_owner_check
     assert not s.awaiting_alt_consent
     assert s.only_chosen
@@ -152,9 +162,8 @@ def test_likes_this_variant_skips_alternatives():
     q = make_qualifier()
     s = Session(chat_id="1")
     q.handle_message(s, "#20260708_001", {})
-    q.handle_message(s, "14-го на 7 дней, двое", {
+    turn = q.handle_message(s, "мне нравится этот вариант, 14-го на 7 дней, двое", {
         "check_in": "2026-07-14", "check_out": "2026-07-21", "guests": 2})
-    turn = q.handle_message(s, "мне нравится этот вариант", {})
     assert turn.need_owner_check
     assert s.only_chosen
     assert "похожих" not in turn.reply_draft.lower()
@@ -225,13 +234,14 @@ def test_greeting_without_object_asks_object_or_search():
 
 
 def test_object_or_search_answer_selection():
-    """Ответ «подберите» — идём в квалификацию (даты/гости)."""
+    """Ответ «подберите» — отправляем анкету-критерии."""
     q = make_qualifier()
     s = Session(chat_id="5")
     q.handle_message(s, "Добрый день", {})
     turn = q.handle_message(s, "Подберите мне, пожалуйста, варианты", {})
     assert s.wants_selection
-    assert "даты" in turn.reply_draft
+    assert "Бюджет в месяц" in turn.reply_draft
+    assert "Дата заезда" in turn.reply_draft
 
 
 def test_object_or_search_answer_specific_asks_link():
@@ -244,7 +254,7 @@ def test_object_or_search_answer_specific_asks_link():
     # Прислал ID — обычный путь с подтверждением объекта.
     turn = q.handle_message(s, "#obj_20260708_001", {})
     assert s.chosen is CHOSEN
-    assert "Вилла у моря" in turn.reply_draft
+    assert "вилла" in turn.reply_draft and "Раваи" in turn.reply_draft
 
 
 def test_unknown_object_id_reports_not_found():
@@ -271,11 +281,10 @@ def test_no_object_goes_straight_to_matching():
     q = make_qualifier()
     s = Session(chat_id="2")
     turn = q.handle_message(s, "Ищу виллу на месяц", {})
-    assert "даты" in turn.reply_draft
-    turn = q.handle_message(s, "…", {
-        "check_in": "2026-08-01", "check_out": "2026-09-01", "guests": 2})
-    assert "другие варианты" in turn.reply_draft
-    turn = q.handle_message(s, "Раваи, до 60к", {
-        "budget": 60000, "districts": ["Раваи"]})
-    # объект не выбран -> сразу подбор
+    assert s.wants_selection                          # «ищу» = подбор, без переспроса
+    assert "Бюджет в месяц" in turn.reply_draft       # анкета-критерии
+    turn = q.handle_message(s, "с 1 августа, Раваи, до 60к, 2 спальни", {
+        "check_in": "2026-08-01", "budget": 60000,
+        "districts": ["Раваи"], "bedrooms": 2})
+    # объект не выбран -> сразу подбор по критериям
     assert "Вилла" in turn.reply_draft

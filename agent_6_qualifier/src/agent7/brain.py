@@ -29,6 +29,7 @@ EXTRACT_SCHEMA = {
         "budget": {"type": "NUMBER", "description": "бюджет в месяц, THB"},
         "budget_tolerance_pct": {"type": "NUMBER", "description": "допустимая погрешность бюджета, %"},
         "districts": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "желаемые районы"},
+        "bedrooms": {"type": "INTEGER", "description": "сколько спален нужно клиенту"},
         "guests": {"type": "INTEGER", "description": "сколько человек будет проживать"},
         "pets": {"type": "BOOLEAN", "description": "есть ли животные"},
         "wants_alternatives": {"type": "BOOLEAN", "description": "клиент согласился посмотреть другие варианты"},
@@ -104,6 +105,7 @@ def extract_lead_update(
         "check_out": lead.check_out.isoformat() if lead.check_out else None,
         "budget": lead.budget,
         "districts": lead.districts or None,
+        "bedrooms": lead.bedrooms,
         "guests": lead.guests,
         "pets": lead.pets,
     }
@@ -149,6 +151,8 @@ def apply_update(lead: LeadProfile, update: dict) -> LeadProfile:
         for d in update["districts"]:
             if d and d not in lead.districts:
                 lead.districts.append(d)
+    if update.get("bedrooms"):
+        lead.bedrooms = int(update["bedrooms"])
     if update.get("guests"):
         lead.guests = int(update["guests"])
     if update.get("pets") is not None:

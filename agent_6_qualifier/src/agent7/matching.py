@@ -51,6 +51,13 @@ def capacity_ok(listing: Listing, lead: LeadProfile) -> bool:
     return listing.rooms * 2 >= lead.guests
 
 
+def bedrooms_ok(listing: Listing, lead: LeadProfile) -> bool:
+    """Клиент назвал число спален — объект должен иметь не меньше."""
+    if lead.bedrooms is None or listing.rooms is None:
+        return True
+    return listing.rooms >= lead.bedrooms
+
+
 def similarity_score(candidate: Listing, chosen: Listing | None) -> int:
     """Чем выше, тем ближе к объекту, который выбрал клиент."""
     if chosen is None:
@@ -84,6 +91,7 @@ def find_alternatives(
         and budget_ok(l.price_month, lead)
         and district_ok(l, lead)
         and capacity_ok(l, lead)
+        and bedrooms_ok(l, lead)
         and pets_ok(l, lead)
     ]
     candidates.sort(

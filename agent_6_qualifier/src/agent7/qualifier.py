@@ -19,12 +19,13 @@ from .models import Availability, LeadProfile, Listing
 from .object_id import extract_object_ids, extract_tg_post
 from .templates import (
     CLIENT_ASK_ALTERNATIVES,
+    CLIENT_ASK_DATES,
     CLIENT_ASK_OBJECT_LINK,
     CLIENT_ASK_OBJECT_OR_SEARCH,
-    CLIENT_QUALIFY_CORE,
-    CLIENT_QUALIFY_FOLLOWUP,
+    CLIENT_QUALIFY_BULLETS,
     client_object_busy,
     client_offer_line,
+    client_price_line,
 )
 
 
@@ -36,9 +37,10 @@ class Session:
     chosen: Listing | None = None
     asked_object_source: bool = False  # спросили «конкретный объект или подбор?»
     wants_selection: bool = False      # клиент просит подбор по запросу
-    asked_core: bool = False          # уже спросили даты/гостей
-    asked_followup: bool = False      # уже спросили район/бюджет
-    asked_checkout: bool = False      # уже уточнили дату выезда
+    asked_core: bool = False          # анкета-критерии уже отправлена
+    asked_followup: bool = False      # (легаси, оставлено для старых сессий)
+    asked_checkout: bool = False      # (легаси, оставлено для старых сессий)
+    price_quoted: bool = False        # ориентировочную цену уже назвали
     offered_alternatives: bool = False
     awaiting_alt_consent: bool = False
     links_sent: bool = False          # ссылки на TG-пост и фото уже отправлены
@@ -272,17 +274,30 @@ class Qualifier:
             return Turn(reply_draft=CLIENT_ASK_OBJECT_OR_SEARCH, events=events,
                         skip_polish=True)
 
-        if chosen is not None and not session.asked_core:
-            parts.append(self._confirm_object_line(chosen, lead.check_in))
+        # Анкета-критерии одним сообщением (+ подтверждение объекта из таблицы).
+        # Дата выезда не указана = контракт на год, переспрашивать не нужно.
+        if not session.asked_core:
+            session.asked_core = True
+            session.asked_followup = True
+            session.asked_checkout = True
+            if chosen is not None:
+                parts.append(self._confirm_object_line(chosen))
+            parts.append(CLIENT_QUALIFY_BULLETS)
+            return Turn(reply_draft="\n\n".join(parts), events=events, skip_polish=True)
 
-        # Обязательная квалификация: сначала только даты и гости.
-        if not (lead.check_in and lead.guests):
-            if not session.asked_core:
-                session.asked_core = True
-            parts.append(CLIENT_QUALIFY_CORE)
-            return Turn(reply_draft="\n\n".join(parts), events=events)
+        # Минимум для проверки доступности и цены — дата заезда.
+        if not lead.check_in:
+            parts.append(CLIENT_ASK_DATES)
+            return Turn(reply_draft="\n\n".join(parts), events=events, skip_polish=True)
 
-        # Даты и гости получены -> отправляем ссылки на пост и фото (один раз).
+        # Ориентировочная цена месяца заезда из monthly_prices (один раз).
+        if chosen is not None and not session.price_quoted:
+            quote = chosen.price_quote(lead.check_in)
+            if quote:
+                parts.append(client_price_line(quote))
+            session.price_quoted = True
+
+        # Критерии получены -> отправляем ссылки на пост и фото (один раз).
         if chosen is not None and not session.links_sent:
             links = []
             if chosen.tg_post_url:
@@ -292,22 +307,6 @@ class Qualifier:
             if links:
                 parts.append("\n".join(links))
                 session.links_sent = True
-
-        # Дата выезда не названа — уточняем (без неё владельцу нечего проверять).
-        if lead.check_out is None and not lead.stay_months and not session.asked_checkout:
-            from .templates import CLIENT_ASK_CHECKOUT
-            session.asked_checkout = True
-            parts.append(CLIENT_ASK_CHECKOUT)
-            if not session.asked_followup and (lead.budget is None or not lead.districts):
-                session.asked_followup = True
-                parts.append(CLIENT_QUALIFY_FOLLOWUP)
-            return Turn(reply_draft="\n\n".join(parts), events=events, skip_polish=True)
-
-        # Добивка района/бюджета — один раз, вашей фразой (без переписывания Gemini).
-        if not session.asked_followup and (lead.budget is None or not lead.districts):
-            session.asked_followup = True
-            parts.append(CLIENT_QUALIFY_FOLLOWUP)
-            return Turn(reply_draft="\n\n".join(parts), events=events, skip_polish=True)
 
         # Выбранный объект занят на даты клиента -> окно доступности + выбор.
         if chosen is not None and self._busy_for_dates(chosen, lead):
@@ -383,14 +382,24 @@ class Qualifier:
         return None
 
     @staticmethod
-    def _confirm_object_line(listing: Listing, check_in=None) -> str:
-        bits = [f"Вы про «{listing.title or listing.object_id}»"]
+    def _confirm_object_line(listing: Listing) -> str:
+        """«Да, это вилла, 3 спальни, район Чонг Тале» — факты из таблицы.
+        Цену здесь не называем: она зависит от месяца заезда (monthly_prices)
+        и озвучивается после того, как клиент назовёт даты."""
+        bits = []
+        if listing.housing_type:
+            bits.append(f"это {listing.housing_type.lower()}")
+        if listing.rooms:
+            n = listing.rooms
+            word = ("спальня" if n % 10 == 1 and n % 100 != 11
+                    else "спальни" if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14)
+                    else "спален")
+            bits.append(f"{n} {word}")
         if listing.district:
             bits.append(f"район {listing.district}")
-        quote = listing.price_quote(check_in)
-        if quote:
-            bits.append(quote)
-        return ", ".join(bits) + " — отличный выбор!"
+        if not bits:
+            return f"Да, объект «{listing.title or listing.object_id}» у нас в базе."
+        return "Здравствуйте! Да, " + ", ".join(bits) + "."
 
     @staticmethod
     def _busy_for_dates(listing: Listing, lead: LeadProfile) -> bool:

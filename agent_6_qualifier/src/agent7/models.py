@@ -135,6 +135,7 @@ class LeadProfile:
     budget: Optional[float] = None
     budget_tolerance_pct: float = DEFAULT_BUDGET_TOLERANCE_PCT  # ±%, можно уточнить у клиента
     districts: list[str] = field(default_factory=list)
+    bedrooms: Optional[int] = None    # сколько спален нужно клиенту
     guests: Optional[int] = None
     pets: Optional[bool] = None
     preferred_object_id: str = ""

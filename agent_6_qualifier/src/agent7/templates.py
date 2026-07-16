@@ -31,18 +31,22 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
         "пожалуйста, номер или пришлите ссылку на пост — сразу посмотрю. "
         "Могу также подобрать варианты под ваш запрос."
     ),
-    "client_qualify_core": (
-        "Подскажите, пожалуйста, на какие даты планируете заезд и выезд, "
-        "и сколько человек будет проживать?"
+    # Единый вопрос-анкета: все критерии одним сообщением, меньше переписки.
+    "client_qualify_bullets": (
+        "Сообщите, пожалуйста:\n"
+        "• Бюджет в месяц\n"
+        "• Район\n"
+        "• Количество спален\n"
+        "• Дата заезда\n"
+        "• Дата выезда (не указывайте, если контракт на год)"
     ),
-    "client_qualify_followup": (
-        "Я могу подобрать вам и другие варианты, если хотите. "
-        "Для этого сообщите желаемый район и бюджет — "
-        "проверю всё в базе и, возможно, найду для вас что-то получше."
+    # Минимум для проверки доступности и цены — дата заезда.
+    "client_ask_dates": (
+        "Уточните, пожалуйста, дату заезда — проверю доступность и назову "
+        "цену на ваш месяц."
     ),
-    "client_ask_checkout": (
-        "И уточните, пожалуйста, до какой даты планируете проживание?"
-    ),
+    # Ориентировочная цена месяца заезда из monthly_prices.
+    "client_price_line": "Ориентировочная цена на ваши даты: {quote}.",
     "client_ask_alternatives": (
         "Хотите, подберу для вас ещё несколько похожих вариантов?"
     ),
@@ -159,9 +163,12 @@ CLIENT_ASK_OBJECT_LINK = _T["client_ask_object_link"]
 
 def client_object_not_found(object_id: str) -> str:
     return _T["client_object_not_found"].format(object_id=object_id)
-CLIENT_QUALIFY_CORE = _T["client_qualify_core"]
-CLIENT_QUALIFY_FOLLOWUP = _T["client_qualify_followup"]
-CLIENT_ASK_CHECKOUT = _T["client_ask_checkout"]
+CLIENT_QUALIFY_BULLETS = _T["client_qualify_bullets"]
+CLIENT_ASK_DATES = _T["client_ask_dates"]
+
+
+def client_price_line(quote: str) -> str:
+    return _T["client_price_line"].format(quote=quote)
 CLIENT_ASK_ALTERNATIVES = _T["client_ask_alternatives"]
 CLIENT_ASK_BUDGET_TOLERANCE = _T["client_ask_budget_tolerance"]
 CLIENT_NO_ALTERNATIVES = _T["client_no_alternatives"]
