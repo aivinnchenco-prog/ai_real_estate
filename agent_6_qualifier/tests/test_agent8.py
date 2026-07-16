@@ -119,7 +119,8 @@ def test_owner_busy_info_free_from_and_notion_update():
 
 
 def test_client_busy_message_offers_choice():
-    msg = client_object_busy("Вилла у моря", "15.08.2026", "16.08.2026")
+    msg = client_object_busy("A_20260713_003", "15.08.2026", "16.08.2026")
+    assert "ваш вариант A_20260713_003" in msg
     assert "занят до 15.08.2026" in msg
     assert "свободен с 16.08.2026" in msg
     assert "похожие варианты" in msg
@@ -202,10 +203,45 @@ def test_free_nights_zero_when_checkin_blocked():
     assert check.free_nights_from(date(2026, 7, 14)) == 0
 
 
+def test_booking_doc_data_and_generation(tmp_path):
+    """Данные брони → JSON → node → docx. Годовой контракт без даты выезда."""
+    from agent7.qualifier import Session
+    from agent7.models import LeadProfile, Listing
+    from agent8 import booking_doc
+
+    lead = LeadProfile(full_name="Иванов Иван", citizenship="Украина",
+                       check_in=date(2026, 9, 1), budget=100000, guests=3)
+    listing = Listing(object_id="A_20260713_003", title="Вилла у моря",
+                      address="Тхаланг, Chang Wat Phuket",
+                      housing_type="Вилла", rooms=3)
+    session = Session(chat_id="1", lead=lead, chosen=listing)
+
+    data = booking_doc.build_booking_data(session, "Telegram: @client")
+    assert data["object"]["objectId"] == "A_20260713_003"
+    # Парсерное название объявления в договор не пишем — только тип и спальни
+    assert "Вилла у моря" not in data["object"]["propertyName"]
+    assert data["object"]["propertyName"] == "Villa, 3 bedrooms / Вилла, 3 спальни"
+    assert data["client"]["fullName"] == "Иванов Иван"
+    assert data["request"]["checkinDate"] == "01.09.2026"
+    # Дата выезда не названа -> годовой контракт: checkout = заезд + 365 дней
+    assert data["request"]["longTerm"] is True
+    assert data["request"]["checkoutDate"] == "01.09.2027"
+    assert "годовой контракт" in data["request"]["longTermNoteRu"]
+    assert data["agency"]["brand"] == "OpenHome"
+
+    path = booking_doc.generate_booking_doc(session, "Telegram: @client")
+    try:
+        assert path.exists() and path.stat().st_size > 5000
+        assert path.suffix == ".docx"
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def test_client_object_partial_message():
     from agent7.templates import client_object_partial
-    msg = client_object_partial("Вилла", "14.07.2026", 4, "18.07.2026",
+    msg = client_object_partial("A_20260713_003", "14.07.2026", 4, "18.07.2026",
                                 "13.08.2026", "14.08.2026")
+    assert "вашему варианту A_20260713_003" in msg
     assert "14.07.2026" in msg and "4 дн" in msg
     assert "13.08.2026" in msg and "14.08.2026" in msg
 

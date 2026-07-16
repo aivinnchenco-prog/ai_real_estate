@@ -12,7 +12,7 @@
     "district": "Район",
     "video_seedance": "video_url_Seedance",
     "last_error": "last_error",
-    "montage": "Статус для Агент_3"
+    "montage": "Монтаж"
   },
   "overlay_fields": {
     "housing_type": "Тип жилья",
@@ -22,7 +22,11 @@
     "district": "Район"
   },
   "statuses": {
-    "allowed": ["ready_for_video", "ready_to_post", "video_failed"],
+    "allowed": [
+      "ready_for_video",
+      "ready_to_post",
+      "video_failed"
+    ],
     "video_done": "ready_to_post",
     "video_failed": "video_failed"
   }

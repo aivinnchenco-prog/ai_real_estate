@@ -38,6 +38,9 @@ LEAD_FIELDS = {
     "Альтернативные объекты": "text",
     "Ссылка Notion": "url",
     "Ссылка TG-пост": "url",
+    "WhatsApp": "text",
+    # Клиент не назвал дату выезда = аренда на год (см. анкету квалификатора)
+    "Контракт на год": "checkbox",
 }
 PETS_OPTIONS = ["да", "нет", "не указано"]
 
@@ -207,6 +210,9 @@ class AmoClient:
             cf.append(fv("Объект ID", lead.preferred_object_id))
         if lead.check_in:
             cf.append(fv("Дата заезда", ts(lead.check_in)))
+            # Дата выезда не названа = годовой контракт (анкета квалификатора).
+            # Пишем и снятие галочки: клиент мог назвать выезд позже.
+            cf.append(fv("Контракт на год", not lead.check_out))
         if lead.check_out:
             cf.append(fv("Дата выезда", ts(lead.check_out)))
         if lead.budget is not None:
@@ -216,12 +222,60 @@ class AmoClient:
             cf.append(fv("Район", ", ".join(lead.districts)))
         if lead.guests:
             cf.append(fv("Гостей", lead.guests))
+        if lead.whatsapp:
+            cf.append(fv("WhatsApp", lead.whatsapp))
         if not cf:
             return
         body: dict = {"custom_fields_values": cf}
         if lead.budget:
             body["price"] = int(lead.budget)
         self._req("PATCH", f"/leads/{lead_id}", json=body)
+
+    def attach_file(self, lead_id: int, path) -> None:
+        """Загружает файл в amo-диск и прикрепляет к сделке (договор брони).
+
+        Схема amo v4: account.drive_url -> сессия загрузки -> байты ->
+        file uuid -> PUT /leads/{id}/files.
+        """
+        from pathlib import Path as _P
+
+        p = _P(path)
+        data = p.read_bytes()
+        drive = self._req("GET", "/account?with=drive_url").get("drive_url", "")
+        if not drive:
+            raise RuntimeError("amo: drive_url недоступен для аккаунта")
+
+        content_type = ("application/vnd.openxmlformats-officedocument."
+                        "wordprocessingml.document")
+        session = requests.post(
+            f"{drive}/v1.0/sessions",
+            headers=self.headers,
+            json={"file_name": p.name, "file_size": len(data),
+                  "content_type": content_type},
+            timeout=30,
+        )
+        session.raise_for_status()
+        upload_url = session.json()["upload_url"]
+
+        up = requests.post(
+            upload_url,
+            headers={"Authorization": self.headers["Authorization"],
+                     "Content-Type": content_type},
+            data=data,
+            timeout=60,
+        )
+        up.raise_for_status()
+        file_uuid = up.json().get("uuid")
+        if not file_uuid:
+            raise RuntimeError(f"amo: загрузка файла не вернула uuid: {up.text[:200]}")
+
+        r = requests.put(
+            f"{self.base}/leads/{lead_id}/files",
+            headers=self.headers,
+            json=[{"file_uuid": file_uuid}],
+            timeout=30,
+        )
+        r.raise_for_status()
 
     def add_note(self, entity: str, entity_id: int, text: str) -> None:
         body = [{"note_type": "common", "params": {"text": text}}]

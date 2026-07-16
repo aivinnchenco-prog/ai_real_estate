@@ -130,7 +130,7 @@ async function resolvePage(fields, { objectId, latest }) {
     const id = pageObjectId(page, fields);
     if (!id) continue;
     if (!pageMontageEnabled(page, fields)) {
-      console.warn(`Skip ${id}: Статус для Агент_3 = НЕТ (монтаж выключен)`);
+      console.warn(`Skip ${id}: «Монтаж» = НЕТ (монтаж выключен)`);
       continue;
     }
     const prefix = `${id}/photos/`;
@@ -157,7 +157,7 @@ async function main() {
   const { page, objectId } = await resolvePage(fields, lookup);
 
   if (!pageMontageEnabled(page, fields)) {
-    console.log(`Skip ${objectId}: «Статус для Агент_3» = НЕТ — объект только для базы, монтаж и Seedance не нужны.`);
+    console.log(`Skip ${objectId}: «Монтаж» = НЕТ — объект только для базы, монтаж и Seedance не нужны.`);
     process.exit(0);
   }
 

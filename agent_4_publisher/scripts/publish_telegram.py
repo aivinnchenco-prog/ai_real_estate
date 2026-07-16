@@ -73,7 +73,7 @@ def telegram_channel(config: dict[str, Any]) -> str:
     return (
         os.environ.get("TELEGRAM_CHANNEL")
         or config.get("telegram", {}).get("channel")
-        or "@trip_home_phuket"
+        or "@OpenHome_th"
     ).strip()
 
 
@@ -127,6 +127,20 @@ def build_telegram_caption(page: dict[str, Any], fields: dict[str, str], config:
 
     caption = "\n\n".join(p for p in parts if p)
     caption = sanitize_telegram_caption(caption, config)
+
+    # Локация — после sanitize: strip_urls мог бы срезать maps-ссылку из текста
+    # описания, а мы хотим её в посте всегда, если есть в Notion.
+    if tg_cfg.get("append_google_maps", True):
+        maps_url = (get_prop(page, fields.get("google_maps", nfc.GOOGLE_MAPS), "url") or "").strip()
+        if maps_url and maps_url not in caption:
+            line = f"📍 Локация: {maps_url}"
+            room = MAX_CAPTION - len(line) - 2  # место под «\n\n» + ссылку
+            if room < 40:
+                caption = line[:MAX_CAPTION]
+            else:
+                if len(caption) > room:
+                    caption = caption[: room - 1].rstrip() + "…"
+                caption = f"{caption}\n\n{line}"
     if len(caption) > MAX_CAPTION:
         caption = caption[: MAX_CAPTION - 1] + "…"
     return caption

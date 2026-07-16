@@ -14,7 +14,7 @@
 | F3 | `--force` | По `page_id` от оператора | Всё выше, срочно, вне лимита |
 
 **Лимит:** не более **3 постов в одну соцсеть за сутки** — 1 карусель + 2 видео (интервал 3–4 ч).  
-**Telegram:** только **фото** из `Фото` → [@trip_home_phuket](https://t.me/trip_home_phuket), **без Seedance**.  
+**Telegram:** только **фото** из `Фото` → [@OpenHome_th](https://t.me/OpenHome_th), **без Seedance**.  
 **Telegram:** колонка **Описание для Telegram**.  
 **Metricool:** колонка **Описание сец.сети** (универсальное для всех соцсетей).  
 **Блокировка:** `agent6_locked` — после взятия не повторять без `--force`.
@@ -22,7 +22,7 @@
 ## Workflow (строго по порядку)
 
 1. Проверить lock, лимит 3 поста/сеть, интервал 3–4 ч, R2 URL
-2. **Telegram** — только фото из `Фото` → @trip_home_phuket → `post_url_telegram`
+2. **Telegram** — только фото из `Фото` → @OpenHome_th → `post_url_telegram`
 3. **Metricool** — отложенно: F1 карусель (1/сеть/день) или F2 видео Seedance (2/сеть/день)
 4. **ChatPlace** — воронка на IG (carousel + reel отдельно) со ссылкой на TG-пост
 5. Записать `post_url_*`, `chatplace_funnel_*_done`, `agent6_carousel_done` / `agent6_video_done`, `agent6_locked=true`
@@ -72,7 +72,7 @@ python3 scripts/publish_pipeline.py --page-id PAGE_ID --platform instagram --dry
 
 ## Правила
 
-- TG **всегда первым**, только **фото**, канал **@trip_home_phuket**
+- TG **всегда первым**, только **фото**, канал **@OpenHome_th**
 - Seedance **никогда** не идёт в Telegram
 - ChatPlace **только после** `post_url_telegram`
 - Без `--force` — не трогать `agent6_locked` записи

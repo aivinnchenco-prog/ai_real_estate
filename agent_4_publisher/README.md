@@ -43,7 +43,7 @@ cp .env.example .env
 Токен и канал в `.env` (не в `.env.example`):
 ```
 TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHANNEL=@trip_home_phuket
+TELEGRAM_CHANNEL=@OpenHome_th
 ```
 ```bash
 python3 scripts/publish_telegram.py --check-bot

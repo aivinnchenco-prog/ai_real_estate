@@ -1,0 +1,8 @@
+{
+  "name": "agent6-booking-doc",
+  "private": true,
+  "description": "Генерация docx-соглашения о бронировании (Agent 8 Notary)",
+  "dependencies": {
+    "docx": "^8.5.0"
+  }
+}

@@ -23,6 +23,7 @@ EXTRACT_SCHEMA = {
         "name": {"type": "STRING", "description": "имя клиента, как обращаться"},
         "full_name": {"type": "STRING", "description": "полное ФИО клиента для брони"},
         "citizenship": {"type": "STRING", "description": "гражданство клиента"},
+        "whatsapp": {"type": "STRING", "description": "номер телефона WhatsApp клиента"},
         "check_in": {"type": "STRING", "description": "дата заезда ISO YYYY-MM-DD"},
         "check_out": {"type": "STRING", "description": "дата выезда ISO YYYY-MM-DD"},
         "stay_months": {"type": "NUMBER", "description": "срок проживания в месяцах"},
@@ -108,6 +109,7 @@ def extract_lead_update(
         "bedrooms": lead.bedrooms,
         "guests": lead.guests,
         "pets": lead.pets,
+        "whatsapp": lead.whatsapp or None,
     }
     payload = {
         "contents": [{"parts": [{"text": _EXTRACT_PROMPT.format(
@@ -135,6 +137,8 @@ def apply_update(lead: LeadProfile, update: dict) -> LeadProfile:
         lead.full_name = update["full_name"]
     if update.get("citizenship"):
         lead.citizenship = update["citizenship"]
+    if update.get("whatsapp"):
+        lead.whatsapp = str(update["whatsapp"]).strip()
     for key in ("check_in", "check_out"):
         if update.get(key):
             try:

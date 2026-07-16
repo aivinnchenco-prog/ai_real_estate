@@ -102,7 +102,10 @@
       "calendar": "Календарь",
       "monthly_prices": "monthly_prices",
       "caption_social": "Описание соц.сети",
-      "max_guests": "Вместимость гостей"
+      "max_guests": "Вместимость гостей",
+      "montage": "Монтаж",
+      "publish": "Публикация",
+      "tg_post": "post_url_telegram"
     },
     "statuses": {
       "after_structurize": "ready_for_video",
@@ -149,6 +152,9 @@
     ],
     "publisher_script": null,
     "publish_fb_groups": true,
-    "publish_fb_marketplace": true
+    "publish_fb_marketplace": true,
+    "default_montage": "ДА",
+    "default_publish": "ДА",
+    "telegram_showcase": true
   }
 }

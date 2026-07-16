@@ -100,26 +100,29 @@ def _date_range(session: Session) -> str:
 
 
 def build_client_message(verdict: OwnerVerdict, session: Session) -> str:
-    title = (session.chosen.title if session.chosen else session.lead.preferred_object_id)
+    # В сообщениях клиенту используем метку объекта («ваш вариант A_..._003»),
+    # а не длинный парсерный заголовок.
+    object_id = (session.chosen.object_id if session.chosen
+                 else session.lead.preferred_object_id)
     if verdict.status == "free":
-        return client_owner_confirmed(title, _date_range(session))
+        return client_owner_confirmed(object_id, _date_range(session))
     if verdict.status == "conditions_changed":
         note = verdict.conditions_note
         if verdict.new_price_month:
             note = (note + " " if note else "") + f"Цена: {verdict.new_price_month:,.0f} THB/мес".replace(",", " ")
-        return client_owner_conditions(title, note or "уточните детали у менеджера")
+        return client_owner_conditions(object_id, note or "уточните детали у менеджера")
     # busy
     if verdict.busy_until:
         from datetime import timedelta
         free_from = verdict.busy_until + timedelta(days=1)
         return client_object_busy(
-            title,
+            object_id,
             verdict.busy_until.strftime("%d.%m.%Y"),
             free_from.strftime("%d.%m.%Y"),
         )
     return (
-        f"К сожалению, владелец сообщил, что «{title}» занят на ваши даты. "
-        "Подобрать похожие варианты?"
+        f"К сожалению, владелец сообщил, что ваш вариант {object_id} занят "
+        "на ваши даты. Подобрать похожие варианты?"
     )
 
 

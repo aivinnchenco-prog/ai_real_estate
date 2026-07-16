@@ -20,7 +20,7 @@
 |-----------|---------|-----|
 | Instagram | **@workdvorak** | Metricool + ChatPlace |
 | TikTok (бренд) | **@vinchencso_08** | Metricool (воронка TikTok — phase 5.1, не сделано) |
-| Telegram | **@trip_home_phuket** | Прямая публикация |
+| Telegram | **@OpenHome_th** | Прямая публикация |
 
 ---
 
@@ -31,7 +31,7 @@
 | Объект ID | `20260702_001` |
 | Notion page_id | `3912c251-5061-81fa-974d-eaf233f581ba` |
 | Объект | LEGENDARY 2BR, Choeng Thale |
-| TG пост | `https://t.me/trip_home_phuket/12` |
+| TG пост | `https://t.me/OpenHome_th/12` |
 | IG carousel (live) | `https://www.instagram.com/p/DagA9t2iK36/` |
 
 ---

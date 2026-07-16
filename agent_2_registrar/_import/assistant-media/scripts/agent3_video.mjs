@@ -241,10 +241,11 @@ async function main() {
   }
   console.log(`Gallery (Notion): ${galleryUrl}`);
 
-  // «Статус для Агент_3»: НЕТ — объект только для базы, монтаж не нужен. Пусто = ДА.
-  const montage = page.properties?.["Статус для Агент_3"]?.select?.name;
+  // «Монтаж» (бывш. «Статус для Агент_3»): НЕТ — объект только для базы. Пусто = ДА.
+  const montage = page.properties?.["Монтаж"]?.select?.name
+    ?? page.properties?.["Статус для Агент_3"]?.select?.name;
   if ((montage || "").trim().toUpperCase() === "НЕТ") {
-    console.log("«Статус для Агент_3» = НЕТ — монтаж и Seedance пропущены.");
+    console.log("«Монтаж» = НЕТ — монтаж и Seedance пропущены.");
     process.exit(0);
   }
 

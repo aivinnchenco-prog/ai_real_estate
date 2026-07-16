@@ -8,7 +8,7 @@ import re
 # служебный obj_ префиксом источника не считается)
 _ID_RE = re.compile(r"(?:#obj[_ ]?|#)?\b([A-Za-z]{1,3}_)?(\d{8}_\d{3})\b", re.IGNORECASE)
 
-# Ссылка на пост TG-канала: https://t.me/trip_home_phuket/123
+# Ссылка на пост TG-канала: https://t.me/OpenHome_th/123
 _TG_POST_RE = re.compile(r"https?://t\.me/([\w_]+)/(\d+)")
 
 

@@ -20,7 +20,7 @@ def make_session() -> Session:
         object_id="20260702_001", title="Вилла", district="Раваи",
         price_month=70000, availability=Availability.BUSY,
         busy_until=date(2026, 7, 20),
-        tg_post_url="https://t.me/trip_home_phuket/12",
+        tg_post_url="https://t.me/OpenHome_th/12",
     )
     s.asked_core = True
     s.asked_followup = True

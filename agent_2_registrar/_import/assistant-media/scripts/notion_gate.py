@@ -18,10 +18,23 @@ class NotionListing:
     gallery_url: str | None
     video_vertical: str | None
     video_seedance: str | None
+    montage_flag: str = ""   # «Монтаж»: ДА/НЕТ, "" = дефолт из конфига
+    publish_flag: str = ""   # «Публикация»: ДА/НЕТ, "" = дефолт из конфига
+    tg_post_url: str = ""    # post_url_telegram: пост-витрина в TG-канале
 
     @property
     def has_videos(self) -> bool:
         return bool(self.video_vertical or self.video_seedance)
+
+
+_FLAG_OFF = {"НЕТ", "NO", "NET", "FALSE", "0"}
+
+
+def flag_enabled(value: str | None, default: bool = True) -> bool:
+    """ДА/НЕТ-флаг из select-колонки: пустое значение = default (из pipeline.json)."""
+    if not value or not value.strip():
+        return default
+    return value.strip().upper() not in _FLAG_OFF
 
 
 def _rich_text(prop: dict) -> str:
@@ -32,6 +45,10 @@ def _rich_text(prop: dict) -> str:
 def _title(prop: dict) -> str:
     items = prop.get("title") or []
     return "".join(t.get("plain_text", "") for t in items).strip()
+
+
+def _select(prop: dict) -> str:
+    return ((prop or {}).get("select") or {}).get("name") or ""
 
 
 def parse_listing_page(page: dict[str, Any], fields: dict[str, str]) -> NotionListing | None:
@@ -49,6 +66,9 @@ def parse_listing_page(page: dict[str, Any], fields: dict[str, str]) -> NotionLi
         gallery_url=(props.get(fields["photo"], {}) or {}).get("url"),
         video_vertical=(props.get(fields["video_vertical"], {}) or {}).get("url"),
         video_seedance=(props.get(fields["video_seedance"], {}) or {}).get("url"),
+        montage_flag=_select(props.get(fields.get("montage", "Монтаж"), {})),
+        publish_flag=_select(props.get(fields.get("publish", "Публикация"), {})),
+        tg_post_url=(props.get(fields.get("tg_post", "post_url_telegram"), {}) or {}).get("url") or "",
     )
 
 
@@ -68,8 +88,16 @@ def fetch_by_object_id(crm: NotionCRM, object_id: str, fields: dict[str, str]) -
     return parse_listing_page(page, fields)
 
 
-def agent3_ready(listing: NotionListing, statuses: dict[str, str], *, allow_retry: bool = True) -> tuple[bool, str]:
-    """Agent 3: только ready_for_video + галерея в Notion, без готовых видео."""
+def agent3_ready(
+    listing: NotionListing,
+    statuses: dict[str, str],
+    *,
+    allow_retry: bool = True,
+    default_montage: bool = True,
+) -> tuple[bool, str]:
+    """Agent 3: ready_for_video + галерея + флаг «Монтаж», без готовых видео."""
+    if not flag_enabled(listing.montage_flag, default_montage):
+        return False, "«Монтаж» = НЕТ (монтаж выключен)"
     ok_status = {statuses["after_structurize"]}
     if allow_retry:
         ok_status.add(statuses.get("video_failed", "video_failed"))
@@ -82,13 +110,29 @@ def agent3_ready(listing: NotionListing, statuses: dict[str, str], *, allow_retr
     return True, "ok"
 
 
-def agent6_ready(listing: NotionListing, statuses: dict[str, str]) -> tuple[bool, str]:
-    """Agent 6 Publisher: ready_to_post + video_url_Seedance (fallback: vertical)."""
+def agent6_ready(
+    listing: NotionListing,
+    statuses: dict[str, str],
+    *,
+    default_publish: bool = True,
+    default_montage: bool = True,
+) -> tuple[bool, str]:
+    """Agent 4/6 Publisher: флаг «Публикация» + ready_to_post + видео.
+
+    Исключение: монтаж выключен («Монтаж» = НЕТ) — публикуем
+    карусель без видео, поэтому наличие video_url не требуем.
+    """
+    if not flag_enabled(listing.publish_flag, default_publish):
+        return False, "«Публикация» = НЕТ (постинг выключен)"
     if listing.status != statuses["video_done"]:
         return False, f"status={listing.status}, need {statuses['video_done']}"
-    if not listing.video_seedance and not listing.video_vertical:
-        return False, "no video_url_Seedance in Notion — wait for Agent 5 (or Agent 3 fallback)"
-    return True, "ok"
+    if listing.has_videos:
+        return True, "ok"
+    if not flag_enabled(listing.montage_flag, default_montage):
+        if not listing.gallery_url:
+            return False, "монтаж выключен, но нет галереи (Фото) для карусели"
+        return True, "ok: карусель без видео (монтаж выключен)"
+    return False, "no video_url_Seedance in Notion — wait for Agent 5 (or Agent 3 fallback)"
 
 
 # Backward compatibility (deprecated)

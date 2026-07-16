@@ -35,6 +35,7 @@ from notion_gate import (  # noqa: E402
     agent6_ready,
     fetch_by_object_id,
     fetch_by_status,
+    flag_enabled,
 )
 from event_log import log_event  # noqa: E402
 from pipeline_config import apply_env_overrides  # noqa: E402
@@ -75,15 +76,17 @@ def run_agent3(object_id: str) -> int:
     return proc.returncode
 
 
-def run_agent6(page_id: str, platform: str, publisher_script: Path) -> int:
-    print(f"\n[chain] Agent 6 → {page_id} ({platform})")
+def run_agent6(page_id: str, platform: str, publisher_script: Path,
+               mode: str | None = None) -> int:
+    print(f"\n[chain] Agent 6 → {page_id} ({platform}"
+          + (f", mode={mode}" if mode else "") + ")")
     if not publisher_script.exists():
         print(f"[chain] SKIP Agent 6: not found {publisher_script}", file=sys.stderr)
         return 0
-    proc = subprocess.run(
-        [sys.executable, str(publisher_script), "--page-id", page_id, "--platform", platform],
-        cwd=publisher_script.parent,
-    )
+    cmd = [sys.executable, str(publisher_script), "--page-id", page_id, "--platform", platform]
+    if mode:
+        cmd.extend(["--mode", mode])
+    proc = subprocess.run(cmd, cwd=publisher_script.parent)
     return proc.returncode
 
 
@@ -112,6 +115,24 @@ def run_fb_branch(page_id: str, script_name: str) -> int:
         cmd = ["xvfb-run", "-a", "-s", "-screen 0 1440x900x24"] + cmd
     print(f"\n[chain] Agent 4 FB ({script_name}) → {page_id}")
     proc = subprocess.run(cmd, cwd=publisher_dir)
+    return proc.returncode
+
+
+def run_telegram_showcase(page_id: str) -> int:
+    """TG-канал — витрина ВСЕЙ базы: постим фото+описание сразу после Агента 2,
+    независимо от флагов «Монтаж»/«Публикация» (они управляют только
+    соц.сетями). Скрипт идемпотентен: post_url_telegram заполнен — пропустит.
+    --no-metricool: Metricool-карусель остаётся за обычной веткой Агента 4."""
+    publisher_dir = ROOT.parents[2] / "agent_4_publisher"
+    script = publisher_dir / "scripts" / "publish_telegram.py"
+    if not script.exists():
+        print(f"[chain] SKIP telegram: not found {script}", file=sys.stderr)
+        return 0
+    print(f"\n[chain] Telegram showcase → {page_id}")
+    proc = subprocess.run(
+        [sys.executable, str(script), "--page-id", page_id, "--no-metricool"],
+        cwd=publisher_dir,
+    )
     return proc.returncode
 
 
@@ -154,6 +175,10 @@ def continue_chain(
     chain = cfg.get("chain", {})
     publisher = resolve_publisher_script(cfg)
     platforms: list[str] = publish_platforms or chain.get("publish_platforms", [])
+    # Пустая ячейка флага = дефолт: «ДА» — всё автоматом (текущий режим),
+    # «НЕТ» — объекты копятся в базе, пока флаг не поставят вручную.
+    default_montage = flag_enabled(chain.get("default_montage", "ДА"))
+    default_publish = flag_enabled(chain.get("default_publish", "ДА"))
 
     exit_code = 0
 
@@ -169,11 +194,54 @@ def continue_chain(
                 fetch_by_status(crm, statuses.get("video_failed", "video_failed"), nf)
             )
 
+        # TG-канал — витрина всей базы: каждый объект после Агента 2 постится
+        # в Telegram независимо от флагов (выключается chain.telegram_showcase).
+        # Смотрим и статусы монтажа/готовности — чтобы дослать посты объектам,
+        # которые прошли цепочку до появления этой ветки.
+        if chain.get("telegram_showcase", True):
+            tg_candidates = list(listings)
+            if not object_id:
+                for st_key in ("video_start", "video_done"):
+                    st = statuses.get(st_key)
+                    if st:
+                        tg_candidates.extend(fetch_by_status(crm, st, nf))
+            seen_tg: set[str] = set()
+            for listing in tg_candidates:
+                if listing.object_id in seen_tg or listing.tg_post_url:
+                    continue
+                seen_tg.add(listing.object_id)
+                if not listing.gallery_url:
+                    continue
+                code_tg = run_telegram_showcase(listing.page_id)
+                if code_tg != 0:
+                    log_event(listing.object_id, "chain", "telegram_showcase_failed",
+                              code=code_tg)
+
         processed_3: set[str] = set()
         for listing in listings:
             if listing.object_id in processed_3:
                 continue
-            ready, reason = agent3_ready(listing, statuses)
+            montage_on = flag_enabled(listing.montage_flag, default_montage)
+            publish_on = flag_enabled(listing.publish_flag, default_publish)
+            if not montage_on:
+                # Монтаж выключен. Если публикация включена — минуем Агента 3:
+                # переводим объект сразу в ready_to_post (карусель без видео).
+                if (publish_on and listing.gallery_url
+                        and listing.status == statuses["after_structurize"]):
+                    print(f"[chain] {listing.object_id}: монтаж=НЕТ, публикация=ДА → "
+                          f"сразу {statuses['video_done']} (карусель без видео)")
+                    crm.update_page(listing.page_id, {
+                        nf["status"]: crm.build_status(statuses["video_done"]),
+                    })
+                    log_event(listing.object_id, "chain", "skip_montage_to_publish",
+                              page_id=listing.page_id)
+                else:
+                    print(f"[chain] Agent 3 skip {listing.object_id}: монтаж=НЕТ"
+                          + ("" if publish_on else ", публикация=НЕТ — объект только для базы"))
+                processed_3.add(listing.object_id)
+                continue
+            ready, reason = agent3_ready(listing, statuses,
+                                         default_montage=default_montage)
             if not ready:
                 print(f"[chain] Agent 3 skip {listing.object_id}: {reason}")
                 continue
@@ -201,13 +269,17 @@ def continue_chain(
             listings6 = fetch_by_status(crm, statuses["video_done"], nf)
 
         for listing in listings6:
-            ready6, reason6 = agent6_ready(listing, statuses)
+            ready6, reason6 = agent6_ready(listing, statuses,
+                                           default_publish=default_publish,
+                                           default_montage=default_montage)
             if not ready6:
                 print(f"[chain] Agent 6 skip {listing.object_id}: {reason6}")
                 continue
+            # Видео нет (монтаж выключен) — публикуем только карусель.
+            mode6 = None if listing.has_videos else "carousel"
             for platform in platforms:
                 log_event(listing.object_id, "chain", "agent6_start", platform=platform)
-                code6 = run_agent6(listing.page_id, platform, publisher)
+                code6 = run_agent6(listing.page_id, platform, publisher, mode=mode6)
                 if code6 != 0:
                     exit_code = code6
                     log_event(listing.object_id, "chain", "agent6_failed", platform=platform)

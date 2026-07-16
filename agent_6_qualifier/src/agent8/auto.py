@@ -33,11 +33,10 @@ def busy_message_for_client(precheck, listing, lead) -> str:
     busy_until = precheck.busy_until(lead.check_in)
     free_from = busy_until + timedelta(days=1) if busy_until else None
     free_nights = precheck.free_nights_from(lead.check_in)
-    title = listing.title or listing.object_id
     if free_nights > 0:
         free_until = lead.check_in + timedelta(days=free_nights)
         return client_object_partial(
-            title,
+            listing.object_id,
             lead.check_in.strftime("%d.%m.%Y"),
             free_nights,
             free_until.strftime("%d.%m.%Y"),
@@ -45,7 +44,7 @@ def busy_message_for_client(precheck, listing, lead) -> str:
             free_from.strftime("%d.%m.%Y") if free_from else "?",
         )
     return client_object_busy(
-        title,
+        listing.object_id,
         busy_until.strftime("%d.%m.%Y") if busy_until else "?",
         free_from.strftime("%d.%m.%Y") if free_from else "?",
     )

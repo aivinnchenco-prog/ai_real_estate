@@ -1,0 +1,42 @@
+{
+  "contract": {
+    "number": "OH-A_20260714_007-R01",
+    "date": "15.07.2026",
+    "validUntil": "22.07.2026"
+  },
+  "agency": {
+    "brand": "OpenHome",
+    "name": "OpenHome (OPENHOME CO., LTD.)",
+    "email": "info@openhome.example",
+    "phone": "+66625124002"
+  },
+  "client": {
+    "fullName": "Nelli Avdeeva / Авдеева Нелли",
+    "citizenship": "Kazakhstan / Казахстан",
+    "phone": "+77051571188",
+    "email": ""
+  },
+  "object": {
+    "objectId": "A_20260714_007",
+    "propertyName": "Angsana Beachfront Residences",
+    "address": "10 Moo 4 Srisoonthorn Cherngtalay, Thalang District, Phuket 83110, Thailand",
+    "unit": "6231, floor 3",
+    "bedrooms": "2",
+    "area": "200"
+  },
+  "request": {
+    "checkinDate": "09.07.2026",
+    "checkoutDate": "02.08.2026",
+    "longTerm": false,
+    "longTermNote": "",
+    "longTermNoteRu": "",
+    "guests": "4 (2 adults, 2 children)",
+    "budget": "180 000",
+    "budgetCurrency": "THB",
+    "budgetPeriod": "per stay (24 nights)",
+    "budgetPeriodRu": "за весь период (24 ночи)",
+    "pets": false,
+    "petsNote": "",
+    "petsNoteRu": ""
+  }
+}

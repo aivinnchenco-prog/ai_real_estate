@@ -15,6 +15,9 @@ venv/
 **/venv/
 node_modules/
 **/node_modules/
+
+# Сгенерированные docx-соглашения о бронировании (Agent 8 Notary)
+agent_6_qualifier/data/contracts/
 __pycache__/
 **/__pycache__/
 *.pyc

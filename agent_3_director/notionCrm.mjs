@@ -136,7 +136,7 @@ export function pageObjectId(page, fields) {
   return page.properties?.[fields.object_id]?.rich_text?.[0]?.plain_text?.trim() || null;
 }
 
-// «Статус для Агент_3»: ДА/НЕТ — брать ли объект на монтаж. Пусто = ДА.
+// «Монтаж» (бывш. «Статус для Агент_3»): ДА/НЕТ — брать ли объект на монтаж. Пусто = ДА.
 export function pageMontageEnabled(page, fields) {
   if (!fields.montage) return true;
   const value = readSelect(page, fields.montage);

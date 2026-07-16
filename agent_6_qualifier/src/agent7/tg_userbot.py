@@ -311,6 +311,43 @@ async def main() -> None:
             await humanized_respond(event, reply)
             print(f"[out] {chat_id}: {reply[:80]}")
 
+            # Бронь подтверждена — вместе с сообщением отправляем клиенту
+            # docx-соглашение о бронировании (Agent 8 Notary) и прикрепляем
+            # его же к сделке в amoCRM.
+            if turn.booking_confirmed:
+                doc_path = None
+                try:
+                    from agent8.booking_doc import generate_booking_doc
+                    # Контакт в договоре — мессенджер, где идёт диалог (Telegram).
+                    # WhatsApp запрашивается только для карточки amoCRM.
+                    uname = getattr(sender, "username", "") or ""
+                    contact = f"Telegram: @{uname}" if uname else f"Telegram id {chat_id}"
+                    doc_path = await asyncio.to_thread(
+                        generate_booking_doc, session, contact
+                    )
+                    await client.send_file(
+                        event.chat_id, str(doc_path),
+                        caption="Соглашение о бронировании (заявка). Оплаты по нему "
+                                "нет — итоговые условия зафиксируем в основном "
+                                "договоре после просмотра.",
+                        reply_to=event.message.id,
+                    )
+                    print(f"[notary] договор отправлен: {doc_path.name}")
+                except Exception as e:
+                    notify_error("booking_doc", str(e),
+                                 "договор не сформирован — бронь зафиксирована, "
+                                 "документ нужно отправить вручную")
+                if doc_path is not None and amo is not None and session.amo_lead_id:
+                    try:
+                        await asyncio.to_thread(
+                            amo.attach_file, session.amo_lead_id, doc_path
+                        )
+                        print(f"[notary] договор прикреплён к сделке #{session.amo_lead_id}")
+                    except Exception as e:
+                        notify_error("amo.attach_file", str(e),
+                                     f"договор не прикреплён к сделке "
+                                     f"#{session.amo_lead_id} — приложите вручную")
+
             session.history.append({"role": "user", "text": text})
             session.history.append({"role": "assistant", "text": reply})
             if len(session.history) > 12:
@@ -340,10 +377,15 @@ async def main() -> None:
                     stages = amo.ensure_pipeline()
                     amo.update_lead_status(session.amo_lead_id, stages["Бронь подтверждена"])
                     lead = session.lead
+                    # Финальная синхронизация карточки: гости/WhatsApp могли быть
+                    # распарсены запасными регулярками мимо Gemini-обновлений.
+                    amo.update_lead_fields(session.amo_lead_id, lead,
+                                           amo.ensure_lead_fields())
                     amo.note_client(
                         session.amo_lead_id,
                         lead.preferred_object_id or "-",
-                        f"ФИО: {lead.full_name}, гражданство: {lead.citizenship}",
+                        f"ФИО: {lead.full_name}, гражданство: {lead.citizenship}, "
+                        f"WhatsApp: {lead.whatsapp}, гостей: {lead.guests}",
                     )
                 except Exception as e:
                     notify_error("amo.stage", str(e), "бронь подтверждена")

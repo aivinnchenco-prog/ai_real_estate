@@ -30,6 +30,9 @@ AGENT_ENV_MAP: dict[str, dict[str, str]] = {
         "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
         "ANTHROPIC_MODEL": "ANTHROPIC_MODEL",
         "CURSOR_API_KEY": "CURSOR_API_KEY",
+        # Кнопки «Монтаж/Публикация» в боте пишут флаги прямо в Notion
+        "NOTION_API_KEY": "NOTION_API_KEY",
+        "NOTION_DB_ID": "NOTION_DB_ID",
     },
     "agent_1_parser/fb_parser/.env": {
         "TELEGRAM_BOT_TOKEN": "TG_BOT_TOKEN_FB_PARSER",

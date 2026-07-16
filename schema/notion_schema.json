@@ -76,7 +76,8 @@
     {"exact_name": "Занято до", "type": "date", "writers": ["agent_6_qualifier", "agent_7_envoy"], "readers": ["agent_6_qualifier"]},
     {"exact_name": "Будущие брони", "type": "rich_text", "writers": ["agent_6_qualifier"], "readers": ["agent_6_qualifier"]},
     {"exact_name": "Свободно", "type": "checkbox", "writers": ["agent_7_envoy"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Статус для Агент_3", "type": "select", "writers": ["agent_2_registrar", "manual"], "readers": ["agent_3_director"], "$comment": "ДА/НЕТ — брать ли объект на монтаж видео (Seedance). Пусто = ДА."},
+    {"exact_name": "Монтаж", "type": "select", "writers": ["agent_1_parser", "agent_2_registrar", "manual"], "readers": ["agent_3_director"], "$comment": "Бывш. «Статус для Агент_3». ДА/НЕТ — брать ли объект на монтаж видео (Seedance). Пусто = дефолт из pipeline.json (chain.default_montage). Кнопки в TG-боте Агента 1 пишут сюда."},
+    {"exact_name": "Публикация", "type": "select", "writers": ["agent_1_parser", "agent_2_registrar", "manual"], "readers": ["agent_4_publisher"], "$comment": "ДА/НЕТ — публиковать ли объект в соц.сети (Metricool + FB-ветки). Пусто = дефолт из pipeline.json (chain.default_publish). Монтаж=НЕТ + Публикация=ДА — карусель без видео. Кнопки в TG-боте Агента 1 пишут сюда."},
 
     {"exact_name": "last_error", "type": "rich_text", "writers": ["agent_2_registrar", "agent_3_director", "agent_4_publisher"], "readers": ["manual"]},
     {"exact_name": "error_count", "type": "number", "writers": ["agent_3_director", "agent_4_publisher"], "readers": ["agent_3_director"]},

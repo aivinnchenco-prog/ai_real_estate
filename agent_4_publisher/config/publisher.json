@@ -443,7 +443,7 @@
     }
   },
   "telegram": {
-    "channel": "@trip_home_phuket",
+    "channel": "@OpenHome_th",
     "media": "images_only",
     "source_field": "photo",
     "caption_field": "Описание для Telegram",
@@ -462,6 +462,7 @@
     ],
     "append_object_hashtag": false,
     "append_contact_phone": false,
+    "append_google_maps": true,
     "chain_metricool_after_telegram": true
   },
   "chatplace": {

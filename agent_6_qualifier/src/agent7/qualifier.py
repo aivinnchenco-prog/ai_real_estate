@@ -187,8 +187,9 @@ class Qualifier:
             if skips_alternatives(message, session):
                 # Клиент отказался от альтернатив — не переспрашиваем.
                 session.awaiting_alt_consent = False
-                from .templates import CLIENT_WAIT_OWNER
-                return Turn(reply_draft=CLIENT_WAIT_OWNER, events=events)
+                from .templates import client_wait_owner
+                return Turn(reply_draft=client_wait_owner(self._oid(session)),
+                            events=events)
             if update.get("wants_alternatives") or is_consent(message):
                 session.awaiting_alt_consent = False
                 session.offered_alternatives = True
@@ -205,6 +206,8 @@ class Qualifier:
             from .templates import (
                 CLIENT_BOOKING_CITIZENSHIP,
                 CLIENT_BOOKING_FIO,
+                CLIENT_BOOKING_GUESTS,
+                CLIENT_BOOKING_WHATSAPP,
                 client_booking_confirmed,
             )
             if is_decline(message) and not session.booking_intent:
@@ -223,28 +226,43 @@ class Qualifier:
                 )
                 if m:
                     lead.citizenship = m.group(1).strip(" .,!")
+            # Запасной разбор номера телефона без LLM (ждём его после гражданства).
+            if not lead.whatsapp and lead.citizenship:
+                m = re.search(r"\+?\d[\d\s\-()]{7,17}\d", message)
+                if m:
+                    lead.whatsapp = re.sub(r"[\s\-()]", "", m.group(0))
             if is_consent(message) or lead.full_name or lead.citizenship:
                 session.booking_intent = True
+            # Запасной разбор числа гостей без LLM (ждём его первым вопросом
+            # после согласия на бронь; ФИО ещё не спрашивали).
+            if (session.booking_intent and not lead.guests and not lead.full_name):
+                m = re.search(r"\b(\d{1,2})\b", message)
+                if m and 1 <= int(m.group(1)) <= 20:
+                    lead.guests = int(m.group(1))
             if not session.booking_intent:
                 return Turn(
                     reply_draft="Подтверждаете бронь на эти даты?",
                     events=events,
                     skip_polish=True,
                 )
+            if not lead.guests:
+                return Turn(reply_draft=CLIENT_BOOKING_GUESTS, events=events, skip_polish=True)
             if not lead.full_name:
                 return Turn(reply_draft=CLIENT_BOOKING_FIO, events=events, skip_polish=True)
             if not lead.citizenship:
                 return Turn(reply_draft=CLIENT_BOOKING_CITIZENSHIP, events=events, skip_polish=True)
+            if not lead.whatsapp:
+                return Turn(reply_draft=CLIENT_BOOKING_WHATSAPP, events=events, skip_polish=True)
             session.booking_confirmed = True
             session.handoff_to_human = True
-            title = (chosen.title if chosen else lead.preferred_object_id)
             dr = self._date_range(lead)
             ev = (
                 f"Бронь подтверждена: {lead.full_name}, "
-                f"гражданство {lead.citizenship} — нужен менеджер для просмотра"
+                f"гражданство {lead.citizenship}, WhatsApp {lead.whatsapp}, "
+                f"гостей: {lead.guests} — нужен менеджер для просмотра"
             )
             return Turn(
-                reply_draft=client_booking_confirmed(title, dr),
+                reply_draft=client_booking_confirmed(self._oid(session), dr),
                 events=events + [ev],
                 booking_confirmed=True,
                 handoff_to_human=True,
@@ -260,8 +278,9 @@ class Qualifier:
         parts: list[str] = []
 
         if session.awaiting_owner and not session.owner_verdict:
-            from .templates import CLIENT_WAITING_OWNER
-            return Turn(reply_draft=CLIENT_WAITING_OWNER, events=events, skip_polish=True)
+            from .templates import client_waiting_owner
+            return Turn(reply_draft=client_waiting_owner(self._oid(session)),
+                        events=events, skip_polish=True)
 
         # Клиент пришёл без объекта, без запроса на подбор и без параметров —
         # выясняем: конкретный объект с наших ресурсов или подбор по запросу.
@@ -298,13 +317,15 @@ class Qualifier:
                 parts.append(client_price_line(quote))
             session.price_quoted = True
 
-        # Критерии получены -> отправляем ссылки на пост и фото (один раз).
+        # Критерии получены -> отправляем ссылки на пост, фото и карту (один раз).
         if chosen is not None and not session.links_sent:
             links = []
             if chosen.tg_post_url:
                 links.append(f"Пост с описанием: {chosen.tg_post_url}")
             if chosen.photos_url:
                 links.append(f"Все фото: {chosen.photos_url}")
+            if chosen.google_maps:
+                links.append(f"Локация на карте: {chosen.google_maps}")
             if links:
                 parts.append("\n".join(links))
                 session.links_sent = True
@@ -314,8 +335,7 @@ class Qualifier:
             busy_until = chosen.busy_until.strftime("%d.%m.%Y")
             free_from = self._free_from(chosen)
             session.awaiting_alt_consent = True
-            parts.append(client_object_busy(chosen.title or chosen.object_id,
-                                            busy_until, free_from))
+            parts.append(client_object_busy(chosen.object_id, busy_until, free_from))
             events.append(f"Объект {chosen.object_id} занят до {busy_until}")
             return Turn(reply_draft="\n\n".join(parts), events=events)
 
@@ -323,8 +343,9 @@ class Qualifier:
         if (chosen is not None and not session.awaiting_alt_consent
                 and not session.owner_verdict and not session.awaiting_owner):
             parts.append(
-                "Отлично, передаю запрос по этому объекту — уточню у владельца "
-                "доступность на ваши даты и сразу вернусь с ответом."
+                f"Отлично, передаю запрос по вашему варианту {chosen.object_id} — "
+                "уточню у владельца доступность на ваши даты и сразу вернусь "
+                "с ответом."
             )
             # Клиент выбрал только этот объект — альтернативы не навязываем.
             if not skips_alternatives(message, session):
@@ -358,9 +379,9 @@ class Qualifier:
             # просить расширить бюджет бессмысленно — честно говорим, что
             # альтернатив пока нет, и ждём вердикта владельца.
             if session.chosen is not None and session.awaiting_owner:
-                from .templates import CLIENT_NO_ALTERNATIVES
-                return Turn(reply_draft=CLIENT_NO_ALTERNATIVES, events=events,
-                            skip_polish=True)
+                from .templates import client_no_alternatives
+                return Turn(reply_draft=client_no_alternatives(self._oid(session)),
+                            events=events, skip_polish=True)
             from .templates import CLIENT_ASK_BUDGET_TOLERANCE
             return Turn(reply_draft=CLIENT_ASK_BUDGET_TOLERANCE, events=events)
 
@@ -372,6 +393,13 @@ class Qualifier:
         return Turn(reply_draft="\n\n".join(lines), events=events)
 
     # ---------- вспомогательное ----------
+
+    @staticmethod
+    def _oid(session: Session) -> str:
+        """Метка объекта для сообщений клиенту («ваш вариант A_20260713_003»)."""
+        if session.chosen is not None:
+            return session.chosen.object_id
+        return session.lead.preferred_object_id or ""
 
     def _resolve_listing(self, message: str) -> Listing | None:
         ids = extract_object_ids(message)

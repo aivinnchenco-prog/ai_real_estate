@@ -31,7 +31,7 @@ def test_extract_ids_dedup_and_empty():
 
 
 def test_extract_tg_post():
-    assert extract_tg_post("https://t.me/trip_home_phuket/123") == ("trip_home_phuket", 123)
+    assert extract_tg_post("https://t.me/OpenHome_th/123") == ("OpenHome_th", 123)
     assert extract_tg_post("без ссылки") is None
 
 
@@ -170,3 +170,27 @@ def test_owner_message_has_no_budget():
     msg = owner_first_message(OwnerChannel.TELEGRAM, "21.07.2026", "26.07.2026", guests=3)
     assert "Бюджет" not in msg
     assert "21.07.2026" in msg and "26.07.2026" in msg
+
+
+def test_owner_message_includes_listing_link():
+    """Ссылка на объявление владельца — сразу после «на ваше жильё»."""
+    url = "https://www.airbnb.com/rooms/12345"
+    msg = owner_first_message(OwnerChannel.WHATSAPP, "21.07.2026", "26.07.2026",
+                              guests=3, listing_url=url)
+    assert f"на ваше жильё {url}, готов заселиться" in msg
+    # Без ссылки — фраза без лишних пробелов и скобок.
+    msg2 = owner_first_message(OwnerChannel.WHATSAPP, "21.07.2026", "26.07.2026")
+    assert "на ваше жильё, готов заселиться" in msg2
+
+
+def test_owner_message_has_agency_intro():
+    """Представляемся менеджером агентства (бренд из config/project.json)."""
+    msg = owner_first_message(OwnerChannel.TELEGRAM, "21.07.2026", "26.07.2026")
+    assert "Я менеджер от агентства" in msg
+    assert "OpenHome" in msg
+
+
+def test_owner_message_year_contract_without_checkout():
+    """Нет даты выезда = годовой контракт: так и сообщаем владельцу."""
+    msg = owner_first_message(OwnerChannel.WHATSAPP, "01.09.2026", "")
+    assert "готов заселиться с 01.09.2026, контракт на год" in msg

@@ -68,6 +68,39 @@ class ChainGateTests(unittest.TestCase):
         listing3 = NotionListing("p1", "id", "ready_to_post", "T", "https://g", "https://seedance", None)
         self.assertTrue(agent6_ready(listing3, st)[0])
 
+    def test_montage_flag_gates_agent3(self):
+        """«Монтаж» = НЕТ — объект не берётся на монтаж; пусто = дефолт."""
+        st = {"after_structurize": "ready_for_video", "video_failed": "video_failed"}
+        listing = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None,
+                                montage_flag="НЕТ")
+        ok, reason = agent3_ready(listing, st)
+        self.assertFalse(ok)
+        self.assertIn("монтаж выключен", reason)
+        empty = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None)
+        self.assertTrue(agent3_ready(empty, st)[0])                          # пусто = ДА
+        self.assertFalse(agent3_ready(empty, st, default_montage=False)[0])  # режим «пусто = НЕТ»
+
+    def test_publish_flag_gates_agent6(self):
+        """«Публикация» = НЕТ — постинг выключен даже при готовом видео."""
+        st = {"video_done": "ready_to_post"}
+        listing = NotionListing("p1", "id", "ready_to_post", "T", "https://g",
+                                None, "https://v", publish_flag="НЕТ")
+        ok, reason = agent6_ready(listing, st)
+        self.assertFalse(ok)
+        self.assertIn("Публикация", reason)
+
+    def test_agent6_carousel_without_video_when_montage_off(self):
+        """Монтаж=НЕТ + Публикация=ДА — публикуем карусель, видео не требуем."""
+        st = {"video_done": "ready_to_post"}
+        listing = NotionListing("p1", "id", "ready_to_post", "T", "https://g", None, None,
+                                montage_flag="НЕТ", publish_flag="ДА")
+        ok, reason = agent6_ready(listing, st)
+        self.assertTrue(ok)
+        self.assertIn("карусель", reason)
+        no_gallery = NotionListing("p1", "id", "ready_to_post", "T", None, None, None,
+                                   montage_flag="НЕТ", publish_flag="ДА")
+        self.assertFalse(agent6_ready(no_gallery, st)[0])
+
 
     def test_one_id_per_session(self):
         sid = "_test_session_bind"

@@ -9,10 +9,10 @@ from agent7.qualifier import Qualifier, Session
 
 CHOSEN = Listing(object_id="20260708_001", title="Вилла у моря", district="Раваи",
                  housing_type="вилла", rooms=2, price_month=50000,
-                 tg_post_url="https://t.me/trip_home_phuket/10")
+                 tg_post_url="https://t.me/OpenHome_th/10")
 ALT = Listing(object_id="20260708_002", title="Вилла рядом", district="Раваи",
               housing_type="вилла", rooms=2, price_month=52000,
-              tg_post_url="https://t.me/trip_home_phuket/11",
+              tg_post_url="https://t.me/OpenHome_th/11",
               photos_url="https://r2.example/20260708_002/photos")
 BUSY = Listing(object_id="20260708_003", title="Занятая вилла", district="Раваи",
                housing_type="вилла", rooms=2, price_month=50000,
@@ -42,20 +42,23 @@ def test_object_id_message_confirms_and_asks_bullets():
 
 
 def test_links_sent_after_core_fields_once():
-    """Ссылки на пост и фото — после дат и гостей, и только один раз."""
+    """Ссылки на пост, фото и карту — после дат и гостей, и только один раз."""
     listing = Listing(object_id="20260708_009", title="Кондо", price_month=30000,
-                      tg_post_url="https://t.me/trip_home_phuket/99",
-                      photos_url="https://r2.example/20260708_009/photos/index.html")
+                      tg_post_url="https://t.me/OpenHome_th/99",
+                      photos_url="https://r2.example/20260708_009/photos/index.html",
+                      google_maps="https://maps.google.com/?q=7.99,98.29")
     q = Qualifier(find_by_id={"20260708_009": listing}.get, fetch_all=lambda: [listing])
     s = Session(chat_id="1")
     turn = q.handle_message(s, "#20260708_009", {})
     assert "t.me" not in turn.reply_draft                # до квалификации ссылок нет
     turn = q.handle_message(s, "с 1 по 10 августа, двое", {
         "check_in": "2026-08-01", "check_out": "2026-08-10", "guests": 2})
-    assert "t.me/trip_home_phuket/99" in turn.reply_draft
+    assert "t.me/OpenHome_th/99" in turn.reply_draft
     assert "r2.example/20260708_009" in turn.reply_draft
+    assert "maps.google.com" in turn.reply_draft         # локация Google Maps
     turn = q.handle_message(s, "бюджет 30к", {"budget": 30000, "districts": ["Ката"]})
     assert "t.me" not in turn.reply_draft                # повторно не шлём
+    assert "maps.google.com" not in turn.reply_draft
 
 
 def test_price_quoted_after_dates():
@@ -157,8 +160,10 @@ def test_decline_stops_alternative_offers():
     assert s.awaiting_alt_consent
     turn = q.handle_message(s, "нет", {})
     assert not s.awaiting_alt_consent
-    assert "владельца" in turn.reply_draft            # ждём ответа владельца
-    assert "вариант" not in turn.reply_draft.lower()  # не навязываем ещё раз
+    assert "владельца" in turn.reply_draft              # ждём ответа владельца
+    assert "20260708_001" in turn.reply_draft           # метка объекта в сообщении
+    assert "похожие" not in turn.reply_draft.lower()    # не навязываем ещё раз
+    assert "подобрать" not in turn.reply_draft.lower()
 
 
 def test_only_this_object_skips_alternatives_offer():
@@ -197,7 +202,7 @@ def test_alternatives_shown_after_consent():
     q.handle_message(s, "бюджет 55к, Раваи", {"budget": 55000, "districts": ["Раваи"]})
     turn = q.handle_message(s, "да, покажите", {"wants_alternatives": True})
     assert "20260708_002" in turn.reply_draft or "Вилла рядом" in turn.reply_draft
-    assert "t.me/trip_home_phuket/11" in turn.reply_draft   # ссылка на TG-пост
+    assert "t.me/OpenHome_th/11" in turn.reply_draft   # ссылка на TG-пост
     assert "r2.example" in turn.reply_draft                 # ссылка на фото R2
 
 
@@ -218,7 +223,7 @@ def test_no_owner_recheck_when_already_free():
     turn = q.handle_message(s, "да готов", {})
     assert not turn.need_owner_check
     assert "владельц" not in turn.reply_draft.lower()
-    assert "ФИО" in turn.reply_draft
+    assert "сколько человек" in turn.reply_draft.lower()   # первый вопрос брони
     assert not s.awaiting_owner
 
 
@@ -231,12 +236,23 @@ def test_booking_confirmed_after_owner_free():
     s.lead.check_out = __import__("datetime").date(2026, 7, 21)
     s.owner_verdict = "free"
     turn = q.handle_message(s, "да, подтверждаю", {})
+    # После одобрения владельца первым делом уточняем число проживающих.
+    assert "сколько человек" in turn.reply_draft.lower()
+    assert not turn.booking_confirmed
+    turn = q.handle_message(s, "нас 4", {})
+    assert s.lead.guests == 4                  # распарсено без LLM
     assert "ФИО" in turn.reply_draft
     assert not turn.booking_confirmed
     turn = q.handle_message(s, "Иванов Иван Петрович, гражданин России", {
         "full_name": "Иванов Иван Петрович", "citizenship": "Россия"})
+    # После ФИО и гражданства — обязательный номер WhatsApp для связи.
+    assert "WhatsApp" in turn.reply_draft
+    assert not turn.booking_confirmed
+    turn = q.handle_message(s, "+66 62 512-40-02", {})
+    assert s.lead.whatsapp == "+66625124002"   # распарсен без LLM
     assert turn.booking_confirmed
     assert turn.handoff_to_human
+    assert "гостей: 4" in " ".join(turn.events)
     assert "менеджер" in turn.reply_draft.lower()
     assert "просмотр" in turn.reply_draft.lower()
 

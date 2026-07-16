@@ -78,7 +78,7 @@ python3 scripts/publish_pipeline.py --page-id PAGE_ID --mode all --force
 └────────────────────────────┬────────────────────────────────────┘
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 1. TELEGRAM @trip_home_phuket (сразу, не отложенно)             │
+│ 1. TELEGRAM @OpenHome_th (сразу, не отложенно)             │
 │    • Только ИЗОБРАЖЕНИЯ из Фото (R2 gallery)                    │
 │    • Seedance в TG НЕ публикуем                                   │
 │    • Текст: Описание для Telegram (готовое от Agent 2)          │
@@ -190,7 +190,7 @@ POST /hooks/agent6
 
 ## Telegram (мгновенная публикация)
 
-**Канал:** [@trip_home_phuket](https://t.me/trip_home_phuket)
+**Канал:** [@OpenHome_th](https://t.me/OpenHome_th)
 
 **Контент:** только фото объекта из колонки **Фото** (R2 gallery, `sendMediaGroup`).  
 **Не публикуем:** `video_url_Seedance`, FFmpeg reel и любое видео.
@@ -200,16 +200,16 @@ POST /hooks/agent6
 **Да.** Автопостинг в канал — только через [Telegram Bot API](https://core.telegram.org/bots/api):
 
 1. Создать бота у [@BotFather](https://t.me/BotFather) → получить `TELEGRAM_BOT_TOKEN`
-2. Добавить бота в канал **@trip_home_phuket** как **администратора**
+2. Добавить бота в канал **@OpenHome_th** как **администратора**
 3. Выдать право **«Публикация сообщений»** (Post messages)
 4. В `.env`:
    ```
    TELEGRAM_BOT_TOKEN=...
-   TELEGRAM_CHANNEL=@trip_home_phuket
+   TELEGRAM_CHANNEL=@OpenHome_th
    ```
 
 Скрипт: `scripts/publish_telegram.py`  
-После `sendMediaGroup` → `post_url_telegram` = `https://t.me/trip_home_phuket/{message_id}`
+После `sendMediaGroup` → `post_url_telegram` = `https://t.me/OpenHome_th/{message_id}`
 
 ---
 

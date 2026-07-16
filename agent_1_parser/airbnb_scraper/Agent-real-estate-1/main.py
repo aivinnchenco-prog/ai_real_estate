@@ -10,23 +10,23 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import CallbackQuery, Message, ContentType, InlineKeyboardButton, InlineKeyboardMarkup, FSInputFile
 from aiogram.types import BotCommand, BotCommandScopeDefault, BotCommandScopeChat
 from aiogram.utils.media_group import MediaGroupBuilder
+import html
 import os
+import re
+import sys
+from pathlib import Path
 from CustomLogger import logger
 from google_sheets import GoogleSheetsWriter
-from voice_agent import VoiceAgent, format_listing_card, format_search_header, help_text
+from voice_agent import VoiceAgent, format_listing_card, format_search_header
 from airbnb_url import normalize_airbnb_url, resolve_currency
 from fb_handoff import extract_fb_url, handoff_fb_to_agent2
 from parser_pool import close_parser
 from workflow import finalize_take_work, take_listing_to_work
-from claude_planner import plan_and_enqueue
-from cursor_agent import CursorAgentRunner
 from queue_worker import ensure_agent_listener_task, poll_loop, poll_once
 import config
 import asyncio
 
 _queue_poll_task = None
-_cursor_busy: set[int] = set()
-cursor_runner = CursorAgentRunner()
 
 
 BOT_TOKEN = config.TG_BOT_TOKEN
@@ -143,150 +143,83 @@ async def cmd_start(message: Message):
     await send_plain_text(message, intro)
 
 
-@router.message(Command("help"))
-async def cmd_help(message: Message):
-    if message.from_user.id not in get_allowed_users():
+# ---------- Ручной запуск агентов по ID объекта ----------
+# /agent3 <ID> — монтаж видео (Director/Seedance) для одного объекта
+# /agent4 <ID> — публикация (Metricool + FB-ветки) для одного объекта
+# Оба идут через chain_runner: он уважает флаги «Монтаж»/«Публикация» и статусы.
+
+CHAIN_DIR = Path(__file__).resolve().parents[3] / "agent_2_registrar" / "_import" / "assistant-media"
+_OBJECT_ID_RE = re.compile(r"^[A-Za-z]{0,3}_?\d{8}_\d{3}$")
+_agent_runs: set[str] = set()
+
+
+def _parse_object_id_arg(text: str, command: str) -> str | None:
+    arg = (text or "").removeprefix(command).strip()
+    return arg if arg and _OBJECT_ID_RE.match(arg) else None
+
+
+async def _run_chain_for_object(message: Message, from_agent: int,
+                                object_id: str, label: str) -> None:
+    key = f"{from_agent}:{object_id}"
+    if key in _agent_runs:
+        await message.reply(f"⏳ {label} по {object_id} уже выполняется. Подождите.")
         return
-    await message.answer(help_text())
-
-
-@router.message(Command("task"))
-async def cmd_task(message: Message):
-    if message.from_user.id not in admins:
-        await message.reply('Команда /task только для админов.')
-        return
-
-    text = (message.text or '').strip()
-    if text.lower().startswith('/task'):
-        text = text[5:].strip()
-
-    if not text:
-        await message.reply(
-            'Использование:\n'
-            '<code>/task описание задачи</code>\n\n'
-            'Claude структурирует → Supabase → Cursor подхватит автоматически.'
-        )
-        return
-
-    await message.reply('📋 Claude структурирует задачу...')
-    try:
-        task_id = await asyncio.to_thread(plan_and_enqueue, text, 'airbnb-bot')
-    except Exception as exc:
-        logger.error(f'/task error: {exc}')
-        await message.reply(f'Ошибка: {exc}')
-        return
-
+    _agent_runs.add(key)
     await message.reply(
-        f'✅ Задача в Supabase\n'
-        f'ID: <code>{task_id}</code>\n'
-        f'Очередь подхватит в течение ~{config.TASK_POLL_INTERVAL_SEC} с.'
+        f"🚀 Запускаю {label} по объекту <b>{object_id}</b>. "
+        "Это может занять несколько минут — напишу, когда закончится."
     )
-
-
-@router.message(Command("cursor"))
-async def cmd_cursor(message: Message):
-    if message.from_user.id not in admins:
-        await message.reply('Команда /cursor только для админов.')
-        return
-
-    text = (message.text or '').strip()
-    if text.lower().startswith('/cursor'):
-        text = text[7:].strip()
-
-    if not text or text.lower() in ('help', '?', 'помощь'):
-        await message.reply(
-            '<b>/cursor</b> — запускает Cursor-агента на ноутбуке (реально пишет код).\n\n'
-            '<code>/cursor описание задачи</code>\n'
-            '<code>/cursor new описание</code> — новая сессия\n'
-            '<code>/cursor reset</code> — сбросить сессию\n\n'
-            'Нужен <code>CURSOR_API_KEY</code> в .env.\n'
-            '/task — только очередь в Supabase (без автокода).'
-        )
-        return
-
-    if text.lower() in ('reset', 'clear', 'сброс'):
-        cursor_runner.clear_session(message.from_user.id)
-        await message.reply('🆕 Сессия Cursor сброшена.')
-        return
-
-    if text.lower() == 'new':
-        cursor_runner.clear_session(message.from_user.id)
-        await message.reply('🆕 Новая сессия. Теперь: <code>/cursor ваша задача</code>')
-        return
-
-    new_session = False
-    lower = text.lower()
-    if lower.startswith('new '):
-        new_session = True
-        text = text[4:].strip()
-
-    if not text:
-        await message.reply('Напиши задачу: <code>/cursor что сделать</code>')
-        return
-
-    if not cursor_runner.is_enabled():
-        await message.reply(cursor_runner.setup_hint())
-        return
-
-    user_id = message.from_user.id
-    if user_id in _cursor_busy:
-        await message.reply('⏳ Предыдущая задача Cursor ещё выполняется. Подождите.')
-        return
-
-    session_note = ''
-    if not new_session and cursor_runner.get_agent_id(user_id):
-        session_note = '\n↪ Продолжаю предыдущую сессию (/cursor new — новая).'
-
-    _cursor_busy.add(user_id)
-    await message.reply(
-        f'🤖 Запускаю Cursor на этой машине...{session_note}\n'
-        'Может занять несколько минут.'
-    )
-
     try:
-        result = await asyncio.to_thread(
-            cursor_runner.run,
-            user_id,
-            text,
-            new_session=new_session,
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "scripts/chain_runner.py",
+            "--from-agent", str(from_agent), "--object-id", object_id,
+            cwd=str(CHAIN_DIR),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        out, _ = await proc.communicate()
+        tail_lines = out.decode(errors="replace").strip().splitlines()[-12:]
+        tail = html.escape("\n".join(tail_lines)) or "(нет вывода)"
+        icon = "✅" if proc.returncode == 0 else "❌"
+        await message.answer(
+            f"{icon} {label} по <b>{object_id}</b> завершён "
+            f"(код {proc.returncode})\n<pre>{tail[-3000:]}</pre>"
         )
     except Exception as exc:
-        logger.error(f'/cursor error: {exc}')
-        await message.reply(f'❌ Ошибка: {exc}')
-        return
+        logger.error(f"/agent{from_agent} {object_id} error: {exc}")
+        await message.answer(f"❌ Ошибка запуска {label}: {exc}")
     finally:
-        _cursor_busy.discard(user_id)
-
-    if not result.text and result.error:
-        await message.reply(f'❌ {result.error}')
-        return
-
-    icon = '✅' if result.ok else '⚠️'
-    header = (
-        f'{icon} Cursor\n'
-        f'agent: <code>{result.agent_id or "—"}</code>\n'
-        f'run: <code>{result.run_id or "—"}</code>\n'
-        f'status: {result.status or "—"}\n\n'
-    )
-    body = result.text or result.error or '(пустой ответ)'
-    await send_plain_text(message, header + body)
+        _agent_runs.discard(key)
 
 
-@router.message(Command("retro"))
-async def cmd_retro(message: Message):
+@router.message(Command("agent3"))
+async def cmd_agent3(message: Message):
     if message.from_user.id not in get_allowed_users():
         return
-    parts = (message.text or '').split()
-    days = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else config.DEFAULT_RETRO_DAYS
-    await message.reply(f'📊 Анализирую работу за {days} дн...')
-    reply = await asyncio.to_thread(
-        voice_agent.analyze_period,
-        message.from_user.id,
-        days,
-        message.text or '',
-        message.from_user.first_name or '',
-    )
-    await send_plain_text(message, reply)
+    object_id = _parse_object_id_arg(message.text, "/agent3")
+    if not object_id:
+        await message.reply(
+            "Использование: <code>/agent3 A_20260713_003</code>\n"
+            "Монтаж видео (Seedance) для объекта. Требуются: статус "
+            "ready_for_video, галерея фото и флаг «Монтаж» ≠ НЕТ."
+        )
+        return
+    await _run_chain_for_object(message, 3, object_id, "Агент 3 (монтаж)")
+
+
+@router.message(Command("agent4"))
+async def cmd_agent4(message: Message):
+    if message.from_user.id not in get_allowed_users():
+        return
+    object_id = _parse_object_id_arg(message.text, "/agent4")
+    if not object_id:
+        await message.reply(
+            "Использование: <code>/agent4 A_20260713_003</code>\n"
+            "Публикация в соц.сети (Metricool + FB) для объекта. Требуются: "
+            "статус ready_to_post и флаг «Публикация» ≠ НЕТ."
+        )
+        return
+    await _run_chain_for_object(message, 6, object_id, "Агент 4 (публикация)")
 
 
 async def send_plain_text(message: Message, text: str):
@@ -457,6 +390,101 @@ async def process_agent_query(message: Message, text: str):
         logger.error(f'Ошибка запроса к базе: {e}')
         await message.reply(f'Ошибка: {e}')
 
+# ---------- Кнопки «Монтаж / Публикация» после парсинга ----------
+# При выводе кнопок оба флага сразу пишутся в Notion как НЕТ (объект ждёт
+# решения) — иначе вотчер цепочки (опрос ~30с) успеет запустить монтаж до
+# ответа. Нажатие ДА снимает паузу, и цепочка подхватывает объект.
+import uuid
+from notion_flags import set_flags
+
+_flag_choices: dict[str, dict] = {}
+
+
+def _flag_btn(token: str, kind: str, value: str, chosen: str | None) -> InlineKeyboardButton:
+    label = {"montage": "Монтаж", "publish": "Публикация"}[kind]
+    mark = "✅ " if chosen == value else ""
+    return InlineKeyboardButton(
+        text=f"{mark}{label}: {value}",
+        callback_data=f"flag:{token}:{kind}:{value}",
+    )
+
+
+def _flags_keyboard(token: str) -> InlineKeyboardMarkup:
+    c = _flag_choices.get(token, {})
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [_flag_btn(token, "montage", "ДА", c.get("montage")),
+         _flag_btn(token, "montage", "НЕТ", c.get("montage"))],
+        [_flag_btn(token, "publish", "ДА", c.get("publish")),
+         _flag_btn(token, "publish", "НЕТ", c.get("publish"))],
+    ])
+
+
+async def send_flags_question(message: Message, object_id: str) -> None:
+    """Спросить про монтаж/публикацию; до ответа объект стоит на паузе."""
+    token = uuid.uuid4().hex[:8]
+    _flag_choices[token] = {"object_id": object_id, "montage": None, "publish": None}
+    ok, note = await asyncio.to_thread(set_flags, object_id, "НЕТ", "НЕТ")
+    if not ok:
+        logger.error(f"notion_flags: не удалось поставить паузу для {object_id}: {note}")
+    await message.answer(
+        f"🎬 Что делать с объектом <b>{object_id}</b>?\n"
+        "Монтаж — генерировать ли видео (Seedance).\n"
+        "Публикация — постить ли в соц.сети (при монтаж=НЕТ выйдет карусель фото).\n"
+        "Пока не выбрано — объект ждёт в базе, цепочка не запускается.",
+        reply_markup=_flags_keyboard(token),
+    )
+
+
+def _flags_summary(object_id: str, montage: str, publish: str) -> str:
+    text = f"Объект <b>{object_id}</b>: монтаж — {montage}, публикация — {publish}."
+    if montage == "ДА" and publish == "ДА":
+        return text + "\nПолная цепочка: видео + публикация во все площадки."
+    if montage == "НЕТ" and publish == "ДА":
+        return text + "\nБез видео: будет опубликована карусель фото."
+    if montage == "ДА" and publish == "НЕТ":
+        return text + "\nВидео смонтируется и сохранится в таблице, постинга не будет."
+    return text + "\nОбъект остаётся только в базе."
+
+
+@router.callback_query(F.data.startswith("flag:"))
+async def on_flag_choice(callback: CallbackQuery):
+    try:
+        _, token, kind, value = callback.data.split(":", 3)
+    except ValueError:
+        await callback.answer()
+        return
+    entry = _flag_choices.get(token)
+    if entry is None or kind not in ("montage", "publish"):
+        await callback.answer(
+            "Кнопки устарели (бот перезапускался). Поставьте флажки "
+            "«Монтаж» и «Публикация» прямо в Notion.",
+            show_alert=True,
+        )
+        return
+
+    entry[kind] = value
+    ok, note = await asyncio.to_thread(
+        set_flags,
+        entry["object_id"],
+        value if kind == "montage" else None,
+        value if kind == "publish" else None,
+    )
+    if not ok:
+        entry[kind] = None
+        await callback.answer(f"Ошибка записи в Notion: {note}", show_alert=True)
+        return
+
+    montage, publish = entry["montage"], entry["publish"]
+    if montage and publish:
+        await callback.message.edit_text(
+            _flags_summary(entry["object_id"], montage, publish)
+        )
+        _flag_choices.pop(token, None)
+    else:
+        await callback.message.edit_reply_markup(reply_markup=_flags_keyboard(token))
+    await callback.answer("Записано в Notion")
+
+
 # FB-парсер использует один браузерный профиль — параллельные запуски его ломают
 _FB_PARSE_LOCK = asyncio.Lock()
 
@@ -473,6 +501,8 @@ async def handle_fb_url_message(message: Message, fb_url: str):
             f"✅ {result.object_id or result.session_id} добавлен в CRM\n"
             f"📷 Фото: {result.photos}\n{result.note}"
         )
+        if result.object_id:
+            await send_flags_question(message, result.object_id)
     else:
         await message.answer(result.note or "Неизвестная ошибка FB-парсера")
 
@@ -546,6 +576,7 @@ async def handle_url_message(message: Message):
                             f'drive {t.get("drive_upload_sec", "—")}с)'
                         )
                     await message.answer(f'✅ {result.object_id} добавлен в CRM{timing_line}')
+                    await send_flags_question(message, result.object_id)
                 if result.drive_note:
                     await message.answer(result.drive_note)
                 if len(text) > MAX_TEXT_LENGTH:
@@ -637,19 +668,14 @@ async def set_commands():
     # Set commands for regular users
     user_commands = [
         BotCommand(command='start', description='Старт'),
-        BotCommand(command='help', description='Jarvis — что умеет'),
-        BotCommand(command='retro', description='Анализ за период'),
+        BotCommand(command='agent3', description='Монтаж видео по ID объекта'),
+        BotCommand(command='agent4', description='Публикация в соц.сети по ID объекта'),
     ]
     await bot.set_my_commands(user_commands, BotCommandScopeDefault())
 
     # Set extended commands for admins
-    admin_commands = [
-        BotCommand(command='start', description='Старт'),
-        BotCommand(command='help', description='Jarvis — что умеет'),
-        BotCommand(command='task', description='Задача → Claude → Supabase'),
-        BotCommand(command='cursor', description='Cursor SDK — код на ноутбуке'),
-        BotCommand(command='retro', description='Анализ за период'),
-        BotCommand(command='admin', description='Управление'),
+    admin_commands = user_commands + [
+        BotCommand(command='admin', description='Управление пользователями'),
     ]
     for admin_id in admins:
         try:
@@ -675,8 +701,6 @@ async def start_bot():
     queue_note = ''
     if config.SUPABASE_URL:
         queue_note = f'\n📋 Очередь Supabase: опрос каждые {config.TASK_POLL_INTERVAL_SEC} с'
-    if cursor_runner.is_enabled():
-        queue_note += '\n🤖 /cursor — Cursor SDK (код на ноутбуке)'
 
     for admin_id in admins:
         try:

@@ -32,12 +32,14 @@ class Listing:
     page_id: str = ""
     title: str = ""
     district: str = ""
+    address: str = ""                  # «Адрес» — для договора брони
     housing_type: str = ""
     rooms: Optional[int] = None
     price_month: Optional[float] = None
     pets_allowed: Optional[bool] = None    # None = в таблице не указано
     photos_url: str = ""                   # R2-галерея (колонка «Фото»)
     tg_post_url: str = ""                  # post_url_telegram
+    google_maps: str = ""                  # «Google Maps» — точка на карте
     source_url: str = ""                   # «Источник объявления»
     calendar_url: str = ""                 # «Календарь»: где проверять доступность дат
     owner_name: str = ""
@@ -155,6 +157,7 @@ class LeadProfile:
     name: str = ""
     full_name: str = ""               # ФИО для брони
     citizenship: str = ""               # гражданство для брони
+    whatsapp: str = ""                  # номер WhatsApp для связи (бронь)
     check_in: Optional[date] = None
     check_out: Optional[date] = None
     stay_months: Optional[float] = None

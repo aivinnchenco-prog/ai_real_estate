@@ -25,12 +25,14 @@ _DEFAULT_FIELDS = {
     "title": "Название объекта",
     "object_id": "Объект ID",
     "district": "Район",
+    "address": "Адрес",
     "type": "Тип жилья",
     "rooms": "Количество комнат",
     "price_month": "Цена за месяц",
     "pets": "Можно с питомцами",
     "photos": "Фото",
     "tg_post": "post_url_telegram",
+    "google_maps": "Google Maps",
     "source": "Источник объявления",
     # URL проверки доступности: Airbnb / календарь УК / «ручной»
     "calendar": "Календарь",
@@ -64,12 +66,14 @@ _F = _load_fields()
 PROP_TITLE = _F["title"]
 PROP_OBJECT_ID = _F["object_id"]
 PROP_DISTRICT = _F["district"]
+PROP_ADDRESS = _F["address"]
 PROP_TYPE = _F["type"]
 PROP_ROOMS = _F["rooms"]
 PROP_PRICE_MONTH = _F["price_month"]
 PROP_PETS = _F["pets"]
 PROP_PHOTOS = _F["photos"]
 PROP_TG_POST = _F["tg_post"]
+PROP_GMAPS = _F["google_maps"]
 PROP_SOURCE = _F["source"]
 PROP_CALENDAR = _F["calendar"]
 PROP_OWNER = _F["owner"]
@@ -180,12 +184,14 @@ def _to_listing(page: dict) -> Listing:
         page_id=page.get("id", ""),
         title=_plain(p.get(PROP_TITLE)),
         district=_plain(p.get(PROP_DISTRICT)),
+        address=_plain(p.get(PROP_ADDRESS)),
         housing_type=_plain(p.get(PROP_TYPE)),
         rooms=int(float(rooms_raw)) if rooms_raw else None,
         price_month=float(price_raw) if price_raw else None,
         pets_allowed=pets,
         photos_url=photos,
         tg_post_url=_plain(p.get(PROP_TG_POST)),
+        google_maps=_plain(p.get(PROP_GMAPS)),
         source_url=_plain(p.get(PROP_SOURCE)),
         calendar_url=_plain(p.get(PROP_CALENDAR)),
         owner_name=_plain(p.get(PROP_OWNER)),
