@@ -23,6 +23,7 @@ from . import brain, notion_store
 from .alerts import notify_error
 from .amo import AmoClient
 from .context import build_knowledge, format_history
+from .human import humanized_respond
 from .qualifier import Qualifier, Session
 from .sessions import SessionStore
 
@@ -185,12 +186,12 @@ async def handle_owner_message(client, event, sender, amo: AmoClient | None) -> 
 
     # Владелец сказал «занято», но не назвал сроки — обязательный уточняющий вопрос.
     if verdict.status == "busy" and not verdict.busy_until:
-        await event.respond(OWNER_BUSY_FOLLOWUP)
+        await humanized_respond(event, OWNER_BUSY_FOLLOWUP)
         print(f"[owner:@{username}] занято без сроков -> уточняем")
         return True
 
     ack = OWNER_ACK_FREE if verdict.status == "free" else OWNER_ACK_CONDITIONS
-    await event.respond(ack)
+    await humanized_respond(event, ack)
 
     client_msg = build_client_message(verdict, session)
     reply = brain.polish_reply(client_msg, session.language, session.lead.name)
@@ -307,7 +308,7 @@ async def main() -> None:
                 turn.reply_draft if turn.skip_polish
                 else brain.polish_reply(turn.reply_draft, session.language, session.lead.name)
             )
-            await event.respond(reply)
+            await humanized_respond(event, reply)
             print(f"[out] {chat_id}: {reply[:80]}")
 
             session.history.append({"role": "user", "text": text})
