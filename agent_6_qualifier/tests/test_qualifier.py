@@ -70,6 +70,24 @@ def test_price_quoted_after_dates():
     assert s.price_quoted
 
 
+def test_price_for_short_period_prorated():
+    """Запрос меньше месяца — цена пропорцией на период клиента, не за месяц."""
+    listing = Listing(
+        object_id="20260708_010", title="Вилла", housing_type="вилла",
+        rooms=3, district="Бангтао",
+        monthly_prices={"2026-07": {"price": 130600, "status": "prorated"}},
+    )
+    q = Qualifier(find_by_id={"20260708_010": listing}.get, fetch_all=lambda: [listing])
+    s = Session(chat_id="9")
+    q.handle_message(s, "#20260708_010", {})
+    turn = q.handle_message(s, "с 21 по 26 июля, бюджет 100к", {
+        "check_in": "2026-07-21", "check_out": "2026-07-26", "budget": 100000})
+    # 130600 / 30 × 5 ночей = 21766.7 → округление до сотен = 21 800
+    assert "21 800 THB за 5 ночей" in turn.reply_draft
+    assert "из расчёта 130 600 THB/мес" in turn.reply_draft
+    assert "130 600 THB/мес." not in turn.reply_draft.split("за 5 ночей")[0]
+
+
 def test_missing_checkout_means_year_contract():
     """Дата выезда не указана = контракт на год: не переспрашиваем, идём к владельцу."""
     q = make_qualifier()

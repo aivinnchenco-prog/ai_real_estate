@@ -66,7 +66,6 @@ def build_outreach_plan(
         check_in=lead.check_in.strftime("%d.%m.%Y") if lead.check_in else "",
         check_out=lead.check_out.strftime("%d.%m.%Y") if lead.check_out else "",
         guests=lead.guests,
-        budget=f"{lead.budget:,.0f}".replace(",", " ") if lead.budget else "",
     )
     return plan
 
@@ -154,7 +153,6 @@ def register_owner_whatsapp(listing: Listing, whatsapp: str, lead: LeadProfile) 
         check_in=lead.check_in.strftime("%d.%m.%Y") if lead.check_in else "",
         check_out=lead.check_out.strftime("%d.%m.%Y") if lead.check_out else "",
         guests=lead.guests,
-        budget=f"{lead.budget:,.0f}".replace(",", " ") if lead.budget else "",
     )
     return msg + "\n\n" + OWNER_WA_ASK_CALENDAR
 

@@ -89,6 +89,32 @@ class Listing:
             return f"ориентировочно {text}, точную цену на ваши даты уточню у владельца"
         return text
 
+    def price_quote_for_period(
+        self, check_in: Optional[date], check_out: Optional[date]
+    ) -> str:
+        """Цена на конкретный период клиента.
+
+        Запрос короче месяца (< 28 ночей) — пропорция от месячной цены:
+        месячная / 30 × ночей, округление до сотен THB. Иначе — месячная.
+        """
+        if not (check_in and check_out):
+            return self.price_quote(check_in)
+        nights = (check_out - check_in).days
+        if nights <= 0 or nights >= 28:
+            return self.price_quote(check_in)
+        price, _status = self.get_price_for_month(check_in)
+        if price is None:
+            return ""
+        per_period = round(price / 30 * nights / 100) * 100
+        period_text = f"{per_period:,.0f} THB".replace(",", " ")
+        month_text = f"{price:,.0f} THB/мес".replace(",", " ")
+        word = ("ночь" if nights % 10 == 1 and nights % 100 != 11
+                else "ночи" if nights % 10 in (2, 3, 4) and nights % 100 not in (12, 13, 14)
+                else "ночей")
+        return (f"{period_text} за {nights} {word} "
+                f"(из расчёта {month_text}), точную цену на ваш период "
+                f"уточню у владельца")
+
     @property
     def source_is_airbnb(self) -> bool:
         return "airbnb." in self.source_url.lower()

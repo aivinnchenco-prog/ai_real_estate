@@ -160,6 +160,13 @@ def test_fb_marketplace_asks_whatsapp():
 
 
 def test_whatsapp_script_no_contact_request():
-    msg = owner_first_message(OwnerChannel.WHATSAPP, "01.08", "01.09", budget="50 000 THB")
+    msg = owner_first_message(OwnerChannel.WHATSAPP, "01.08", "01.09", guests=2)
     assert "клиент" in msg.lower()
     assert "WhatsApp для связи" not in msg
+
+
+def test_owner_message_has_no_budget():
+    """Бюджет клиента владельцу не сообщаем — внутренняя информация для торга."""
+    msg = owner_first_message(OwnerChannel.TELEGRAM, "21.07.2026", "26.07.2026", guests=3)
+    assert "Бюджет" not in msg
+    assert "21.07.2026" in msg and "26.07.2026" in msg

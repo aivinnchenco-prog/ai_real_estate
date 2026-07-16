@@ -290,9 +290,10 @@ class Qualifier:
             parts.append(CLIENT_ASK_DATES)
             return Turn(reply_draft="\n\n".join(parts), events=events, skip_polish=True)
 
-        # Ориентировочная цена месяца заезда из monthly_prices (один раз).
+        # Ориентировочная цена (один раз): период короче месяца — пропорцией
+        # от месячной цены, иначе месячная из monthly_prices.
         if chosen is not None and not session.price_quoted:
-            quote = chosen.price_quote(lead.check_in)
+            quote = chosen.price_quote_for_period(lead.check_in, lead.check_out)
             if quote:
                 parts.append(client_price_line(quote))
             session.price_quoted = True

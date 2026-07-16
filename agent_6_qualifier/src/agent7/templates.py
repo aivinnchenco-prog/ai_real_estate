@@ -76,8 +76,10 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
     "client_booking_citizenship": (
         "Спасибо! И укажите, пожалуйста, ваше гражданство."
     ),
+    # Название объекта клиенту не вписываем (парсерные заголовки длинные и
+    # корявые) — говорим «ваш вариант»: клиент и так знает, о чём речь.
     "client_booking_confirmed": (
-        "Бронь зафиксирована по «{title}» на {date_range}. "
+        "Бронь по вашему варианту зафиксирована на {date_range}. "
         "Наш менеджер сейчас подключится к диалогу и согласует с вами "
         "время просмотра жилья вместе с владельцем."
     ),
@@ -86,15 +88,15 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
         "для назначения просмотра. Ожидайте, пожалуйста."
     ),
     "client_owner_confirmed": (
-        "Отличные новости! Владелец подтвердил доступность «{title}» "
+        "Отличные новости! Владелец подтвердил, что ваш вариант свободен "
         "на ваши даты ({date_range}). Подтверждаете бронь?"
     ),
     "client_owner_conditions": (
-        "Владелец по объекту «{title}» ответил, но условия немного изменились: {note}. "
+        "Владелец по вашему варианту ответил, но условия немного изменились: {note}. "
         "Подходят ли вам такие условия?"
     ),
     "client_object_busy": (
-        "К сожалению, «{title}» занят до {busy_until} и будет свободен с {free_from}. "
+        "К сожалению, ваш вариант занят до {busy_until} и будет свободен с {free_from}. "
         "Подойдут ли вам такие даты? Если нет — подберу похожие варианты."
     ),
     "client_object_partial": (
@@ -112,7 +114,6 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
         "готов заселиться с {check_in} по {check_out}."
     ),
     "owner_first_guests": " Гостей: {guests}.",
-    "owner_first_budget": " Бюджет: {budget}.",
     "owner_first_ask": " Подскажите, свободны ли эти даты?",
     "owner_first_fb_whatsapp": (
         " Оставьте, пожалуйста, ваш WhatsApp для связи — так будет быстрее."
@@ -246,11 +247,11 @@ def owner_first_message(
     check_in: str,
     check_out: str,
     guests: int | None = None,
-    budget: str = "",
 ) -> str:
     """Первое сообщение владельцу по каналу.
 
-    WA / TG / FB Marketplace — сразу про клиента.
+    WA / TG / FB Marketplace — сразу про клиента. Бюджет клиента владельцу
+    НЕ сообщаем (это наша внутренняя информация для торга).
     Airbnb — НЕ про клиента и без запроса контакта (см. OWNER_AIRBNB_STEP2).
     """
     if channel == OwnerChannel.AIRBNB:
@@ -259,8 +260,6 @@ def owner_first_message(
     msg = _T["owner_first_base"].format(check_in=check_in, check_out=check_out)
     if guests:
         msg += _T["owner_first_guests"].format(guests=guests)
-    if budget:
-        msg += _T["owner_first_budget"].format(budget=budget)
     msg += _T["owner_first_ask"]
     if channel == OwnerChannel.FB_MARKETPLACE:
         msg += _T["owner_first_fb_whatsapp"]
