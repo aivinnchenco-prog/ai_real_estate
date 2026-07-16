@@ -214,6 +214,39 @@ def test_booking_confirmed_after_owner_free():
     assert "просмотр" in turn.reply_draft.lower()
 
 
+def test_greeting_without_object_asks_object_or_search():
+    """Клиент написал «просто так» — уточняем: конкретный объект или подбор."""
+    q = make_qualifier()
+    s = Session(chat_id="5")
+    turn = q.handle_message(s, "Здравствуйте!", {})
+    assert "конкретный объект" in turn.reply_draft
+    assert "подобрать" in turn.reply_draft
+    assert s.asked_object_source
+
+
+def test_object_or_search_answer_selection():
+    """Ответ «подберите» — идём в квалификацию (даты/гости)."""
+    q = make_qualifier()
+    s = Session(chat_id="5")
+    q.handle_message(s, "Добрый день", {})
+    turn = q.handle_message(s, "Подберите мне, пожалуйста, варианты", {})
+    assert s.wants_selection
+    assert "даты" in turn.reply_draft
+
+
+def test_object_or_search_answer_specific_asks_link():
+    """Ответ «видел у вас конкретный объект» — просим ссылку/номер."""
+    q = make_qualifier()
+    s = Session(chat_id="6")
+    q.handle_message(s, "Привет", {})
+    turn = q.handle_message(s, "Меня интересует конкретный объект, видел у вас на канале", {})
+    assert "ссылку" in turn.reply_draft or "номер объекта" in turn.reply_draft
+    # Прислал ID — обычный путь с подтверждением объекта.
+    turn = q.handle_message(s, "#obj_20260708_001", {})
+    assert s.chosen is CHOSEN
+    assert "Вилла у моря" in turn.reply_draft
+
+
 def test_no_object_goes_straight_to_matching():
     q = make_qualifier()
     s = Session(chat_id="2")

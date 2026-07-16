@@ -252,10 +252,10 @@ def acquire_profile_lock(profile: Path) -> Path:
 
 
 def resolve_proxy(cfg: dict[str, Any] | None = None) -> dict[str, str] | None:
-    """Прокси постинг-аккаунта этой ветки (config.account.proxy_env,
-    по умолчанию FB_POST_PROXY). Свой, не парсинговый.
+    """Прокси постинг-аккаунта этой ветки (config.account.proxy_env).
+    Свой, не парсинговый и не от другой ветки.
     Формат: scheme://user:pass@host:port или host:port:user:pass."""
-    raw = account_env(cfg or {}, "proxy_env", "FB_POST_PROXY")
+    raw = account_env(cfg or {}, "proxy_env")
     if not raw:
         return None
     if "://" in raw:
@@ -273,7 +273,7 @@ def resolve_proxy(cfg: dict[str, Any] | None = None) -> dict[str, str] | None:
     if len(parts) == 4:
         host, port, user, pw = parts
         return {"server": f"http://{host}:{port}", "username": user, "password": pw}
-    print(f"[warn] FB_POST_PROXY нераспознан: {raw}", file=sys.stderr)
+    print(f"[warn] прокси постинг-аккаунта нераспознан: {raw}", file=sys.stderr)
     return None
 
 
@@ -304,24 +304,24 @@ def is_logged_in(context: Any) -> bool:
     )
 
 
-def account_env(cfg: dict[str, Any], key: str, fallback: str) -> str:
+def account_env(cfg: dict[str, Any], key: str) -> str:
     """Имя env-переменной для аккаунта этой ветки берём из конфига
-    (account.email_env / password_env / proxy_env). Значение читаем по нему,
-    если пусто — по общему постинг-аккаунту FB_POST_*."""
+    (account.email_env / password_env / proxy_env). У каждой ветки
+    (группы / Marketplace) СВОЙ аккаунт — общего fallback нет, не смешиваем."""
     var = (cfg.get("account", {}) or {}).get(key, "")
-    value = os.environ.get(var, "").strip() if var else ""
-    return value or os.environ.get(fallback, "").strip()
+    return os.environ.get(var, "").strip() if var else ""
 
 
 def try_relogin(page: Any, cfg: dict[str, Any]) -> None:
     """Запасной вариант: разовый логин ПОСТИНГ-аккаунта этой ветки
     (не парсингового!). Аккаунт задаётся в config.account.*_env."""
-    email = account_env(cfg, "email_env", "FB_POST_EMAIL")
-    password = account_env(cfg, "password_env", "FB_POST_PASSWORD")
+    email = account_env(cfg, "email_env")
+    password = account_env(cfg, "password_env")
     if not email or not password:
         raise RuntimeError(
-            "AUTH_REQUIRED: сессия протухла, а логин/пароль постинг-аккаунта не заданы "
-            "(см. config.account.*_env, отдельный от парсингового FB_EMAIL)"
+            "AUTH_REQUIRED: сессия протухла, а логин/пароль постинг-аккаунта этой "
+            "ветки не заданы (см. config.account.*_env; аккаунт отдельный "
+            "от парсингового FB_EMAIL и от другой ветки постинга)"
         )
     page.goto("https://www.facebook.com/login", wait_until="domcontentloaded")
     human_delay(cfg)

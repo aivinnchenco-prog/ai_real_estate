@@ -15,6 +15,16 @@ from .models import Listing, OwnerChannel
 
 _DEFAULT_TEMPLATES: dict[str, str] = {
     # ---------- Клиент (Agent 7) ----------
+    # Клиент написал без объекта и без параметров поиска — выясняем, что ему нужно.
+    "client_ask_object_or_search": (
+        "Здравствуйте! Подскажите, пожалуйста: вас интересует конкретный объект, "
+        "который вы увидели на наших ресурсах, — или подобрать для вас "
+        "варианты под ваш запрос?"
+    ),
+    "client_ask_object_link": (
+        "Отлично! Пришлите, пожалуйста, ссылку на пост или номер объекта "
+        "(например, #A_20260713_003) — сразу посмотрю по нему всю информацию."
+    ),
     "client_qualify_core": (
         "Подскажите, пожалуйста, на какие даты планируете заезд и выезд, "
         "и сколько человек будет проживать?"
@@ -137,6 +147,8 @@ _T = _load_templates()
 
 # ---------- Клиент (Agent 7) ----------
 
+CLIENT_ASK_OBJECT_OR_SEARCH = _T["client_ask_object_or_search"]
+CLIENT_ASK_OBJECT_LINK = _T["client_ask_object_link"]
 CLIENT_QUALIFY_CORE = _T["client_qualify_core"]
 CLIENT_QUALIFY_FOLLOWUP = _T["client_qualify_followup"]
 CLIENT_ASK_CHECKOUT = _T["client_ask_checkout"]

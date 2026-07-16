@@ -23,7 +23,7 @@
     "hook_cover_first": true
   },
   "browser": {
-    "$comment_profile": "Постинг идёт с ОТДЕЛЬНОГО FB-аккаунта (не с парсингового): свой профиль браузера и свои FB_POST_EMAIL/FB_POST_PASSWORD.",
+    "$comment_profile": "Постинг идёт с ОТДЕЛЬНОГО FB-аккаунта этой ветки (не парсингового и не другой ветки): свой профиль браузера и свои FB_GROUPS_EMAIL/FB_GROUPS_PASSWORD.",
     "profile_env": "FB_GROUPS_BROWSER_PROFILE",
     "default_profile": ".fb_groups_profile",
     "headless_env": "FB_HEADLESS",

@@ -1,6 +1,8 @@
-"""Тесты человеческого поведения userbot (задержки, окно активности)."""
+"""Тесты человеческого поведения userbot (задержки перед ответом).
+
+Окна активности НЕТ намеренно: квалификатор отвечает круглосуточно.
+"""
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -16,27 +18,18 @@ def test_typing_delay_scales_with_length_and_bounded():
     assert 1.0 <= short <= long <= 9.0
 
 
-def test_typing_delay_jitter_within_range():
+def test_typing_delay_jitter_positive():
     for _ in range(50):
         d = human.typing_delay_seconds("привет как дела", cps=12, min_s=0.1, max_s=100, jitter=0.25)
         assert d > 0
 
 
-def test_active_hours_day_vs_night():
-    # 15:00 по Пхукету (UTC+7) = 08:00 UTC — внутри окна 09:00-22:30
-    midday = datetime(2026, 7, 16, 8, 0, tzinfo=timezone.utc)
-    assert human.within_active_hours(midday, tz_offset_hours=7, start="09:00", end="22:30")
-    # 03:00 по Пхукету = 20:00 UTC пред. дня — ночь, окно закрыто
-    night = datetime(2026, 7, 15, 20, 0, tzinfo=timezone.utc)
-    assert not human.within_active_hours(night, tz_offset_hours=7, start="09:00", end="22:30")
+def test_read_delay_in_range():
+    for _ in range(50):
+        assert 0.5 <= human.read_delay_seconds(0.5, 2.0) <= 2.0
 
 
-def test_seconds_until_active_zero_when_open():
-    midday = datetime(2026, 7, 16, 8, 0, tzinfo=timezone.utc)
-    assert human.seconds_until_active(midday, tz_offset_hours=7, start="09:00") == 0.0
-
-
-def test_seconds_until_active_positive_at_night():
-    night = datetime(2026, 7, 15, 20, 0, tzinfo=timezone.utc)  # 03:00 местного
-    wait = human.seconds_until_active(night, tz_offset_hours=7, start="09:00")
-    assert 5 * 3600 <= wait <= 6 * 3600  # до 09:00 местного ~6 часов
+def test_no_active_hours_gate():
+    """Квалификатор работает 24/7 — функций окна активности быть не должно."""
+    assert not hasattr(human, "within_active_hours")
+    assert not hasattr(human, "seconds_until_active")

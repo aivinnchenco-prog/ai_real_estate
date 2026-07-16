@@ -53,7 +53,7 @@
       "min": 900,
       "max": 2400
     },
-    "$comment_profile": "Постинг идёт с ОТДЕЛЬНОГО FB-аккаунта (не с парсингового): свой профиль браузера и свои FB_POST_EMAIL/FB_POST_PASSWORD."
+    "$comment_profile": "Постинг идёт с ОТДЕЛЬНОГО FB-аккаунта этой ветки (не парсингового и не другой ветки): свой профиль браузера и свои FB_MARKETPLACE_EMAIL/FB_MARKETPLACE_PASSWORD."
   },
   "notion": {
     "fields": {

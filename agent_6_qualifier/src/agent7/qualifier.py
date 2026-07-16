@@ -19,6 +19,8 @@ from .models import Availability, LeadProfile, Listing
 from .object_id import extract_object_ids, extract_tg_post
 from .templates import (
     CLIENT_ASK_ALTERNATIVES,
+    CLIENT_ASK_OBJECT_LINK,
+    CLIENT_ASK_OBJECT_OR_SEARCH,
     CLIENT_QUALIFY_CORE,
     CLIENT_QUALIFY_FOLLOWUP,
     client_object_busy,
@@ -32,6 +34,8 @@ class Session:
     chat_id: str
     lead: LeadProfile = field(default_factory=LeadProfile)
     chosen: Listing | None = None
+    asked_object_source: bool = False  # спросили «конкретный объект или подбор?»
+    wants_selection: bool = False      # клиент просит подбор по запросу
     asked_core: bool = False          # уже спросили даты/гостей
     asked_followup: bool = False      # уже спросили район/бюджет
     asked_checkout: bool = False      # уже уточнили дату выезда
@@ -58,6 +62,21 @@ _CONSENT_RE = re.compile(
 )
 _DECLINE_RE = re.compile(
     r"\b(нет|не надо|не нужно|не хочу|не стоит|только этот|только его|no|nope)\b",
+    re.IGNORECASE,
+)
+# Клиент просит подбор («подберите», «ищу», «какие есть варианты») —
+# без объекта сразу идём в квалификацию, не переспрашивая про конкретный объект.
+_WANTS_SELECTION_RE = re.compile(
+    r"подбор|подобрать|подбер(и|ите)|посоветуй(те)?|предложи(те)?|"
+    r"порекомендуй(те)?|найд(и|ите)|ищ(у|ем)|"
+    r"какие\s+(есть\s+)?варианты|что\s+(у\s+вас\s+)?есть|"
+    r"есть\s+(ли\s+)?(что|вариант)|по\s+запросу",
+    re.IGNORECASE,
+)
+# Клиент говорит, что пришёл по конкретному объекту, но ID/ссылку ещё не прислал.
+_HAS_SPECIFIC_RE = re.compile(
+    r"конкретн\w+|(у?видел\w*|смотрел\w*|нашел|нашёл)\b|"
+    r"(ваш\w*|на\s+вашем)\s+(пост|канал|сайт|страниц|инстаграм|объявлен)",
     re.IGNORECASE,
 )
 # Клиент доволен выбранным объектом — альтернативы не предлагаем.
@@ -139,6 +158,20 @@ class Qualifier:
             session.only_chosen = True
         if prefers_chosen_only(message) or is_decline(message):
             session.only_chosen = True
+
+        # Клиент без объекта: «подберите/ищу/какие варианты» — это запрос подбора.
+        if session.chosen is None and _WANTS_SELECTION_RE.search(message or ""):
+            session.wants_selection = True
+        # Ответ на вопрос «конкретный объект или подбор?»
+        if (session.asked_object_source and session.chosen is None
+                and not session.wants_selection):
+            if update.get("wants_alternatives"):
+                session.wants_selection = True
+            elif _HAS_SPECIFIC_RE.search(message or ""):
+                # Пришёл по конкретному объекту, но ID/ссылки нет — просим прислать.
+                return Turn(reply_draft=CLIENT_ASK_OBJECT_LINK, events=events,
+                            skip_polish=True)
+
         if session.awaiting_alt_consent:
             if skips_alternatives(message, session):
                 # Клиент отказался от альтернатив — не переспрашиваем.
@@ -218,6 +251,17 @@ class Qualifier:
         if session.awaiting_owner and not session.owner_verdict:
             from .templates import CLIENT_WAITING_OWNER
             return Turn(reply_draft=CLIENT_WAITING_OWNER, events=events, skip_polish=True)
+
+        # Клиент пришёл без объекта, без запроса на подбор и без параметров —
+        # выясняем: конкретный объект с наших ресурсов или подбор по запросу.
+        if (chosen is None and not session.wants_selection
+                and not session.asked_object_source
+                and not (lead.check_in or lead.guests or lead.budget
+                         or lead.districts or lead.stay_months)):
+            session.asked_object_source = True
+            events.append("Спросили: конкретный объект или подбор")
+            return Turn(reply_draft=CLIENT_ASK_OBJECT_OR_SEARCH, events=events,
+                        skip_polish=True)
 
         if chosen is not None and not session.asked_core:
             parts.append(self._confirm_object_line(chosen, lead.check_in))
