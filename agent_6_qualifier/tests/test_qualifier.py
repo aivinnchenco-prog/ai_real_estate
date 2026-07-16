@@ -247,6 +247,26 @@ def test_object_or_search_answer_specific_asks_link():
     assert "Вилла у моря" in turn.reply_draft
 
 
+def test_unknown_object_id_reports_not_found():
+    """Номер есть в сообщении, но объекта нет в базе — честный ответ, не вопрос про подбор."""
+    q = make_qualifier()
+    s = Session(chat_id="7")
+    turn = q.handle_message(s, "Интересует объект 20260702_999", {})
+    assert "20260702_999" in turn.reply_draft
+    assert "Не нашёл" in turn.reply_draft
+    assert not s.asked_object_source
+
+
+def test_object_id_with_source_prefix():
+    """ID с префиксом источника (A_...) распознаётся и находится в базе."""
+    listing = Listing(object_id="A_20260713_003", title="Вилла Айрбнб", price_month=45000)
+    q = Qualifier(find_by_id={"A_20260713_003": listing}.get, fetch_all=lambda: [listing])
+    s = Session(chat_id="8")
+    turn = q.handle_message(s, "Здравствуйте! Интересует A_20260713_003", {})
+    assert s.chosen is listing
+    assert "Вилла Айрбнб" in turn.reply_draft
+
+
 def test_no_object_goes_straight_to_matching():
     q = make_qualifier()
     s = Session(chat_id="2")

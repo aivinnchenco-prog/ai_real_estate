@@ -25,6 +25,12 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
         "Отлично! Пришлите, пожалуйста, ссылку на пост или номер объекта "
         "(например, #A_20260713_003) — сразу посмотрю по нему всю информацию."
     ),
+    # Номер объекта в сообщении есть, но в базе такого нет (опечатка/старый пост).
+    "client_object_not_found": (
+        "Не нашёл объект с номером {object_id} в нашей базе. Проверьте, "
+        "пожалуйста, номер или пришлите ссылку на пост — сразу посмотрю. "
+        "Могу также подобрать варианты под ваш запрос."
+    ),
     "client_qualify_core": (
         "Подскажите, пожалуйста, на какие даты планируете заезд и выезд, "
         "и сколько человек будет проживать?"
@@ -149,6 +155,10 @@ _T = _load_templates()
 
 CLIENT_ASK_OBJECT_OR_SEARCH = _T["client_ask_object_or_search"]
 CLIENT_ASK_OBJECT_LINK = _T["client_ask_object_link"]
+
+
+def client_object_not_found(object_id: str) -> str:
+    return _T["client_object_not_found"].format(object_id=object_id)
 CLIENT_QUALIFY_CORE = _T["client_qualify_core"]
 CLIENT_QUALIFY_FOLLOWUP = _T["client_qualify_followup"]
 CLIENT_ASK_CHECKOUT = _T["client_ask_checkout"]

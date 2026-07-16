@@ -148,6 +148,15 @@ class Qualifier:
             session.chosen = listing
             session.lead.preferred_object_id = listing.object_id
             events.append(f"Клиент указал объект {listing.object_id}")
+        elif session.chosen is None:
+            # Номер в сообщении был, но в базе не нашёлся (опечатка/старый пост) —
+            # говорим честно, а не задаём вопрос «конкретный или подбор».
+            missing = extract_object_ids(message)
+            if missing:
+                from .templates import client_object_not_found
+                events.append(f"Объект {missing[0]} не найден в базе")
+                return Turn(reply_draft=client_object_not_found(missing[0]),
+                            events=events, skip_polish=True)
 
         if update.get("language"):
             session.language = update["language"]

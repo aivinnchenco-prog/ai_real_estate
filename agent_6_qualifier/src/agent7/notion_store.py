@@ -214,11 +214,22 @@ def fetch_all_listings() -> list[Listing]:
 
 
 def find_by_object_id(object_id: str) -> Listing | None:
+    """Поиск по «Объект ID». Клиент может опустить префикс источника
+    (написать 20260713_003 вместо A_20260713_003) — тогда ищем по вхождению
+    и принимаем страницу, чей ID заканчивается на присланный номер."""
     db = os.environ["NOTION_DATABASE_ID"]
-    body = {"filter": {"property": PROP_OBJECT_ID, "rich_text": {"equals": object_id}}}
-    r = requests.post(f"{_API}/databases/{db}/query", headers=_headers(), json=body, timeout=30)
-    r.raise_for_status()
-    pages = r.json()["results"]
+
+    def query(condition: dict) -> list[dict]:
+        body = {"filter": {"property": PROP_OBJECT_ID, "rich_text": condition}}
+        r = requests.post(f"{_API}/databases/{db}/query",
+                          headers=_headers(), json=body, timeout=30)
+        r.raise_for_status()
+        return r.json()["results"]
+
+    pages = query({"equals": object_id})
+    if not pages:
+        pages = [p for p in query({"contains": object_id})
+                 if _to_listing(p).object_id.endswith(object_id)]
     return _to_listing(pages[0]) if pages else None
 
 

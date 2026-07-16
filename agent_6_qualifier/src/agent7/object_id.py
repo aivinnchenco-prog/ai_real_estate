@@ -3,18 +3,26 @@ from __future__ import annotations
 
 import re
 
-# #obj_20260708_001 | #20260708_001 | 20260708_001 (в тексте или подписи поста)
-_ID_RE = re.compile(r"(?:#obj[_ ]?|#)?(\d{8}_\d{3})\b", re.IGNORECASE)
+# #obj_20260708_001 | #20260708_001 | 20260708_001 | A_20260713_003
+# (префикс источника, напр. A_ у Airbnb-парсера, сохраняем в ID;
+# служебный obj_ префиксом источника не считается)
+_ID_RE = re.compile(r"(?:#obj[_ ]?|#)?\b([A-Za-z]{1,3}_)?(\d{8}_\d{3})\b", re.IGNORECASE)
 
 # Ссылка на пост TG-канала: https://t.me/trip_home_phuket/123
 _TG_POST_RE = re.compile(r"https?://t\.me/([\w_]+)/(\d+)")
 
 
 def extract_object_ids(text: str) -> list[str]:
-    """Все Объект ID из текста, без дубликатов, в порядке появления."""
+    """Все Объект ID из текста, без дубликатов, в порядке появления.
+
+    Префикс источника (A_20260713_003) сохраняется; служебный obj_ — нет.
+    """
     seen: list[str] = []
     for m in _ID_RE.finditer(text or ""):
-        oid = m.group(1)
+        prefix = m.group(1) or ""
+        if prefix.lower() == "obj_":
+            prefix = ""
+        oid = prefix + m.group(2)
         if oid not in seen:
             seen.append(oid)
     return seen
