@@ -382,11 +382,13 @@ def parse_gallery_image_urls(gallery_url: str) -> list[str]:
 
 
 def hook_cover_url(gallery_url: str) -> str | None:
-    """Хук-обложка от Агента 3: photos/000_hook_cover.jpg (легаси: {id}/hook_cover.jpg)."""
+    """Хук-обложка от Агента 3: {id}/hook_cover.jpg — вне папки photos/,
+    чтобы клиент, получивший от Агента 6 ссылку на галерею, не видел цену
+    на хуке (легаси-путь photos/000_hook_cover.jpg тоже проверяем)."""
     if not gallery_url or "/photos/" not in gallery_url:
         return None
     base = gallery_url.rsplit("/photos/", 1)[0]
-    for candidate in (f"{base}/photos/000_hook_cover.jpg", f"{base}/hook_cover.jpg"):
+    for candidate in (f"{base}/hook_cover.jpg", f"{base}/photos/000_hook_cover.jpg"):
         request = urllib.request.Request(candidate, method="HEAD")
         request.add_header("User-Agent", "real-estate-agent6-publisher/1.0")
         try:

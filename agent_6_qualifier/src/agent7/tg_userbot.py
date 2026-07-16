@@ -347,14 +347,20 @@ async def main() -> None:
                     )
                 except Exception as e:
                     notify_error("amo.stage", str(e), "бронь подтверждена")
-            if turn.handoff_to_human:
-                notify_error(
-                    "manager.handoff",
-                    "Нужен живой менеджер для назначения просмотра",
-                    f"chat_id={chat_id}, ФИО={session.lead.full_name}, "
-                    f"гражданство={session.lead.citizenship}, "
-                    f"объект={session.lead.preferred_object_id}, "
-                    f"сделка #{session.amo_lead_id}",
+            # Диалог передан человеку (бронь подтверждена) — каждый раз, когда
+            # клиент пишет снова, зовём менеджера (антиспам: раз в 5 минут на чат).
+            if session.handoff_to_human or turn.handoff_to_human:
+                from .alerts import notify_manager
+                uname = getattr(sender, "username", "") or ""
+                who = f"@{uname}" if uname else f"chat_id={chat_id}"
+                notify_manager(
+                    f"Клиент {who} ожидает ответа менеджера.\n"
+                    f"Объект: {session.lead.preferred_object_id or '-'}, "
+                    f"сделка #{session.amo_lead_id or '-'}\n"
+                    f"ФИО: {session.lead.full_name or '-'}, "
+                    f"гражданство: {session.lead.citizenship or '-'}\n"
+                    f"Сообщение: {text[:200]}",
+                    dedup_key=chat_id,
                 )
             if (turn.need_owner_check and not session.owner_verdict
                     and chat_id not in _outreach_inflight):

@@ -112,6 +112,9 @@ AGENT_ENV_MAP: dict[str, dict[str, str]] = {
         "AMO_ACCESS_TOKEN": "AMO_ACCESS_TOKEN",
         "ERROR_BOT_TOKEN": "ERROR_BOT_TOKEN",
         "ERROR_CHAT_ID": "ERROR_CHAT_ID",
+        # Бот вызова живого менеджера (если пуст — уведомления идут в бот ошибок)
+        "MANAGER_BOT_TOKEN": "MANAGER_BOT_TOKEN",
+        "MANAGER_CHAT_ID": "MANAGER_CHAT_ID",
     },
 }
 

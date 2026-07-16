@@ -47,6 +47,33 @@ def notify_error(component: str, error: str, context: str = "") -> bool:
     text = f"[Agent 7/8] ОШИБКА: {component}\n\n{error}"
     if context:
         text += f"\n\nКонтекст: {context}"
+    return _send(token, chat_id, text)
+
+
+def notify_manager(text: str, *, dedup_key: str = "") -> bool:
+    """Вызов живого менеджера (не ошибка): клиент ждёт ответа человека.
+
+    Идёт в бот менеджера (MANAGER_BOT_TOKEN / MANAGER_CHAT_ID в .env);
+    если он не настроен — в общий информационный бот ошибок.
+    Антиспам: одинаковый вызов (dedup_key) не чаще раза в 5 минут.
+    """
+    print(f"[МЕНЕДЖЕР] {text}")
+    token = (os.environ.get("MANAGER_BOT_TOKEN", "").strip()
+             or os.environ.get("ERROR_BOT_TOKEN", "").strip())
+    chat_id = (os.environ.get("MANAGER_CHAT_ID", "").strip()
+               or os.environ.get("ERROR_CHAT_ID", "").strip())
+    if not token or not chat_id:
+        return False
+
+    key = ("manager", dedup_key or text[:80])
+    now = time.time()
+    if now - _last_sent.get(key, 0.0) < _DEDUP_WINDOW_SEC:
+        return False
+    _last_sent[key] = now
+    return _send(token, chat_id, f"🔔 НУЖЕН МЕНЕДЖЕР\n\n{text}")
+
+
+def _send(token: str, chat_id: str, text: str) -> bool:
     try:
         requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",

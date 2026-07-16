@@ -39,10 +39,12 @@ function loadSeedanceConfig() {
 
 /**
  * Хук-обложка карусели: первое фото объекта + карточка-хук →
- * R2 {id}/photos/000_hook_cover.jpg (сортируется первой в галерее),
- * после загрузки пересобираем index.html галереи. Ошибка не блокирует видео.
+ * R2 {id}/hook_cover.jpg — НАМЕРЕННО вне папки photos/: галерею photos/
+ * Агент 6 отправляет клиенту, а на хуке напечатана цена, которая меняется
+ * по сезону. Публикатор берёт обложку отдельно первым слайдом карусели.
+ * Ошибка не блокирует видео.
  */
-const HOOK_COVER_NAME = "000_hook_cover.jpg";
+const HOOK_COVER_NAME = "hook_cover.jpg";
 
 async function makeHookCover({ objectId, firstPhotoKey, overlayMeta, seedanceCfg }) {
   const overlayCfg = loadTitleOverlayConfig(seedanceCfg);
@@ -57,27 +59,11 @@ async function makeHookCover({ objectId, firstPhotoKey, overlayMeta, seedanceCfg
       meta: overlayMeta,
       cfg: overlayCfg,
     });
-    const url = await uploadFileToR2(
-      coverLocal, `${objectId}/photos/${HOOK_COVER_NAME}`, "image/jpeg"
+    return await uploadFileToR2(
+      coverLocal, `${objectId}/${HOOK_COVER_NAME}`, "image/jpeg"
     );
-    rebuildGallery(objectId);
-    return url;
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
-  }
-}
-
-function rebuildGallery(objectId) {
-  const script = resolve(ROOT, "..", "scripts", "r2_gallery_admin.py");
-  if (!existsSync(script)) {
-    console.warn("[gallery] r2_gallery_admin.py не найден — index.html не пересобран");
-    return;
-  }
-  const proc = spawnSync("python3", [script, "--rebuild", objectId], { encoding: "utf8" });
-  if (proc.status !== 0) {
-    console.warn(`[gallery] пересборка index.html не удалась: ${proc.stderr?.trim()}`);
-  } else {
-    console.log(`[gallery] index.html пересобран (${proc.stdout?.trim()})`);
   }
 }
 
