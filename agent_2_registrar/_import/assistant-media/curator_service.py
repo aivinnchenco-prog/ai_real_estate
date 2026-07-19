@@ -16,10 +16,18 @@ os.environ.setdefault("OMP_NUM_THREADS", "2")
 os.environ.setdefault("MKL_NUM_THREADS", "2")
 
 import io
+import socket
+
 import numpy as np
 import cv2
 import requests
 import torch
+
+# Форс IPv4 для скачивания фото: requests не умеет happy-eyeballs, и на VPS
+# с полурабочим IPv6 каждый запрос к R2 висит десятки секунд до фолбэка.
+if os.environ.get("CURATOR_FORCE_IPV4", "1") != "0":
+    import urllib3.util.connection as _uc
+    _uc.allowed_gai_family = lambda: socket.AF_INET
 import open_clip
 from PIL import Image
 from fastapi import FastAPI
