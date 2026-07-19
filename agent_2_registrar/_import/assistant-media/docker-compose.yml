@@ -8,6 +8,7 @@ services:
     environment:
       OMP_NUM_THREADS: "2"
       MKL_NUM_THREADS: "2"
+      CURATOR_MIN_SHORT_SIDE: "600"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8077/health')"]

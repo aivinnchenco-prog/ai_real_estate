@@ -8,4 +8,5 @@ services:
     environment:
       OMP_NUM_THREADS: "2"
       MKL_NUM_THREADS: "2"
+      CURATOR_MIN_SHORT_SIDE: "600"
     restart: unless-stopped

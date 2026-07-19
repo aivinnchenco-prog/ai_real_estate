@@ -33,7 +33,8 @@ MODEL_NAME = "ViT-B-32" # сознательно НЕ ViT-L-14: та модел�
 PRETRAINED = "laion2b_s34b_b79k"
 
 # ── технические пороги (тюнятся под твой парсинг) ──
-MIN_SHORT_SIDE = 700 # px
+# FB Marketplace отдаёт 960×640 — порог 700 отбраковывал ВСЕ фото объекта.
+MIN_SHORT_SIDE = int(os.environ.get("CURATOR_MIN_SHORT_SIDE", "600")) # px
 BLUR_MIN_VAR = 80.0 # ниже = размыто
 BRIGHTNESS_RANGE = (40, 225) # средняя яркость 0..255
 
