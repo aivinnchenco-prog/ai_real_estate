@@ -153,8 +153,8 @@
     "publisher_script": null,
     "publish_fb_groups": true,
     "publish_fb_marketplace": true,
-    "default_montage": "ДА",
-    "default_publish": "ДА",
+    "default_montage": "НЕТ",
+    "default_publish": "НЕТ",
     "telegram_showcase": true
   }
 }

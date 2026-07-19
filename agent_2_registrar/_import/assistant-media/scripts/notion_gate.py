@@ -93,9 +93,9 @@ def agent3_ready(
     statuses: dict[str, str],
     *,
     allow_retry: bool = True,
-    default_montage: bool = True,
+    default_montage: bool = False,
 ) -> tuple[bool, str]:
-    """Agent 3: ready_for_video + галерея + флаг «Монтаж», без готовых видео."""
+    """Agent 3: ready_for_video + галерея + явный «Монтаж»=ДА, без готовых видео."""
     if not flag_enabled(listing.montage_flag, default_montage):
         return False, "«Монтаж» = НЕТ (монтаж выключен)"
     ok_status = {statuses["after_structurize"]}
@@ -114,8 +114,8 @@ def agent6_ready(
     listing: NotionListing,
     statuses: dict[str, str],
     *,
-    default_publish: bool = True,
-    default_montage: bool = True,
+    default_publish: bool = False,
+    default_montage: bool = False,
 ) -> tuple[bool, str]:
     """Agent 4/6 Publisher: флаг «Публикация» + ready_to_post + видео.
 

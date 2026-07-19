@@ -446,6 +446,27 @@ def _flags_summary(object_id: str, montage: str, publish: str) -> str:
     return text + "\nОбъект остаётся только в базе."
 
 
+async def _kick_chain_after_flags(object_id: str) -> None:
+    """После выбора «Монтаж»/«Публикация» — подхватить цепочку (уважает флаги в Notion)."""
+    key = f"flags:{object_id}"
+    if key in _agent_runs:
+        return
+    _agent_runs.add(key)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "scripts/chain_runner.py",
+            "--from-agent", "3", "--object-id", object_id,
+            cwd=str(CHAIN_DIR),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+    except Exception as exc:
+        logger.error(f"chain after flags {object_id}: {exc}")
+    finally:
+        _agent_runs.discard(key)
+
+
 @router.callback_query(F.data.startswith("flag:"))
 async def on_flag_choice(callback: CallbackQuery):
     try:
@@ -480,6 +501,7 @@ async def on_flag_choice(callback: CallbackQuery):
             _flags_summary(entry["object_id"], montage, publish)
         )
         _flag_choices.pop(token, None)
+        asyncio.create_task(_kick_chain_after_flags(entry["object_id"]))
     else:
         await callback.message.edit_reply_markup(reply_markup=_flags_keyboard(token))
     await callback.answer("Записано в Notion")

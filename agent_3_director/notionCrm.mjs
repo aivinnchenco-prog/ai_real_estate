@@ -205,12 +205,12 @@ export function pageObjectId(page, fields) {
   return page.properties?.[fields.object_id]?.rich_text?.[0]?.plain_text?.trim() || null;
 }
 
-// «Монтаж» (бывш. «Статус для Агент_3»): ДА/НЕТ — брать ли объект на монтаж. Пусто = ДА.
+// «Монтаж»: только явное ДА включает монтаж; пусто и НЕТ — пропуск.
+const MONTAGE_ON = new Set(["ДА", "YES", "DA"]);
 export function pageMontageEnabled(page, fields) {
-  if (!fields.montage) return true;
-  const value = readSelect(page, fields.montage);
-  if (!value) return true;
-  return !["НЕТ", "NO", "NET"].includes(value.trim().toUpperCase());
+  if (!fields.montage) return false;
+  const value = (readSelect(page, fields.montage) || "").trim().toUpperCase();
+  return MONTAGE_ON.has(value);
 }
 
 export async function queryLatestPages(fields, { limit = 20 } = {}) {

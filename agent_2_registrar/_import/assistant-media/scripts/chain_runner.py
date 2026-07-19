@@ -177,8 +177,8 @@ def continue_chain(
     platforms: list[str] = publish_platforms or chain.get("publish_platforms", [])
     # Пустая ячейка флага = дефолт: «ДА» — всё автоматом (текущий режим),
     # «НЕТ» — объекты копятся в базе, пока флаг не поставят вручную.
-    default_montage = flag_enabled(chain.get("default_montage", "ДА"))
-    default_publish = flag_enabled(chain.get("default_publish", "ДА"))
+    default_montage = flag_enabled(chain.get("default_montage", "НЕТ"))
+    default_publish = flag_enabled(chain.get("default_publish", "НЕТ"))
 
     exit_code = 0
 

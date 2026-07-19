@@ -484,6 +484,12 @@ def main() -> int:
         if existing:
             page = crm.update_page(existing["id"], properties)
         else:
+            # Пауза до выбора кнопок в TG: иначе chain_runner сразу после
+            # structurize успевает запустить Агента 3 (пустой «Монтаж» раньше = ДА).
+            if nf.get("montage"):
+                properties[nf["montage"]] = NotionCRM.build_select("НЕТ")
+            if nf.get("publish"):
+                properties[nf["publish"]] = NotionCRM.build_select("НЕТ")
             page = crm.create_page(properties)
 
         notion_page_id = page["id"]

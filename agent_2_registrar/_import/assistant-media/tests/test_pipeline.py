@@ -67,7 +67,8 @@ class ChainGateTests(unittest.TestCase):
         listing = NotionListing("p1", "20260701_001", "ready_for_video", "T", None, None, None)
         ok, reason = agent3_ready(listing, st)
         self.assertFalse(ok)
-        listing2 = NotionListing("p1", "20260701_001", "ready_for_video", "T", "https://x/gallery", None, None)
+        listing2 = NotionListing("p1", "20260701_001", "ready_for_video", "T", "https://x/gallery", None, None,
+                                 montage_flag="ДА")
         ok2, _ = agent3_ready(listing2, st)
         self.assertTrue(ok2)
 
@@ -75,13 +76,15 @@ class ChainGateTests(unittest.TestCase):
         st = {"video_done": "ready_to_post"}
         listing = NotionListing("p1", "id", "ready_to_post", "T", "https://g", None, None)
         self.assertFalse(agent6_ready(listing, st)[0])
-        listing2 = NotionListing("p1", "id", "ready_to_post", "T", "https://g", None, "https://v")
+        listing2 = NotionListing("p1", "id", "ready_to_post", "T", "https://g", None, "https://v",
+                                 publish_flag="ДА", montage_flag="ДА")
         self.assertTrue(agent6_ready(listing2, st)[0])
-        listing3 = NotionListing("p1", "id", "ready_to_post", "T", "https://g", "https://seedance", None)
+        listing3 = NotionListing("p1", "id", "ready_to_post", "T", "https://g", "https://seedance", None,
+                                 publish_flag="ДА")
         self.assertTrue(agent6_ready(listing3, st)[0])
 
     def test_montage_flag_gates_agent3(self):
-        """«Монтаж» = НЕТ — объект не берётся на монтаж; пусто = дефолт."""
+        """Агент 3 только при явном «Монтаж»=ДА; пусто и НЕТ — пропуск."""
         st = {"after_structurize": "ready_for_video", "video_failed": "video_failed"}
         listing = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None,
                                 montage_flag="НЕТ")
@@ -89,8 +92,10 @@ class ChainGateTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("монтаж выключен", reason)
         empty = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None)
-        self.assertTrue(agent3_ready(empty, st)[0])                          # пусто = ДА
-        self.assertFalse(agent3_ready(empty, st, default_montage=False)[0])  # режим «пусто = НЕТ»
+        self.assertFalse(agent3_ready(empty, st)[0])  # пусто = выключено
+        yes = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None,
+                            montage_flag="ДА")
+        self.assertTrue(agent3_ready(yes, st)[0])
 
     def test_publish_flag_gates_agent6(self):
         """«Публикация» = НЕТ — постинг выключен даже при готовом видео."""

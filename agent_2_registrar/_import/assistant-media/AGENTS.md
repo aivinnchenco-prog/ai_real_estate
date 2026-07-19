@@ -15,12 +15,14 @@
 | Этап | Скрипт | Условие в Notion |
 |------|--------|------------------|
 | Gate + Agent 2 | `run_pipeline.sh` / `agent2_structurize.py` | session ready |
-| Agent 3 | `chain_runner.py` → `agent3_video.mjs` | `ready_for_video` + галерея |
+| Agent 3 | `chain_runner.py` → `run_from_notion.mjs` (Wan / Seedance) | `ready_for_video` + галерея + **«Монтаж» = ДА** |
 | Agent 6 | `chain_runner.py` → `publish_pipeline.py` | `ready_to_post` + video URL |
 
 Agent 3: FFmpeg reel и Seedance **параллельно**; `ready_to_post` ставится сразу после reel.
 
 **Не запускай Agent 3/6 вручную без chain_runner** — он проверяет CRM.
+
+**Монтаж (Wan/Seedance):** только после кнопки «Монтаж: ДА» в боте. Новый объект в Notion создаётся с `Монтаж=НЕТ`; пустое поле ≠ разрешение. Не вызывать `run_from_notion.mjs` / `wan_reel.py` из Агента 2 или сразу после structurize.
 
 ---
 
