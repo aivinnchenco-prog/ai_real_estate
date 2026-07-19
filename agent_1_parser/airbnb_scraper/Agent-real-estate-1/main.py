@@ -158,8 +158,19 @@ def _parse_object_id_arg(text: str, command: str) -> str | None:
     return arg if arg and _OBJECT_ID_RE.match(arg) else None
 
 
+def _object_id_from_text(text: str, *, prefix: str | None = None) -> str | None:
+    """ID объекта из текста: «A_20260719_003» или «agent3 A_…» (без слэша)."""
+    raw = (text or "").strip()
+    if prefix and raw.lower().startswith(prefix.lower()):
+        raw = raw[len(prefix):].strip()
+    if _OBJECT_ID_RE.match(raw):
+        return raw.upper()
+    return None
+
+
 async def _run_chain_for_object(message: Message, from_agent: int,
-                                object_id: str, label: str) -> None:
+                                object_id: str, label: str, *,
+                                force_montage: bool = False) -> None:
     key = f"{from_agent}:{object_id}"
     if key in _agent_runs:
         await message.reply(f"⏳ {label} по {object_id} уже выполняется. Подождите.")
@@ -170,9 +181,14 @@ async def _run_chain_for_object(message: Message, from_agent: int,
         "Это может занять несколько минут — напишу, когда закончится."
     )
     try:
-        proc = await asyncio.create_subprocess_exec(
+        cmd = [
             sys.executable, "scripts/chain_runner.py",
             "--from-agent", str(from_agent), "--object-id", object_id,
+        ]
+        if force_montage:
+            cmd.append("--force-montage")
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
             cwd=str(CHAIN_DIR),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -200,11 +216,13 @@ async def cmd_agent3(message: Message):
     if not object_id:
         await message.reply(
             "Использование: <code>/agent3 A_20260713_003</code>\n"
-            "Монтаж видео (Seedance) для объекта. Требуются: статус "
-            "ready_for_video, галерея фото и флаг «Монтаж» ≠ НЕТ."
+            "Или нажмите /agent3 и отправьте только ID объекта следующим сообщением.\n"
+            "Монтаж видео (Wan). Claude / ANTHROPIC_API_KEY не используется."
         )
         return
-    await _run_chain_for_object(message, 3, object_id, "Агент 3 (монтаж)")
+    await _run_chain_for_object(
+        message, 3, object_id, "Агент 3 (монтаж)", force_montage=True,
+    )
 
 
 @router.message(Command("agent4"))
@@ -260,8 +278,31 @@ async def handle_text_message(message: Message, state: FSMContext) -> None:
         await process_add_user(message, state)
     elif current_state == AdminStates.delete_user_id:
         await process_delete_user(message, state)
-    elif message.text and message.text.startswith('http'):
-        await handle_url_message(message)
+    elif message.text:
+        text = message.text.strip()
+        if text.startswith('http'):
+            await handle_url_message(message)
+            return
+        user_id = message.from_user.id
+        if user_id in get_allowed_users():
+            oid = _object_id_from_text(text, prefix='agent3')
+            if oid:
+                await _run_chain_for_object(
+                    message, 3, oid, "Агент 3 (монтаж)", force_montage=True,
+                )
+                return
+            oid = _object_id_from_text(text, prefix='agent4')
+            if oid:
+                await _run_chain_for_object(message, 6, oid, "Агент 4 (публикация)")
+                return
+            # После /agent3 из меню часто шлют только ID — не уводить в Claude-поиск
+            oid = _object_id_from_text(text)
+            if oid:
+                await _run_chain_for_object(
+                    message, 3, oid, "Агент 3 (монтаж)", force_montage=True,
+                )
+                return
+        await process_agent_query(message, text)
     else:
         await process_agent_query(message, message.text or '')
 
@@ -388,6 +429,15 @@ async def process_agent_query(message: Message, text: str):
 
     except Exception as e:
         logger.error(f'Ошибка запроса к базе: {e}')
+        err = str(e)
+        if 'authentication_error' in err or 'API key is invalid' in err:
+            await message.reply(
+                'Ошибка <b>голосового поиска</b> (Claude / ANTHROPIC_API_KEY).\n'
+                'К монтажу не относится.\n\n'
+                'Ручной монтаж: <code>/agent3 A_20260719_003</code> '
+                'или отправьте только ID объекта.'
+            )
+            return
         await message.reply(f'Ошибка: {e}')
 
 # ---------- Кнопки «Монтаж / Публикация» после парсинга ----------

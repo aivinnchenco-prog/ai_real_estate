@@ -169,6 +169,7 @@ def continue_chain(
     object_id: str | None = None,
     from_agent: int = 3,
     publish_platforms: list[str] | None = None,
+    force_montage: bool = False,
 ) -> int:
     nf = cfg["notion"]["fields"]
     statuses = cfg["notion"]["statuses"]
@@ -221,7 +222,7 @@ def continue_chain(
         for listing in listings:
             if listing.object_id in processed_3:
                 continue
-            montage_on = flag_enabled(listing.montage_flag, default_montage)
+            montage_on = force_montage or flag_enabled(listing.montage_flag, default_montage)
             publish_on = flag_enabled(listing.publish_flag, default_publish)
             if not montage_on:
                 # Монтаж выключен. Если публикация включена — минуем Агента 3:
@@ -241,7 +242,8 @@ def continue_chain(
                 processed_3.add(listing.object_id)
                 continue
             ready, reason = agent3_ready(listing, statuses,
-                                         default_montage=default_montage)
+                                         default_montage=default_montage,
+                                         force=force_montage)
             if not ready:
                 print(f"[chain] Agent 3 skip {listing.object_id}: {reason}")
                 continue
@@ -325,6 +327,8 @@ def main() -> int:
     parser.add_argument("--once", action="store_true", help="Process all pending once")
     parser.add_argument("--from-agent", type=int, default=3, choices=[3, 4, 6])
     parser.add_argument("--object-id", help="Single object to process")
+    parser.add_argument("--force-montage", action="store_true",
+                        help="Ручной запуск: игнорировать «Монтаж»=НЕТ (только с --object-id)")
     parser.add_argument("--publish", help="Comma platforms for Agent 6 this run (e.g. instagram,tiktok)")
     args = parser.parse_args()
 
@@ -342,6 +346,7 @@ def main() -> int:
         object_id=args.object_id,
         from_agent=normalize_from_agent(args.from_agent),
         publish_platforms=platforms_override,
+        force_montage=bool(args.force_montage),
     )
 
 

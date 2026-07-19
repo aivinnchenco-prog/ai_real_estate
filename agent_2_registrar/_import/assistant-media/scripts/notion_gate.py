@@ -94,9 +94,10 @@ def agent3_ready(
     *,
     allow_retry: bool = True,
     default_montage: bool = False,
+    force: bool = False,
 ) -> tuple[bool, str]:
     """Agent 3: ready_for_video + галерея + явный «Монтаж»=ДА, без готовых видео."""
-    if not flag_enabled(listing.montage_flag, default_montage):
+    if not force and not flag_enabled(listing.montage_flag, default_montage):
         return False, "«Монтаж» = НЕТ (монтаж выключен)"
     ok_status = {statuses["after_structurize"]}
     if allow_retry:
