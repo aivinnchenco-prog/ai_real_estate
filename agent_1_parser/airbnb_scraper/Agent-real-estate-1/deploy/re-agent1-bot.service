@@ -1,0 +1,18 @@
+[Unit]
+Description=Real Estate Agent 1 - Telegram parser bot (Airbnb/FB)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/real-estate/agent_1_parser/airbnb_scraper/Agent-real-estate-1
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1440x900x24" /opt/real-estate/agent_1_parser/airbnb_scraper/Agent-real-estate-1/.venv/bin/python main.py
+Restart=always
+RestartSec=15
+Environment=PYTHONUNBUFFERED=1
+# HOME обязателен: Higgsfield CLI ищет credentials в $HOME/.config/higgsfield,
+# без него монтаж, запущенный кнопками бота, падает с «сессия истекла»
+Environment=HOME=/root
+
+[Install]
+WantedBy=multi-user.target
