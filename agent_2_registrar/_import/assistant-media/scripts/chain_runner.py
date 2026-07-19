@@ -76,8 +76,23 @@ def run_agent3(object_id: str) -> int:
     return proc.returncode
 
 
+def resolve_publish_platforms(chain: dict) -> list[str]:
+    """Список Metricool-платформ: приоритет у agent_4_publisher/config/publisher.json."""
+    estate_root = ROOT.parents[2]
+    pub_path = estate_root / "agent_4_publisher" / "config" / "publisher.json"
+    try:
+        with pub_path.open(encoding="utf-8") as f:
+            plats = json.load(f).get("publish_platforms")
+        if plats:
+            return list(plats)
+    except (OSError, json.JSONDecodeError, AttributeError):
+        pass
+    return list(chain.get("publish_platforms") or ["instagram"])
+
+
 def run_agent6(page_id: str, platform: str, publisher_script: Path,
                mode: str | None = None) -> int:
+    """Один вызов publish_pipeline: --platform all публикует во все сети Metricool."""
     print(f"\n[chain] Agent 6 → {page_id} ({platform}"
           + (f", mode={mode}" if mode else "") + ")")
     if not publisher_script.exists():
@@ -175,7 +190,7 @@ def continue_chain(
     statuses = cfg["notion"]["statuses"]
     chain = cfg.get("chain", {})
     publisher = resolve_publisher_script(cfg)
-    platforms: list[str] = publish_platforms or chain.get("publish_platforms", [])
+    platforms: list[str] = publish_platforms or resolve_publish_platforms(chain)
     # Пустая ячейка флага = дефолт: «ДА» — всё автоматом (текущий режим),
     # «НЕТ» — объекты копятся в базе, пока флаг не поставят вручную.
     default_montage = flag_enabled(chain.get("default_montage", "НЕТ"))
@@ -279,12 +294,14 @@ def continue_chain(
                 continue
             # Видео нет (монтаж выключен) — публикуем только карусель.
             mode6 = None if listing.has_videos else "carousel"
-            for platform in platforms:
-                log_event(listing.object_id, "chain", "agent6_start", platform=platform)
-                code6 = run_agent6(listing.page_id, platform, publisher, mode=mode6)
-                if code6 != 0:
-                    exit_code = code6
-                    log_event(listing.object_id, "chain", "agent6_failed", platform=platform)
+            # Один процесс --platform all: все сети в одном запуске (как раньше через
+            # publisher.json), иначе после Instagram срабатывает agent6_locked.
+            plat_arg = "all" if len(platforms) > 1 else platforms[0]
+            log_event(listing.object_id, "chain", "agent6_start", platform=plat_arg)
+            code6 = run_agent6(listing.page_id, plat_arg, publisher, mode=mode6)
+            if code6 != 0:
+                exit_code = code6
+                log_event(listing.object_id, "chain", "agent6_failed", platform=plat_arg)
             for script_name in fb_branches:
                 branch = script_name.replace("_pipeline.py", "")
                 log_event(listing.object_id, "chain", f"{branch}_start", page_id=listing.page_id)

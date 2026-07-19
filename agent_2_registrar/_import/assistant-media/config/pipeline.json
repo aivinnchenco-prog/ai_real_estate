@@ -147,9 +147,7 @@
     "auto_continue_after_agent2": true,
     "auto_agent6": true,
     "auto_agent4": false,
-    "publish_platforms": [
-      "instagram"
-    ],
+    "publish_platforms": null,
     "publisher_script": null,
     "publish_fb_groups": true,
     "publish_fb_marketplace": true,

@@ -252,12 +252,23 @@ def is_agent6_locked(page: dict[str, Any], fields: dict[str, str]) -> bool:
     lock_field = fields.get("agent6_locked")
     if not lock_field:
         return False
-    if not get_prop(page, lock_field, "checkbox"):
-        return False
-    # TG-витрина могла поставить lock без Metricool — не блокируем соцсети.
-    post_id_field = fields.get("metricool_post_id", "metricool_post_id")
-    post_id = (get_prop(page, post_id_field, "rich_text") or "").strip()
-    return bool(post_id)
+    return bool(get_prop(page, lock_field, "checkbox"))
+
+
+def platform_slot_published(
+    page: dict[str, Any],
+    fields: dict[str, str],
+    platform: str,
+    config: dict[str, Any],
+    *,
+    upload_video: bool = False,
+    mode: str | None = None,
+) -> bool:
+    """Уже запланирован/опубликован этот слот (IG carousel vs reel — отдельно)."""
+    url_field = published_url_field(
+        platform, config, upload_video=upload_video, mode=mode,
+    )
+    return bool(url_field and get_prop(page, url_field, "url"))
 
 
 def utc_today_iso() -> str:
@@ -924,13 +935,6 @@ def publish_one(
     mapping = config["video_format_by_platform"]
 
     page = notion_get_page(page_id)
-    if is_agent6_locked(page, fields) and not force:
-        return {
-            "page_id": page_id,
-            "platform": platform,
-            "skipped": True,
-            "reason": "agent6_locked",
-        }
 
     current_status = get_prop(page, fields["status"], "status")
     try:
@@ -975,6 +979,17 @@ def publish_one(
         upload_video = True
     else:
         upload_video = upload_video_for_post(platform, carousel_urls, config)
+
+    if not force and platform_slot_published(
+        page, fields, platform, config, upload_video=upload_video, mode=mode,
+    ):
+        return {
+            "page_id": page_id,
+            "platform": platform,
+            "mode": mode,
+            "skipped": True,
+            "reason": f"already published ({published_url_field(platform, config, upload_video=upload_video, mode=mode)})",
+        }
 
     result = {
         "page_id": page_id,
@@ -1208,9 +1223,8 @@ def main() -> int:
                     exit_code = 1
                     continue
                 print(json.dumps(out, indent=2, ensure_ascii=False))
-                # Лок ставит первый же успешный постинг этого запуска — остальные
-                # публикации в том же запуске не должны блокироваться собственным локом.
-                if not out.get("skipped") and not args.dry_run:
+                # После первой публикации/пропуска «уже есть» — не блокировать lock на остальных сетях.
+                if not args.dry_run:
                     force = True
         return exit_code
 
