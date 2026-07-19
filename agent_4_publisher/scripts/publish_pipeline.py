@@ -991,6 +991,20 @@ def publish_one(
             "reason": f"already published ({published_url_field(platform, config, upload_video=upload_video, mode=mode)})",
         }
 
+    from daily_quota import check_publish_quota
+
+    quota_reason = check_publish_quota(
+        platform, config, upload_video=upload_video, mode=mode, force=force,
+    )
+    if quota_reason:
+        return {
+            "page_id": page_id,
+            "platform": platform,
+            "mode": mode,
+            "skipped": True,
+            "reason": quota_reason,
+        }
+
     result = {
         "page_id": page_id,
         "platform": platform,

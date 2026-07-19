@@ -180,8 +180,9 @@
     ],
     "chain_metricool_after_telegram": true,
     "per_network_daily_limit": {
+      "max_posts_per_day": 4,
       "carousel_max": 1,
-      "video_max": 2,
+      "video_max": 3,
       "video_only_networks": {
         "youtube": {
           "video_max": 3,
