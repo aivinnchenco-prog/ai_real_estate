@@ -51,12 +51,13 @@ def _network_for(platform: str) -> str:
     return network_for(platform)
 
 
-def _today_window(config: dict[str, Any]) -> tuple[str, str, ZoneInfo]:
+def _day_window(config: dict[str, Any], day_offset: int = 0) -> tuple[str, str, ZoneInfo]:
+    """Окно суток по календарю бренда: 0 = сегодня, 1 = завтра, ..."""
     from publish_pipeline import metricool_timezone
 
     tz = ZoneInfo(metricool_timezone(config))
     now = datetime.now(tz)
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=day_offset)
     end = start + timedelta(days=1)
     fmt = "%Y-%m-%dT%H:%M:%S"
     return start.strftime(fmt), end.strftime(fmt), tz
@@ -85,11 +86,13 @@ def _provider_active(provider: dict[str, Any]) -> bool:
     return status not in {"DELETED", "CANCELLED", "FAILED", "ERROR"}
 
 
-def count_today_posts(network: str, config: dict[str, Any]) -> dict[str, int]:
-    """Сколько постов уже в Metricool на сегодня (по календарю бренда)."""
+def count_today_posts(
+    network: str, config: dict[str, Any], day_offset: int = 0
+) -> dict[str, int]:
+    """Сколько постов уже в Metricool на сутки (по календарю бренда)."""
     from metricool_post_search import metricool_list_posts, provider_for_network
 
-    start, end, _ = _today_window(config)
+    start, end, _ = _day_window(config, day_offset)
     try:
         posts = metricool_list_posts(config, start=start, end=end)
     except Exception:
@@ -117,26 +120,60 @@ def check_publish_quota(
     upload_video: bool,
     mode: str | None = None,
     force: bool = False,
+    day_offset: int = 0,
 ) -> str | None:
-    """Вернуть причину skip или None, если слот доступен."""
+    """Вернуть причину «квота занята» или None, если слот доступен.
+
+    day_offset: 0 = сегодня, 1 = завтра, ... (по календарю бренда Metricool).
+    """
     agent6 = config.get("agent6") or {}
     if force and not agent6.get("count_force_as_quota", False):
         return None
 
     network = _network_for(platform)
     is_video = upload_video or mode == "video"
-    counts = count_today_posts(network, config)
+    counts = count_today_posts(network, config, day_offset)
     cap_total = max_posts_per_day(config, platform)
+    day = "сегодня" if day_offset == 0 else f"день +{day_offset}"
 
     if counts["total"] >= cap_total:
-        return f"daily_quota: {network} {counts['total']}/{cap_total} постов на сегодня"
+        return f"daily_quota: {network} {counts['total']}/{cap_total} постов на {day}"
 
     cap_c = carousel_cap(config, platform)
     if not is_video and cap_c is not None and counts["carousel"] >= cap_c:
-        return f"daily_quota: {network} каруселей {counts['carousel']}/{cap_c} на сегодня"
+        return f"daily_quota: {network} каруселей {counts['carousel']}/{cap_c} на {day}"
 
     cap_v = video_cap(config, platform)
     if is_video and cap_v is not None and counts["video"] >= cap_v:
-        return f"daily_quota: {network} видео {counts['video']}/{cap_v} на сегодня"
+        return f"daily_quota: {network} видео {counts['video']}/{cap_v} на {day}"
 
     return None
+
+
+def find_free_day(
+    platform: str,
+    config: dict[str, Any],
+    *,
+    upload_video: bool,
+    mode: str | None = None,
+    force: bool = False,
+) -> tuple[int | None, str | None]:
+    """Первый день со свободным слотом квоты: (day_offset, причина_на_сегодня).
+
+    Квота на сегодня занята — пост не пропускается, а планируется на первый
+    свободный день (завтра, послезавтра, ...). None — нет слота в пределах
+    agent6.quota_lookahead_days (по умолчанию 7).
+    """
+    lookahead = int((config.get("agent6") or {}).get("quota_lookahead_days", 7))
+    today_reason: str | None = None
+    for offset in range(0, lookahead + 1):
+        reason = check_publish_quota(
+            platform, config,
+            upload_video=upload_video, mode=mode, force=force,
+            day_offset=offset,
+        )
+        if offset == 0:
+            today_reason = reason
+        if reason is None:
+            return offset, today_reason
+    return None, today_reason

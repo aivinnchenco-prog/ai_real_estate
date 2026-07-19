@@ -1062,19 +1062,26 @@ def publish_one(
             "reason": skip_reason,
         }
 
-    from daily_quota import check_publish_quota
+    from daily_quota import find_free_day
 
-    quota_reason = check_publish_quota(
+    quota_day_offset, quota_reason_today = find_free_day(
         platform, config, upload_video=upload_video, mode=mode, force=force,
     )
-    if quota_reason:
+    if quota_day_offset is None:
         return {
             "page_id": page_id,
             "platform": platform,
             "mode": mode,
             "skipped": True,
-            "reason": quota_reason,
+            "reason": f"{quota_reason_today} (нет свободного дня в пределах lookahead)",
         }
+    if quota_day_offset > 0:
+        # Квота на сегодня занята — не пропускаем, а планируем на первый свободный день
+        scheduled_time = shift_schedule(scheduled_time, hours=24 * quota_day_offset)
+        print(
+            f"[quota] {platform}: {quota_reason_today} → пост запланирован на "
+            f"+{quota_day_offset} дн. ({scheduled_time})"
+        )
 
     result = {
         "page_id": page_id,
@@ -1098,6 +1105,9 @@ def publish_one(
         "scheduled_time": scheduled_time,
         "timezone": metricool_timezone(config),
     }
+    if quota_day_offset > 0:
+        result["quota_shifted_days"] = quota_day_offset
+        result["quota_reason_today"] = quota_reason_today
 
     if dry_run:
         result["dry_run"] = True
