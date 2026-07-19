@@ -81,7 +81,7 @@
 
     {"exact_name": "last_error", "type": "rich_text", "writers": ["agent_2_registrar", "agent_3_director", "agent_4_publisher"], "readers": ["manual"]},
     {"exact_name": "error_count", "type": "number", "writers": ["agent_3_director", "agent_4_publisher"], "readers": ["agent_3_director"]},
-    {"exact_name": "monthly_prices", "type": "multi_select", "writers": ["agent_2_registrar"], "readers": ["agent_6_qualifier"], "$comment": "Плашка на месяц: «2026-09 · 99 200 ฿» (точная) / «2026-12 ≈ 249 500 ฿» (prorated, экстраполяция); месяцы без цены пропускаются"},
+    {"exact_name": "monthly_prices", "type": "multi_select", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_6_qualifier"], "$comment": "Плашка на месяц: «2026-09 · 99 200 ฿» (точная) / «2026-12 ≈ 249 500 ฿» (prorated, экстраполяция); месяцы без цены пропускаются. «Цена за месяц» и хук берут первый предстоящий месяц (после текущего календаря)."},
     {"exact_name": "Вместимость гостей", "type": "number", "writers": ["agent_2_registrar", "manual"], "readers": ["agent_2_registrar", "agent_6_qualifier"], "$comment": "Только явное число от хозяина («до 5 гостей», sleeps 6); фолбэк-формула комнаты×2+1 в таблицу не пишется."},
     {"exact_name": "publisher_locked", "type": "checkbox", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
     {"exact_name": "publisher_taken_at", "type": "date", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},

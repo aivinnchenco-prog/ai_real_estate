@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "resolution": "720p",
+  "duration_seconds": 2,
+  "segment_seconds": 1.6,
+  "image_count": 9,
+  "max_images_per_request": 9,
+  "max_per_category": 1,
+  "max_similarity": 0.88,
+  "mmr_lambda": 0.6,
+  "curator_diverse_url": "http://127.0.0.1:8077/select-diverse",
+  "wan_reel_script": "scripts/wan_reel.py",
+  "title_overlay": {
+    "enabled": true,
+    "config": "config/title-overlay.json"
+  },
+  "music": {
+    "enabled": true,
+    "r2_prefix": "music/"
+  },
+  "prompt": "Camera dolly moves straight forward along the central axis, directly ahead into the depth of the room, perfectly centered. Constant slow speed. Strictly no lateral movement, no sideways drift, no panning, no tilting, no rotation, no zoom bursts. No object animation, no moving furniture, no people. Static interior scene, only smooth forward camera motion. Photorealistic, bright natural lighting."
+}

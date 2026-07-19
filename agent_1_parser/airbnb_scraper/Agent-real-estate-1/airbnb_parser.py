@@ -81,23 +81,21 @@ class AirbnbParser:
         logger.info(f'Open with currency {self._target_currency}: {url}')
         url_dates = self._parse_url_dates(url)
         url_dates['currency'] = self._target_currency
-        page_source = ''
-        sb = self._ensure_sb()
-        try:
-            self._open_listing_url(url)
-            sb.wait_for_element_visible(
-                '//button[@data-testid="user-flag-report-button"]', timeout=self.WAIT_TIMEOUT)
-            self._close_popup()
-            if config.PARSER_PAGE_SLEEP_SEC > 0:
-                time.sleep(config.PARSER_PAGE_SLEEP_SEC)
-            page_source = self._wait_for_price_page_source()
-            page_source = self._wait_for_photos_page_source(page_source)
-        except Exception:
-            with open('Error.html', 'w', encoding='utf-8') as f:
-                f.write(sb.get_page_source())
-            page_source = sb.get_page_source()
 
-        data = self._parse(page_source, url_dates)
+        page_source, data, ok = self._load_listing_page(url, url_dates)
+        # Access Denied / пустой SSR — один рестарт браузера и повтор
+        if not ok:
+            logger.warning(
+                f'Листинг не загрузился ({self._diagnose_page(page_source)}) — рестарт браузера'
+            )
+            self.close()
+            time.sleep(2 + random.uniform(0, 2))
+            page_source, data, ok = self._load_listing_page(url, url_dates)
+            if not ok:
+                raise RuntimeError(
+                    f"Airbnb не отдал данные объявления "
+                    f"({self._diagnose_page(page_source)})"
+                )
 
         # Airbnb иногда отдаёт SSR-JSON без автоперевода (описание на языке
         # хозяина, например китайском). Свежая перезагрузка обычно приносит
@@ -105,15 +103,17 @@ class AirbnbParser:
         if self._cjk_ratio(data.get('Описание', '')) > 0.15:
             logger.info('Описание не переведено (CJK) — перезагружаю страницу для автоперевода')
             try:
+                sb = self._ensure_sb()
                 self._open_listing_url(url)
                 sb.wait_for_element_visible(
                     '//button[@data-testid="user-flag-report-button"]', timeout=self.WAIT_TIMEOUT)
                 self._close_popup()
-                if config.PARSER_PAGE_SLEEP_SEC > 0:
-                    time.sleep(config.PARSER_PAGE_SLEEP_SEC)
+                self._page_sleep()
                 retry_source = self._wait_for_photos_page_source(self._wait_for_price_page_source())
                 retry_data = self._parse(retry_source, url_dates)
-                if self._cjk_ratio(retry_data.get('Описание', '')) <= 0.15:
+                if retry_data.get('Изображения') is not None and self._cjk_ratio(
+                    retry_data.get('Описание', '')
+                ) <= 0.15 and retry_data.get('Название'):
                     data, page_source = retry_data, retry_source
                     logger.info('Автоперевод получен со второй загрузки')
                 else:
@@ -148,13 +148,100 @@ class AirbnbParser:
 
         return message_text, media, data
 
+    def _load_listing_page(self, url, url_dates):
+        """Открыть листинг и распарсить SSR. → (html, details, ok)."""
+        page_source = ''
+        sb = self._ensure_sb()
+        try:
+            self._open_listing_url(url)
+            sb.wait_for_element_visible(
+                '//button[@data-testid="user-flag-report-button"]', timeout=self.WAIT_TIMEOUT)
+            self._close_popup()
+            self._page_sleep()
+            page_source = self._wait_for_price_page_source()
+            page_source = self._wait_for_photos_page_source(page_source)
+        except Exception:
+            try:
+                page_source = sb.get_page_source()
+            except Exception:
+                page_source = ''
+            with open('Error.html', 'w', encoding='utf-8') as f:
+                f.write(page_source or '')
+        raw = self._load_deferred_state(page_source)
+        ok = self._has_listing_data(raw)
+        data = self._parse(page_source, url_dates)
+        return page_source, data, ok
+
+    def _diagnose_page(self, page_source: str) -> str:
+        raw = page_source or ''
+        low = raw.lower()
+        if 'access denied' in low and ('edgesuite' in low or 'permission to access' in low):
+            return 'Access Denied — Airbnb блокирует IP сервера'
+        # Не ловить disable_google_recaptcha / payments.sca.*challenge в обычном HTML
+        if re.search(
+            r'(verify you are human|are you a human|cf-challenge|px-captcha|'
+            r'attention required|security check)',
+            low,
+        ):
+            return 'captcha/challenge'
+        if len(raw) < 1000:
+            return f'пустая страница ({len(raw)} байт)'
+        if 'niobeclientdata' not in low and 'data-deferred-state' not in low:
+            return 'в HTML нет данных листинга (niobeClientData)'
+        return 'неполная структура SSR'
+
+    def _page_sleep(self):
+        """Пауза после загрузки + джиттер (анти rate-limit на VPS)."""
+        base = max(0.0, float(config.PARSER_PAGE_SLEEP_SEC))
+        jitter = max(0.0, float(getattr(config, 'PARSER_PAGE_SLEEP_JITTER_SEC', 0)))
+        delay = base + (random.uniform(0, jitter) if jitter else 0)
+        if delay > 0:
+            time.sleep(delay)
+
     def fetch_price_for_period(self, url, check_in, check_out):
         """Цена за конкретный период (check_in/check_out, ISO-даты).
 
         Возвращает float (в валюте _target_currency, обычно THB) или None,
-        если Airbnb не отдал цену (даты заняты/недоступны).
+        если Airbnb не отдал цену (даты заняты / Access Denied / пустая страница).
         Используется модулем monthly_pricing для цен по месяцам.
+        При Access Denied Akamai блокирует текущую сессию браузера —
+        рестартуем браузер (новый профиль/cookies) и пробуем ещё раз.
         """
+        retries = max(1, int(getattr(config, 'PRICE_FETCH_RETRIES', 1)))
+        max_restarts = max(0, int(getattr(config, 'PRICE_BLOCK_RESTARTS', 2)))
+        restarts = 0
+        for attempt in range(1, retries + 1):
+            value, blocked = self._fetch_price_for_period_once(url, check_in, check_out)
+            if value is not None:
+                return value
+            if blocked:
+                if restarts >= max_restarts:
+                    logger.warning(
+                        f'fetch_price_for_period {check_in}/{check_out}: '
+                        f'блок после {restarts} рестартов браузера — сдаёмся'
+                    )
+                    return None
+                restarts += 1
+                pause = 5 + random.uniform(0, 5)
+                logger.warning(
+                    f'fetch_price_for_period {check_in}/{check_out}: Access Denied — '
+                    f'рестарт браузера {restarts}/{max_restarts} через {pause:.1f}s'
+                )
+                self.close()
+                time.sleep(pause)
+                continue
+            if attempt < retries:
+                pause = float(getattr(config, 'PRICE_RETRY_SLEEP_SEC', 6))
+                pause += random.uniform(0, min(3.0, pause * 0.4))
+                logger.info(
+                    f'fetch_price_for_period retry {attempt}/{retries} '
+                    f'{check_in}/{check_out} через {pause:.1f}s'
+                )
+                time.sleep(pause)
+        return None
+
+    def _fetch_price_for_period_once(self, url, check_in, check_out):
+        """Возвращает (price|None, blocked: bool). blocked=True → Access Denied / captcha."""
         self._target_currency = resolve_currency(url)
         base = normalize_airbnb_url(url)
         parts = urlparse(base)
@@ -165,15 +252,21 @@ class AirbnbParser:
 
         try:
             self._open_listing_url(dated_url)
-            if config.PARSER_PAGE_SLEEP_SEC > 0:
-                time.sleep(config.PARSER_PAGE_SLEEP_SEC)
-            page_source = self._wait_for_price_page_source()
+            self._close_popup(fast=True)
+            # Короткая пауза вместо общей PARSER_PAGE_SLEEP_SEC (4-5.5с):
+            # для цены не ждём фото/полный JSON, поллинг цены ниже сам дождётся.
+            price_sleep = max(0.0, float(getattr(config, 'PRICE_PAGE_SLEEP_SEC', 0.5)))
+            if price_sleep:
+                time.sleep(price_sleep + random.uniform(0, 0.5))
+            page_source = self._wait_for_price_page_source(
+                poll=float(getattr(config, 'PRICE_WAIT_POLL_SEC', 0.25))
+            )
         except Exception:
             logger.warning(f'fetch_price_for_period: не удалось открыть {check_in}/{check_out}', exc_info=True)
-            return None
+            return None, False
 
-        # Та же цепочка экстракторов, что и в process_url: HTML (aria-label)
-        # надёжнее всего — раньше его тут не было, и цены «не находились».
+        # Сначала цена — в обычном HTML Airbnb часто есть слова captcha/challenge
+        # (feature flags), это не блок. Жёсткий блок — только Access Denied без цены.
         amount, display = self._extract_price_from_html(page_source)
         if not amount:
             amount, display = self._find_price_in_json_text(page_source)
@@ -181,13 +274,21 @@ class AirbnbParser:
             parsed = self._extract_price_from_dom()
             amount = parsed.get('Цена', '')
             display = parsed.get('Цена_отображение', display)
+
         if not amount:
-            logger.info(f'fetch_price_for_period {check_in}/{check_out}: цены нет (даты заняты?)')
-            return None
+            diag = self._diagnose_page(page_source)
+            if diag.startswith('Access Denied'):
+                logger.warning(
+                    f'fetch_price_for_period {check_in}/{check_out}: {diag} — ретраи бессмысленны'
+                )
+                return None, True
+            reason = diag if diag != 'неполная структура SSR' else 'цены нет (даты заняты или SSR без цены)'
+            logger.info(f'fetch_price_for_period {check_in}/{check_out}: {reason}')
+            return None, False
         try:
             value = float(amount)
         except ValueError:
-            return None
+            return None, False
 
         # Airbnb для длинных стеев показывает ставку «X ฿ помесячно».
         # Для полного месяца это и есть цена месяца; для короткого отрезка
@@ -201,7 +302,7 @@ class AirbnbParser:
         if days and days < 27 and re.search(r'помесячно|month', str(display), re.I):
             value = value * days / 30.0
         logger.info(f'fetch_price_for_period {check_in}/{check_out}: {display} -> {value:.0f}')
-        return value
+        return value, False
 
     def close(self):
         """Закрывает браузер; зависший driver.quit() не блокирует бота."""
@@ -315,7 +416,7 @@ class AirbnbParser:
             'guests': (query.get('guests') or [''])[0],
         }
 
-    def _wait_for_price_page_source(self, timeout=None):
+    def _wait_for_price_page_source(self, timeout=None, poll=0.5):
         timeout = config.PARSER_PRICE_WAIT_SEC if timeout is None else timeout
         deadline = time.time() + timeout
         sb = self._ensure_sb()
@@ -326,7 +427,7 @@ class AirbnbParser:
                 break
             if self._find_price_in_json_text(last_source)[0]:
                 break
-            time.sleep(0.5)
+            time.sleep(max(0.1, poll))
         if not self._extract_price_from_html(last_source)[0]:
             if self._extract_price_from_dom().get('Цена'):
                 last_source = sb.get_page_source()
@@ -459,11 +560,51 @@ class AirbnbParser:
 """
         return message_text
 
-    def _close_popup(self):
+    def _close_popup(self, fast=False):
+        """Закрывает cookie/translation и прочие модалки, мешающие цене.
+
+        fast=True — для сбора цен: только Escape + один общий селектор
+        с коротким таймаутом (полный перебор 7 селекторов × 1.5с
+        съедал ~10с на каждый месяц).
+        """
+        sb = self._ensure_sb()
+        if fast:
+            try:
+                sb.press_keys('body', '\ue00c')  # Keys.ESCAPE
+            except Exception:
+                pass
+            try:
+                sb.click(
+                    '//button[contains(@aria-label,"Close") or contains(@aria-label,"Закрыть")]',
+                    timeout=0.4,
+                )
+                time.sleep(0.1)
+            except Exception:
+                pass
+            return
+        selectors = [
+            '//button[@aria-label="Закрыть"]',
+            '//button[@aria-label="Close"]',
+            '//div[@role="dialog"]//button[@aria-label="Закрыть"]',
+            '//div[@role="dialog"]//button[@aria-label="Close"]',
+            '//button[contains(@aria-label,"Close") or contains(@aria-label,"Закрыть")]',
+            '[data-testid="modal-container"] button[aria-label="Close"]',
+            '[data-testid="modal-container"] button[aria-label="Закрыть"]',
+        ]
+        for sel in selectors:
+            try:
+                sb.click(sel, timeout=1.5)
+                time.sleep(0.2)
+            except Exception:
+                pass
         try:
-            self._ensure_sb().click('//button[@aria-label="Закрыть"]', timeout=3)
-        except:
-            pass
+            # Escape часто закрывает «Перевод включен»
+            sb.press_keys('body', '\ue00c')  # Keys.ESCAPE
+        except Exception:
+            try:
+                ActionChains(sb.driver).send_keys(Keys.ESCAPE).perform()
+            except Exception:
+                pass
 
     def parse_saved_json(self, json_path, url_dates=None, page_source=''):
         with open(json_path, encoding='utf-8') as json_file:
@@ -481,6 +622,21 @@ class AirbnbParser:
             os.makedirs(samples_dir, exist_ok=True)
             with open(os.path.join(samples_dir, 'Details.json'), 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+
+        if not self._has_listing_data(data):
+            # Пустой/blocked HTML — не падаем с KeyError 'niobeClientData'
+            return {
+                'Название': '',
+                'Название_2': '',
+                'Описание': '',
+                'Особенности': '',
+                'Удобства': '',
+                'Обзор': '',
+                'Изображения': [],
+                'Локация': {},
+                'Хозяин': {},
+                'Гостей': '',
+            }
 
         details = self._get_details(data)
         details.update(self._extract_price_info(data, page_source, url_dates))

@@ -125,6 +125,7 @@ def build_session(
         "host": listing_data.get("Хозяин") or {},
         "owner": owner or {},
         "monthly_prices": monthly_prices or {},
+        "prices_deferred": not getattr(config, "PRICE_COLLECT_ENABLED", True),
         "calendar_url": url,
     }
     (session_path / "parsed.json").write_text(

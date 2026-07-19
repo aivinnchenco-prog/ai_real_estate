@@ -12,6 +12,7 @@ import os
 import re
 import sys
 import traceback
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -160,7 +161,31 @@ def format_owner_line(owner: dict) -> str:
     return " | ".join(parts)[:1900]
 
 
-def apply_parsed_meta(properties: dict, parsed_meta: dict, nf: dict) -> None:
+def first_upcoming_month_entry(
+    monthly: dict, today: date | None = None
+) -> tuple[str | None, dict | None]:
+    """Первый предстоящий месяц с ценой (строго после текущего календарного).
+
+    Сегодня 16.07 → ищем с 2026-08 (август), не июль.
+    """
+    today = today or date.today()
+    current = f"{today.year:04d}-{today.month:02d}"
+    for month in sorted(monthly):
+        if month <= current:
+            continue
+        entry = monthly.get(month) or {}
+        if entry.get("price"):
+            return month, entry
+    return None, None
+
+
+def apply_parsed_meta(
+    properties: dict,
+    parsed_meta: dict,
+    nf: dict,
+    *,
+    today: date | None = None,
+) -> None:
     """Данные Airbnb-парсера (parsed.json): владелец, календарь, цены по месяцам."""
     if not parsed_meta:
         return
@@ -175,10 +200,23 @@ def apply_parsed_meta(properties: dict, parsed_meta: dict, nf: dict) -> None:
         properties[nf["calendar"]] = NotionCRM.build_url(calendar_url)
 
     monthly = parsed_meta.get("monthly_prices") or {}
-    if monthly and nf.get("monthly_prices"):
-        options = monthly_price_options(monthly)
+    priced_n = sum(1 for v in (monthly or {}).values() if (v or {}).get("price"))
+    min_months = int(os.environ.get("PRICE_MIN_MONTHS", "3"))
+    # При отложенном сборе (VPS) один сид-месяц не пишем в multi_select —
+    # иначе в таблице «как будто готово», а добор на Mac откладывается.
+    monthly_chips = monthly
+    if parsed_meta.get("prices_deferred") and priced_n < min_months:
+        monthly_chips = {}
+
+    if monthly_chips and nf.get("monthly_prices"):
+        options = monthly_price_options(monthly_chips)
         if options:
             properties[nf["monthly_prices"]] = NotionCRM.build_multi_select(options)
+
+    # «Цена за месяц» — из полного monthly (включая сид), даже если чипы ещё не пишем
+    _, entry = first_upcoming_month_entry(monthly, today=today)
+    if entry and entry.get("price") and nf.get("price_monthly"):
+        properties[nf["price_monthly"]] = NotionCRM.build_number(float(entry["price"]))
 
 
 def monthly_price_options(monthly: dict) -> list[str]:
@@ -349,13 +387,21 @@ def main() -> int:
         uploaded: list[str] = []
 
         if not args.dry_run:
-            photo_names: list[str] = []
-            for i, photo in enumerate(photos, 1):
-                name = f"photo_{i:03d}{photo.suffix.lower()}"
-                dest = f"{gallery_base}/{name}"
-                url = r2.upload_from_path(str(photo), dest)
-                uploaded.append(url)
-                photo_names.append(name)
+            # Параллельная загрузка в R2 (_signed_put без общего состояния — thread-safe);
+            # порядок photo_001..N сохраняем по индексу.
+            from concurrent.futures import ThreadPoolExecutor
+
+            r2_workers = max(1, int(os.environ.get("R2_UPLOAD_WORKERS", "6")))
+            photo_names = [
+                f"photo_{i:03d}{photo.suffix.lower()}" for i, photo in enumerate(photos, 1)
+            ]
+
+            def _up(args_):
+                photo, name = args_
+                return r2.upload_from_path(str(photo), f"{gallery_base}/{name}")
+
+            with ThreadPoolExecutor(max_workers=r2_workers) as pool:
+                uploaded = list(pool.map(_up, zip(photos, photo_names)))
             log_event(object_id, "agent2", "r2_upload", count=len(uploaded))
 
             gallery_html = build_gallery_html(

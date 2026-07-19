@@ -28,6 +28,7 @@ import {
 import { listKeys } from "../r2list.mjs";
 import { selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
 import { renderSeedance, isSeedanceConfigured } from "../renderSeedance.mjs";
+import { renderWan, isWanConfigured } from "../renderWan.mjs";
 import { renderHookCover, isTitleOverlayEnabled, loadTitleOverlayConfig } from "../applyTitleOverlay.mjs";
 import { downloadFromR2, uploadFileToR2 } from "../r2util.mjs";
 import { mkdtempSync, rmSync } from "fs";
@@ -35,6 +36,18 @@ import { tmpdir } from "os";
 
 function loadSeedanceConfig() {
   return JSON.parse(readFileSync(resolve(ROOT, "config/seedance.json"), "utf8"));
+}
+
+function loadWanConfig() {
+  return JSON.parse(readFileSync(resolve(ROOT, "config/wan.json"), "utf8"));
+}
+
+function loadVideoEngine() {
+  const engine = (process.env.VIDEO_ENGINE || "wan").toLowerCase();
+  if (engine === "seedance") {
+    return { engine, cfg: loadSeedanceConfig() };
+  }
+  return { engine: "wan", cfg: loadWanConfig() };
 }
 
 /**
@@ -148,7 +161,7 @@ async function resolvePage(fields, { objectId, latest }) {
 async function main() {
   loadEnv();
   const notionCfg = loadNotionConfig();
-  const seedanceCfg = loadSeedanceConfig();
+  const { engine, cfg: videoCfg } = loadVideoEngine();
   const { dryRun, force, skipOverlay, skipSchemaCheck, ...lookup } = parseArgs();
   runSchemaCheck(skipSchemaCheck);
   const fields = notionCfg.fields;
@@ -161,7 +174,7 @@ async function main() {
     process.exit(0);
   }
 
-  console.log(`\n=== Seedance Agent: ${objectId} ===\n`);
+  console.log(`\n=== Video Agent (${engine}): ${objectId} ===\n`);
 
   const title = pageTitle(page, fields);
   const status = pageStatus(page, fields);
@@ -203,25 +216,31 @@ async function main() {
     url: `${publicBase}/${key}`,
   }));
 
-  const selectedNames = await selectPhotosSeedance(imageItems, seedanceCfg);
+  const selectedNames = await selectPhotosSeedance(imageItems, videoCfg);
   const image_keys = selectedNames.map((name) => `${objectId}/photos/${name}`);
 
-  console.log(`Duration: ${seedanceCfg.duration_seconds || 14}s, resolution: ${seedanceCfg.resolution}`);
-  console.log(`R2 photos: ${photoKeys.length}, selected for Seedance: ${image_keys.length}`);
+  const durationLabel =
+    engine === "wan"
+      ? `${videoCfg.duration_seconds || 2}s × ${videoCfg.segment_seconds || 1.6}s segment`
+      : `${videoCfg.duration_seconds || 14}s`;
+  console.log(`Engine: ${engine}, duration: ${durationLabel}, resolution: ${videoCfg.resolution}`);
+  console.log(`R2 photos: ${photoKeys.length}, selected: ${image_keys.length}`);
   for (const k of image_keys) console.log(`  - ${k}`);
 
   if (dryRun) {
-    console.log("\nDRY RUN — no Higgsfield render");
+    console.log("\nDRY RUN — no video render");
     console.log(
       JSON.stringify(
         {
           object_id: objectId,
           status,
-          duration_seconds: seedanceCfg.duration_seconds,
+          engine,
+          duration_seconds: videoCfg.duration_seconds,
+          resolution: videoCfg.resolution,
           image_count: image_keys.length,
           image_keys,
           overlay_meta: overlayMeta,
-          higgsfield_ready: isSeedanceConfigured(seedanceCfg),
+          ready: engine === "wan" ? isWanConfigured(videoCfg) : isSeedanceConfigured(videoCfg),
         },
         null,
         2
@@ -230,14 +249,14 @@ async function main() {
     return;
   }
 
-  // Хук-обложка карусели — до видео, чтобы она была даже при падении Seedance
-  if (!skipOverlay && isTitleOverlayEnabled(seedanceCfg)) {
+  // Хук-обложка карусели — до видео, чтобы она была даже при падении рендера
+  if (!skipOverlay && isTitleOverlayEnabled(videoCfg)) {
     try {
       const coverUrl = await makeHookCover({
         objectId,
         firstPhotoKey: photoKeys.sort()[0],
         overlayMeta,
-        seedanceCfg,
+        seedanceCfg: videoCfg,
       });
       console.log(`✓ hook cover (карусель): ${coverUrl}`);
     } catch (err) {
@@ -245,29 +264,44 @@ async function main() {
     }
   }
 
-  if (!isSeedanceConfigured(seedanceCfg)) {
+  if (engine === "wan") {
+    if (!isWanConfigured(videoCfg)) {
+      throw new Error("Wan not configured — set FAL_KEY in agent_3_director/.env");
+    }
+  } else if (!isSeedanceConfigured(videoCfg)) {
     throw new Error("Higgsfield not configured — run: higgsfield auth login  OR set HIGGSFIELD_MCP_ACCESS_TOKEN");
   }
 
-  const authCheck = spawnSync("node", [resolve(ROOT, "scripts/check_higgsfield_auth.mjs")], {
-    encoding: "utf8",
-    cwd: ROOT,
-  });
-  if (authCheck.status !== 0) {
-    throw new Error(authCheck.stderr?.trim() || "Higgsfield auth check failed");
+  if (engine === "seedance") {
+    const authCheck = spawnSync("node", [resolve(ROOT, "scripts/check_higgsfield_auth.mjs")], {
+      encoding: "utf8",
+      cwd: ROOT,
+    });
+    if (authCheck.status !== 0) {
+      throw new Error(authCheck.stderr?.trim() || "Higgsfield auth check failed");
+    }
   }
 
   try {
-    const result = await renderSeedance({
-      object_id: objectId,
-      image_keys,
-      cfg: seedanceCfg,
-      overlay_meta: overlayMeta,
-      skip_overlay: skipOverlay,
-    });
+    const result =
+      engine === "wan"
+        ? await renderWan({
+            object_id: objectId,
+            image_keys,
+            cfg: videoCfg,
+            overlay_meta: overlayMeta,
+            skip_overlay: skipOverlay,
+          })
+        : await renderSeedance({
+            object_id: objectId,
+            image_keys,
+            cfg: videoCfg,
+            overlay_meta: overlayMeta,
+            skip_overlay: skipOverlay,
+          });
 
     if (!result?.["9x16"]) {
-      throw new Error("Seedance returned no video URL");
+      throw new Error(`${engine} returned no video URL`);
     }
 
     await setSeedanceUrl(page, fields, result["9x16"], notionCfg.statuses?.video_done || "ready_to_post");
@@ -275,9 +309,10 @@ async function main() {
     const summary = {
       object_id: objectId,
       page_id: page.id,
-      seedance: result,
+      engine,
+      video: result,
     };
-    console.log("\nSEEDANCE_DONE");
+    console.log("\nVIDEO_DONE");
     console.log(JSON.stringify(summary, null, 2));
   } catch (err) {
     await setError(page, fields, err.message, notionCfg.statuses?.video_failed || "video_failed");

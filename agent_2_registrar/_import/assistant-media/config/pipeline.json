@@ -14,7 +14,7 @@
     "telegram": "ТГ",
     "description": "Контакты для описаний: whatsapp — номер брони, telegram — как называть ТГ-канал/бота в постах. Меняются здесь, не в коде."
   },
-  "price_months_ahead": 12,
+  "price_months_ahead": 3,
   "batch_wait_seconds": 150,
   "min_video_seconds": 15,
   "frame_duration_seconds": 2.5,
@@ -140,7 +140,7 @@
     "poll_interval_seconds": 10,
     "timeout_seconds": 1200,
     "curator_diverse_url": "http://127.0.0.1:8077/select-diverse",
-    "prompt_template": "Cinematic luxury Phuket property tour for Instagram Reels, vertical 9:16. Multi-shot real estate walkthrough using references {tags}. Smooth camera movement, bright professional lighting, magazine quality interiors, no people. Upbeat ambient background music."
+    "prompt_template": "Vertical 9:16 real estate walkthrough using references {tags}. Treat all reference images as one single continuous, unbroken path through connected spaces — the camera flows from one room into the next through doorways and openings, as if walking through the entire property in one uninterrupted take.\n\nCamera: smooth, soft, stabilized forward dolly only, constant unchanging speed from start to end, no acceleration, no deceleration, no speed ramps, no zoom, no pans, no rotation.\n\nAbsolutely no hard cuts, no jump cuts, no scene changes, no abrupt transitions between reference images — the movement between spaces must feel like continuous physical motion through the property, not separate stitched clips.\n\nNo object animation, no moving furniture, no people. Bright natural lighting, cinematic but calm, photorealistic, single continuous shot from beginning to end."
   },
   "chain": {
     "poll_interval_seconds": 30,

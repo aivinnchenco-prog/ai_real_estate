@@ -1,0 +1,67 @@
+# =============================================================================
+# .cursorignore — Real Estate Agent
+# Синтаксис как у .gitignore. Блокирует индекс + чтение агентом.
+# После добавления: Cursor Settings → Indexing → Resync Index (или перезапуск).
+# =============================================================================
+
+# --- Секреты и учётные данные ---
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.session
+*.session-journal
+credentials/
+**/credentials/
+**/.fb_profile/
+**/.fb_posting_profile/
+**/.fb_groups_profile/
+**/.fb_marketplace_profile/
+agent_4_publisher_fb/
+
+# --- Зависимости и кэши (тяжёлые, не нужны AI) ---
+node_modules/
+**/node_modules/
+.venv/
+**/.venv/
+venv/
+**/venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+**/.pytest_cache/
+
+# --- Архивы и бинарники ---
+*.zip
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+
+# --- macOS / мусор ---
+.DS_Store
+**/.DS_Store
+**/__MACOSX/
+
+# --- Монтаж локал: эксперименты, ffmpeg, сгенерированные ролики ---
+Монтаж локал/
+Монтаж локал/**
+
+# --- Runtime-данные агентов (логи, сессии, state) ---
+agent_1_parser/airbnb_scraper/Agent-real-estate-1/data/
+**/data/sessions/
+**/Logs/
+agent_3_director/data/
+agent_4_publisher/data/
+agent_6_qualifier/data/contracts/
+**/temp_images/
+**/Error.html
+
+# --- Airbnb: старые дубликаты скрапера (канон — Agent-real-estate-1) ---
+agent_1_parser/airbnb_scraper/*
+!agent_1_parser/airbnb_scraper/Agent-real-estate-1/
+
+# --- Git-архив ---
+.git-archived/

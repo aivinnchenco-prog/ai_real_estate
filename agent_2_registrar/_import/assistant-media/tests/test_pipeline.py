@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import unittest
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +12,11 @@ from housing_type import detect_housing_type  # noqa: E402
 from listing_parser import parse_listing  # noqa: E402
 from session_store import bind_object_id, get_object_id, load_session  # noqa: E402
 from notion_gate import NotionListing, agent3_ready, agent6_ready, agent4_ready  # noqa: E402
+from agent2_structurize import (  # noqa: E402
+    first_upcoming_month_entry,
+    monthly_price_options,
+    apply_parsed_meta,
+)
 
 
 LEGENDARY = """
@@ -48,6 +54,12 @@ class ListingParserTests(unittest.TestCase):
         self.assertEqual(d2.max_guests, 4)
         d3 = parse_listing("Вилла без вместимости, в 10 минутах от пляжа", districts=["Rawai"])
         self.assertIsNone(d3.max_guests)
+
+    def test_price_with_nbsp(self):
+        """Airbnb часто пишет «10 000 ฿» с неразрывными пробелами — не должны падать."""
+        text = "Вилла 2BR\nЦена: 10\u00a0000\u00a0฿ в месяц\nRawai"
+        d = parse_listing(text, districts=["Rawai"])
+        self.assertEqual(d.price_monthly, 10000.0)
 
 class ChainGateTests(unittest.TestCase):
     def test_agent3_requires_gallery(self):
@@ -109,6 +121,42 @@ class ChainGateTests(unittest.TestCase):
         bind_object_id(sid, "20260701_099")
         self.assertEqual(load_session(sid)["object_id"], "20260701_099")
         (ROOT / "data" / "sessions" / sid / "session.json").unlink(missing_ok=True)
+
+
+class MonthlyPricesTests(unittest.TestCase):
+    def test_first_upcoming_skips_current_month(self):
+        monthly = {
+            "2026-07": {"price": 40000, "status": "monthly"},
+            "2026-08": {"price": 55000, "status": "monthly"},
+            "2026-09": {"price": 60000, "status": "prorated"},
+        }
+        key, entry = first_upcoming_month_entry(monthly, today=date(2026, 7, 16))
+        self.assertEqual(key, "2026-08")
+        self.assertEqual(entry["price"], 55000)
+
+    def test_options_skip_null_prices(self):
+        monthly = {
+            "2026-08": {"price": None, "status": "insufficient_data"},
+            "2026-09": {"price": 99200, "status": "monthly"},
+        }
+        self.assertEqual(monthly_price_options(monthly), ["2026-09 · 99 200 ฿"])
+
+    def test_apply_sets_price_monthly_from_upcoming(self):
+        props = {}
+        nf = {"monthly_prices": "monthly_prices", "price_monthly": "Цена за месяц"}
+        apply_parsed_meta(
+            props,
+            {
+                "monthly_prices": {
+                    "2026-08": {"price": 55000, "status": "monthly"},
+                    "2026-09": {"price": 60000, "status": "monthly"},
+                }
+            },
+            nf,
+            today=date(2026, 7, 16),
+        )
+        self.assertIn("monthly_prices", props)
+        self.assertEqual(props["Цена за месяц"]["number"], 55000.0)
 
 
 if __name__ == "__main__":

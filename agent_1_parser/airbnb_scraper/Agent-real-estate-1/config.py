@@ -73,7 +73,9 @@ AIRBNB_CURRENCY = os.getenv('AIRBNB_CURRENCY', 'THB').upper()
 
 # --- Скорость парсинга и загрузки ---
 PARSER_REUSE_BROWSER = os.getenv('PARSER_REUSE_BROWSER', 'true').lower() in ('1', 'true', 'yes')
-PARSER_PAGE_SLEEP_SEC = float(os.getenv('PARSER_PAGE_SLEEP_SEC', '2'))
+# Пауза после открытия страницы (+ джиттер) — снижает rate-limit Airbnb на VPS
+PARSER_PAGE_SLEEP_SEC = float(os.getenv('PARSER_PAGE_SLEEP_SEC', '4'))
+PARSER_PAGE_SLEEP_JITTER_SEC = float(os.getenv('PARSER_PAGE_SLEEP_JITTER_SEC', '1.5'))
 PARSER_PRICE_WAIT_SEC = float(os.getenv('PARSER_PRICE_WAIT_SEC', '10'))
 PARSER_WAIT_TIMEOUT = int(os.getenv('PARSER_WAIT_TIMEOUT', '35'))
 # 0 = скачивать все фото листинга (без лимита)
@@ -97,11 +99,31 @@ AGENT2_ROOT = os.getenv('AGENT2_ROOT', '')
 # Сразу запускать agent2_structurize.py после сборки сессии
 AGENT2_AUTORUN = os.getenv('AGENT2_AUTORUN', 'true').lower() in ('1', 'true', 'yes')
 
+# false = на этом хосте цены не собираем (гибрид: VPS парсит объект, Mac добирает цены)
+PRICE_COLLECT_ENABLED = os.getenv('PRICE_COLLECT_ENABLED', 'true').lower() in ('1', 'true', 'yes')
+# Параллельных браузеров для локального сбора цен (1 = как раньше)
+PRICE_PARALLEL_WORKERS = int(os.getenv('PRICE_PARALLEL_WORKERS', '3'))
 # Сколько месяцев вперёд собирать цены (None = взять из pipeline.json Агента 2, дефолт 12)
 _pma = os.getenv('PRICE_MONTHS_AHEAD', '').strip()
 PRICE_MONTHS_AHEAD = int(_pma) if _pma else None
 # Минимальный непрерывный доступный отрезок (дней) для экстраполяции цены месяца
 PRICE_MIN_SEGMENT_DAYS = int(os.getenv('PRICE_MIN_SEGMENT_DAYS', '5'))
+# Повторы одного периода, если Airbnb не отдал цену (антибот/rate-limit)
+PRICE_FETCH_RETRIES = int(os.getenv('PRICE_FETCH_RETRIES', '3'))
+PRICE_RETRY_SLEEP_SEC = float(os.getenv('PRICE_RETRY_SLEEP_SEC', '6'))
+# Сколько раз перезапускать браузер при Access Denied (новый профиль обходит блок сессии)
+PRICE_BLOCK_RESTARTS = int(os.getenv('PRICE_BLOCK_RESTARTS', '2'))
+# Быстрый режим цен: короткая пауза после загрузки и частый поллинг цены
+PRICE_PAGE_SLEEP_SEC = float(os.getenv('PRICE_PAGE_SLEEP_SEC', '0.5'))
+PRICE_WAIT_POLL_SEC = float(os.getenv('PRICE_WAIT_POLL_SEC', '0.25'))
+# Сначала ближайшие N месяцев, пауза, потом остальные; затем refill пустых
+PRICE_PRIORITY_MONTHS = int(os.getenv('PRICE_PRIORITY_MONTHS', '6'))
+PRICE_BATCH_PAUSE_SEC = float(os.getenv('PRICE_BATCH_PAUSE_SEC', '8'))
+PRICE_REFILL_PASS = os.getenv('PRICE_REFILL_PASS', 'true').lower() in ('1', 'true', 'yes')
+# Кэш удачных цен по listing_id (не дергать Airbnb повторно без нужды)
+PRICE_CACHE_ENABLED = os.getenv('PRICE_CACHE_ENABLED', 'true').lower() in ('1', 'true', 'yes')
+PRICE_CACHE_TTL_DAYS = int(os.getenv('PRICE_CACHE_TTL_DAYS', '7'))
+PRICE_CACHE_DIR = os.getenv('PRICE_CACHE_DIR', 'data/monthly_price_cache')
 # Таймаут открытия страницы браузером; при зависании Chrome перезапускается
 PARSER_OPEN_TIMEOUT_SEC = int(os.getenv('PARSER_OPEN_TIMEOUT_SEC', '90'))
 

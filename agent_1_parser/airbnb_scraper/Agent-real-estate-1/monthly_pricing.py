@@ -152,6 +152,10 @@ def price_for_month(
     }
 
 
+def entry_has_price(entry: dict | None) -> bool:
+    return bool(entry and entry.get("price"))
+
+
 def collect_monthly_prices(
     fetch_price: FetchPrice,
     availability: dict[date, bool],
@@ -159,12 +163,82 @@ def collect_monthly_prices(
     months_ahead: int = 12,
     today: date | None = None,
     min_segment_days: int = MIN_SEGMENT_DAYS,
+    existing: dict | None = None,
+    only_missing: bool = False,
 ) -> dict[str, dict]:
-    """Цены на months_ahead месяцев вперёд: {"2026-09": {...}, ...}."""
+    """Цены на months_ahead месяцев вперёд: {"2026-09": {...}, ...}.
+
+    existing + only_missing=True — не трогаем месяцы, где цена уже есть
+    (кэш / предыдущая фаза / refill только insufficient_data).
+    """
     today = today or date.today()
+    existing = existing or {}
     result: dict[str, dict] = {}
     for year, month in iter_months_ahead(today, months_ahead):
-        result[f"{year:04d}-{month:02d}"] = price_for_month(
+        key = f"{year:04d}-{month:02d}"
+        prev = existing.get(key)
+        if only_missing and entry_has_price(prev):
+            result[key] = prev
+            continue
+        result[key] = price_for_month(
             fetch_price, availability, year, month, min_segment_days=min_segment_days
         )
+    return result
+
+
+# Фабрика воркера: (fetch_price, release). release() возвращает браузер в пул.
+PriceWorkerFactory = Callable[[], tuple[FetchPrice, Callable[[], None]]]
+
+
+def collect_monthly_prices_parallel(
+    make_worker: PriceWorkerFactory,
+    availability: dict[date, bool],
+    *,
+    months_ahead: int = 12,
+    today: date | None = None,
+    min_segment_days: int = MIN_SEGMENT_DAYS,
+    existing: dict | None = None,
+    only_missing: bool = False,
+    workers: int = 3,
+) -> dict[str, dict]:
+    """Как collect_monthly_prices, но до `workers` месяцев одновременно.
+
+    make_worker() вызывается в потоке на каждый месяц — верни (fetch, release),
+    где fetch привязан к своему браузеру (Selenium не thread-safe).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    today = today or date.today()
+    existing = existing or {}
+    workers = max(1, int(workers))
+    result: dict[str, dict] = {}
+    jobs: list[tuple[str, int, int]] = []
+
+    for year, month in iter_months_ahead(today, months_ahead):
+        key = f"{year:04d}-{month:02d}"
+        prev = existing.get(key)
+        if only_missing and entry_has_price(prev):
+            result[key] = prev
+            continue
+        jobs.append((key, year, month))
+
+    if not jobs:
+        return result
+
+    def _one(job: tuple[str, int, int]) -> tuple[str, dict]:
+        key, year, month = job
+        fetch, release = make_worker()
+        try:
+            entry = price_for_month(
+                fetch, availability, year, month, min_segment_days=min_segment_days
+            )
+            return key, entry
+        finally:
+            release()
+
+    with ThreadPoolExecutor(max_workers=min(workers, len(jobs))) as pool:
+        futs = [pool.submit(_one, job) for job in jobs]
+        for fut in as_completed(futs):
+            key, entry = fut.result()
+            result[key] = entry
     return result

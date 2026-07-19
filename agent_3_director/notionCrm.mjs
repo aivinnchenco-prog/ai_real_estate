@@ -98,7 +98,69 @@ function readSelect(page, fieldName) {
   return page.properties?.[fieldName]?.select?.name || null;
 }
 
-function formatOverlayPrice(page, priceField, fallbackField) {
+const MONTHS_RU = [
+  "",
+  "январь",
+  "февраль",
+  "март",
+  "апрель",
+  "май",
+  "июнь",
+  "июль",
+  "август",
+  "сентябрь",
+  "октябрь",
+  "ноябрь",
+  "декабрь",
+];
+
+const MONTHLY_CHIP_RE = /^(\d{4}-\d{2})\s*([·≈~])\s*([\d\s\u00a0]+)/;
+
+/** Парсит плашки multi_select monthly_prices → { "2026-08": { price, status } }. */
+export function parseMonthlyPrices(page, fieldName) {
+  const prop = page?.properties?.[fieldName];
+  if (!prop || prop.type !== "multi_select") return {};
+  const result = {};
+  for (const opt of prop.multi_select || []) {
+    const m = String(opt.name || "").trim().match(MONTHLY_CHIP_RE);
+    if (!m) continue;
+    const digits = m[3].replace(/\D/g, "");
+    if (!digits) continue;
+    result[m[1]] = {
+      price: Number(digits),
+      status: m[2] === "·" ? "monthly" : "prorated",
+    };
+  }
+  return result;
+}
+
+/** Первый месяц строго после текущего календарного, у которого есть цена. */
+export function firstUpcomingMonthKey(monthly, now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const current = `${y}-${String(m).padStart(2, "0")}`;
+  for (const key of Object.keys(monthly || {}).sort()) {
+    if (key <= current) continue;
+    if (monthly[key]?.price) return key;
+  }
+  return null;
+}
+
+function monthNameRu(yyyyMm) {
+  const month = Number(String(yyyyMm || "").split("-")[1]);
+  return MONTHS_RU[month] || "";
+}
+
+function formatOverlayPrice(page, priceField, fallbackField, monthlyField) {
+  const monthlyMap = monthlyField ? parseMonthlyPrices(page, monthlyField) : {};
+  const upcoming = firstUpcomingMonthKey(monthlyMap);
+  if (upcoming && monthlyMap[upcoming]?.price) {
+    return {
+      price: Number(monthlyMap[upcoming].price).toLocaleString("en-US"),
+      period: monthNameRu(upcoming),
+    };
+  }
+
   const monthly = priceField ? readNumber(page, priceField) : null;
   const yearly = fallbackField ? readNumber(page, fallbackField) : null;
 
@@ -116,12 +178,19 @@ export function pageVideoOverlayMeta(page, fields, overlayFields = {}) {
   const roomsField = overlayFields.rooms || fields.rooms || "Количество комнат";
   const priceField = overlayFields.price || fields.price_monthly || "Цена за месяц";
   const priceFallback = overlayFields.price_fallback || fields.price_yearly || "Цена за год";
+  const monthlyField =
+    overlayFields.monthly_prices || fields.monthly_prices || "monthly_prices";
   const districtField = overlayFields.district || fields.district || "Район";
 
   const housingType = readSelect(page, housingField);
   const rooms = readNumber(page, roomsField);
   const district = readRichText(page, districtField);
-  const { price, period } = formatOverlayPrice(page, priceField, priceFallback);
+  const { price, period } = formatOverlayPrice(
+    page,
+    priceField,
+    priceFallback,
+    monthlyField
+  );
 
   return {
     title_phrase: housingType || "",

@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from monthly_pricing import (
     collect_monthly_prices,
+    collect_monthly_prices_parallel,
     extrapolate_price,
     iter_months_ahead,
     longest_available_segment,
@@ -131,6 +132,76 @@ class TestCollect(unittest.TestCase):
     def test_collect_respects_months_ahead_param(self):
         result = collect_monthly_prices(lambda a, b: None, {}, months_ahead=6, today=date(2026, 7, 12))
         self.assertEqual(len(result), 6)
+
+    def test_only_missing_skips_cached_prices(self):
+        avail = days_range(date(2026, 8, 1), date(2027, 12, 31), True)
+        existing = {
+            "2026-08": {"price": 408200, "status": "monthly"},
+            "2026-09": {"price": None, "status": "insufficient_data"},
+        }
+        calls = []
+
+        def fetch(a, b):
+            calls.append((a, b))
+            return 50000
+
+        result = collect_monthly_prices(
+            fetch,
+            avail,
+            months_ahead=3,
+            today=date(2026, 7, 12),
+            existing=existing,
+            only_missing=True,
+        )
+        self.assertEqual(result["2026-08"]["price"], 408200)
+        self.assertEqual(result["2026-09"]["price"], 50000)
+        # Август из кэша — полный месяц за август не запрашивали
+        self.assertFalse(any(c[0] == date(2026, 8, 1) for c in calls))
+
+    def test_parallel_same_result(self):
+        avail = days_range(date(2026, 8, 1), date(2027, 12, 31), True)
+
+        def make_worker():
+            return (lambda a, b: 60000), (lambda: None)
+
+        result = collect_monthly_prices_parallel(
+            make_worker,
+            avail,
+            months_ahead=6,
+            today=date(2026, 7, 12),
+            workers=3,
+        )
+        self.assertEqual(len(result), 6)
+        self.assertTrue(all(v["price"] == 60000 for v in result.values()))
+
+
+class TestPriceCache(unittest.TestCase):
+    def test_listing_id_and_roundtrip(self):
+        import tempfile
+        from pathlib import Path
+        import config
+        from price_cache import listing_id_from_url, load_price_cache, save_price_cache
+
+        self.assertEqual(
+            listing_id_from_url("https://www.airbnb.ru/rooms/1650574168567264870?x=1"),
+            "1650574168567264870",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            old_dir, old_en = config.PRICE_CACHE_DIR, config.PRICE_CACHE_ENABLED
+            config.PRICE_CACHE_DIR = tmp
+            config.PRICE_CACHE_ENABLED = True
+            try:
+                url = "https://www.airbnb.com/rooms/111"
+                save_price_cache(url, {
+                    "2026-08": {"price": 10000, "status": "monthly"},
+                    "2026-09": {"price": None, "status": "insufficient_data"},
+                })
+                loaded = load_price_cache(url)
+                self.assertEqual(loaded["2026-08"]["price"], 10000)
+                self.assertNotIn("2026-09", loaded)
+            finally:
+                config.PRICE_CACHE_DIR = old_dir
+                config.PRICE_CACHE_ENABLED = old_en
 
 
 if __name__ == "__main__":

@@ -85,17 +85,26 @@ def extract_district(description: str, districts: list[str]) -> str:
 # Курсы по умолчанию; переопределяются блоком "fx" в config/pipeline.json
 DEFAULT_FX = {"usd_to_thb": 36.0, "eur_to_thb": 39.0}
 
+# Airbnb/Word часто вставляют NBSP (\xa0) и узкие пробелы между разрядами: «10 000 ฿»
+_NUM_SPACE_RE = re.compile(r"[\s\u00a0\u202f\u2007\u2009]+")
+
+
+def _to_float(raw: str) -> float:
+    """Число из строки с обычными/неразрывными пробелами и запятыми."""
+    cleaned = _NUM_SPACE_RE.sub("", (raw or "").strip()).replace(",", "")
+    return float(cleaned)
+
 
 def _parse_deposit(text: str, fx: dict | None = None) -> float | None:
     """Залог всегда в THB. Если в описании сумма в USD/EUR — конвертируем по курсу."""
     m = re.search(
-        r"(?:deposit|депозит|залог)\s*[:\s]*([$€฿]?)\s*(\d[\d\s,]*)\s*(usd|\$|eur|€|thb|฿|бат|baht)?",
+        r"(?:deposit|депозит|залог)\s*[:\s]*([$€฿]?)\s*(\d[\d\s\u00a0\u202f,]*)\s*(usd|\$|eur|€|thb|฿|бат|baht)?",
         text,
         re.I,
     )
     if not m:
         return None
-    amount = float(m.group(2).replace(" ", "").replace(",", ""))
+    amount = _to_float(m.group(2))
     currency = ((m.group(1) or "") + (m.group(3) or "")).strip().lower()
     rates = {**DEFAULT_FX, **(fx or {})}
     if currency in ("usd", "$"):
@@ -178,12 +187,20 @@ def parse_listing(
     m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:m²|m2|кв\.?\s*м|sqm)", description, re.I)
     if m:
         area = float(m.group(1).replace(",", "."))
-    m = re.search(r"(\d[\d\s,]*)\s*(?:THB|฿|бат)(?!.*(?:год|year))", description, re.I)
+    m = re.search(
+        r"(\d[\d\s\u00a0\u202f,]*)\s*(?:THB|฿|бат)(?!.*(?:год|year))",
+        description,
+        re.I,
+    )
     if m:
-        price_monthly = float(m.group(1).replace(" ", "").replace(",", ""))
-    m = re.search(r"(\d[\d\s,]*)\s*(?:THB|฿).*(?:год|year)", description, re.I)
+        price_monthly = _to_float(m.group(1))
+    m = re.search(
+        r"(\d[\d\s\u00a0\u202f,]*)\s*(?:THB|฿).*(?:год|year)",
+        description,
+        re.I,
+    )
     if m:
-        price_yearly = float(m.group(1).replace(" ", "").replace(",", ""))
+        price_yearly = _to_float(m.group(1))
 
     housing_type = detect_housing_type(
         description,

@@ -9,6 +9,7 @@
     "rooms": "Количество комнат",
     "price_monthly": "Цена за месяц",
     "price_yearly": "Цена за год",
+    "monthly_prices": "monthly_prices",
     "district": "Район",
     "video_seedance": "video_url_Seedance",
     "last_error": "last_error",
@@ -19,6 +20,7 @@
     "rooms": "Количество комнат",
     "price": "Цена за месяц",
     "price_fallback": "Цена за год",
+    "monthly_prices": "monthly_prices",
     "district": "Район"
   },
   "statuses": {

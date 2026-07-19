@@ -80,7 +80,7 @@ function pickMusicTrackRoundRobin(objectId, tracks) {
  * ролик — Metricool не даёт выбирать музыку при постинге, поэтому звук
  * вшиваем в файл. Треки берутся по кругу (round-robin), очередь не кончается.
  */
-async function addMusicTrack({ objectId, videoPath, outPath, cfg, tmpDir }) {
+export async function addMusicTrack({ objectId, videoPath, outPath, cfg, tmpDir }) {
   const music = cfg.music || {};
   if (music.enabled === false) return false;
 

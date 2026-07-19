@@ -31,5 +31,5 @@
     "enabled": true,
     "r2_prefix": "music/"
   },
-  "prompt_template": "Vertical 9:16 real estate walkthrough using references {tags}. Smooth, soft, stabilized forward camera dolly only — steady constant speed, no acceleration, no speed ramps, no zoom, no object animation, no moving furniture, no people. Only the camera glides forward through the space. Bright natural lighting, cinematic but calm."
+  "prompt_template": "Vertical 9:16 real estate walkthrough using references {tags}. Treat all reference images as one single continuous, unbroken path through connected spaces — the camera flows from one room into the next through doorways and openings, as if walking through the entire property in one uninterrupted take.\n\nCamera: smooth, soft, stabilized forward dolly only, constant unchanging speed from start to end, no acceleration, no deceleration, no speed ramps, no zoom, no pans, no rotation.\n\nAbsolutely no hard cuts, no jump cuts, no scene changes, no abrupt transitions between reference images — the movement between spaces must feel like continuous physical motion through the property, not separate stitched clips.\n\nNo object animation, no moving furniture, no people. Bright natural lighting, cinematic but calm, photorealistic, single continuous shot from beginning to end."
 }

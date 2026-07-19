@@ -5,6 +5,7 @@ data/activity_log.jsonl
 data/cursor_sessions.json
 data/agent_tasks.db
 data/task_instructions/
+data/monthly_price_cache/
 credentials/
 credentials/oauth-client.json
 credentials/drive-oauth-token.json
