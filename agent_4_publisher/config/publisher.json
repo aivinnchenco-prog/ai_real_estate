@@ -5,7 +5,7 @@
   },
   "metricool": {
     "timezone": "Asia/Bangkok",
-    "planner_calendar_url": "https://app.metricool.com/planning/calendar",
+    "planner_calendar_url": "https://app.metricool.com/planner/calendar",
     "post_search_days_back": 14,
     "post_search_days_ahead": 2,
     "url_sync_delay_minutes": 5,

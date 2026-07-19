@@ -634,9 +634,14 @@ def metricool_schedule_post(
 
     if isinstance(result, dict):
         payload = result.get("data") if isinstance(result.get("data"), dict) else result
-        post_id = payload.get("id") or payload.get("postId") or payload.get("uuid")
+        post_id = payload.get("id") or payload.get("postId")
+        post_uuid = payload.get("uuid") or payload.get("postUuid")
         if post_id is not None:
-            return {"id": str(post_id), "response": result}
+            return {
+                "id": str(post_id),
+                "uuid": str(post_uuid) if post_uuid else None,
+                "response": result,
+            }
     raise RuntimeError(f"Metricool schedule failed: {result}")
 
 
@@ -666,15 +671,25 @@ def _looks_like_post_url(value: str, network: str) -> bool:
     return True
 
 
-def metricool_planner_post_url(post_id: str, config: dict[str, Any] | None = None) -> str:
-    base = "https://app.metricool.com/planning/calendar"
+def metricool_planner_post_url(
+    post_uuid: str | None,
+    config: dict[str, Any] | None = None,
+    *,
+    post_id: str | None = None,
+) -> str:
+    """Ссылка на отложенный пост в Metricool planner (Copy link в календаре)."""
+    base = "https://app.metricool.com/planner/calendar"
     if config:
         base = config.get("metricool", {}).get("planner_calendar_url", base)
-    params = {
-        "userId": os.environ.get("METRICOOL_USER_ID", ""),
-        "blogId": os.environ.get("METRICOOL_BLOG_ID", ""),
-        "postId": str(post_id),
-    }
+    uuid = (post_uuid or "").strip()
+    if not uuid and post_id:
+        try:
+            post = metricool_get_post(post_id)
+            uuid = str(post.get("uuid") or post.get("postUuid") or "").strip()
+        except RuntimeError:
+            uuid = ""
+    blog_id = os.environ.get("METRICOOL_BLOG_ID", "")
+    params = {"blogId": blog_id, "openWithPostUuid": uuid}
     return f"{base}?{urllib.parse.urlencode(params)}"
 
 
@@ -1102,8 +1117,9 @@ def publish_one(
             location=caption_bundle.get("location"),
         )
         post_id = scheduled["id"]
+        post_uuid = scheduled.get("uuid")
         network = network_for(platform)
-        planner_url = metricool_planner_post_url(post_id, config)
+        planner_url = metricool_planner_post_url(post_uuid, config, post_id=post_id)
         published_url = resolve_published_post_url(post_id, network, scheduled["response"])
         url_to_save = published_url or planner_url
 
