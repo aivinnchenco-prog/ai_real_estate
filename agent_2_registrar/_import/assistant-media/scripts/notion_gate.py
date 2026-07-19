@@ -21,6 +21,7 @@ class NotionListing:
     montage_flag: str = ""   # «Монтаж»: ДА/НЕТ, "" = дефолт из конфига
     publish_flag: str = ""   # «Публикация»: ДА/НЕТ, "" = дефолт из конфига
     tg_post_url: str = ""    # post_url_telegram: пост-витрина в TG-канале
+    agent6_locked: bool = False
 
     @property
     def has_videos(self) -> bool:
@@ -51,6 +52,10 @@ def _select(prop: dict) -> str:
     return ((prop or {}).get("select") or {}).get("name") or ""
 
 
+def _checkbox(prop: dict) -> bool:
+    return bool((prop or {}).get("checkbox"))
+
+
 def parse_listing_page(page: dict[str, Any], fields: dict[str, str]) -> NotionListing | None:
     props = page.get("properties", {})
     object_id = _rich_text(props.get(fields["object_id"], {}))
@@ -69,6 +74,7 @@ def parse_listing_page(page: dict[str, Any], fields: dict[str, str]) -> NotionLi
         montage_flag=_select(props.get(fields.get("montage", "Монтаж"), {})),
         publish_flag=_select(props.get(fields.get("publish", "Публикация"), {})),
         tg_post_url=(props.get(fields.get("tg_post", "post_url_telegram"), {}) or {}).get("url") or "",
+        agent6_locked=_checkbox(props.get(fields.get("agent6_locked", "agent6_locked"), {})),
     )
 
 

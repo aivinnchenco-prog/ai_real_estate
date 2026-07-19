@@ -255,6 +255,34 @@ def is_agent6_locked(page: dict[str, Any], fields: dict[str, str]) -> bool:
     return bool(get_prop(page, lock_field, "checkbox"))
 
 
+def publish_skip_reason(
+    page: dict[str, Any],
+    fields: dict[str, str],
+    platform: str,
+    config: dict[str, Any],
+    *,
+    upload_video: bool,
+    mode: str | None,
+    bypass_lock: bool,
+    force: bool,
+) -> str | None:
+    """Причина пропуска слота или None, если публиковать можно.
+
+    force (--force CLI) обходит дневную квоту, не дубли уже запланированных слотов.
+    bypass_lock — продолжение одного запуска после agent6_locked или добивка слотов.
+    """
+    if platform_slot_published(
+        page, fields, platform, config, upload_video=upload_video, mode=mode,
+    ):
+        url_field = published_url_field(
+            platform, config, upload_video=upload_video, mode=mode,
+        )
+        return f"already published ({url_field})"
+    if is_agent6_locked(page, fields) and not bypass_lock and not force:
+        return "agent6_locked"
+    return None
+
+
 def platform_slot_published(
     page: dict[str, Any],
     fields: dict[str, str],
@@ -928,6 +956,7 @@ def publish_one(
     config: dict[str, Any],
     *,
     force: bool = False,
+    bypass_lock: bool = False,
     mode: str | None = None,
 ) -> dict[str, Any]:
     cfg_notion = config["notion"]
@@ -980,15 +1009,23 @@ def publish_one(
     else:
         upload_video = upload_video_for_post(platform, carousel_urls, config)
 
-    if not force and platform_slot_published(
-        page, fields, platform, config, upload_video=upload_video, mode=mode,
-    ):
+    skip_reason = publish_skip_reason(
+        page,
+        fields,
+        platform,
+        config,
+        upload_video=upload_video,
+        mode=mode,
+        bypass_lock=bypass_lock,
+        force=force,
+    )
+    if skip_reason:
         return {
             "page_id": page_id,
             "platform": platform,
             "mode": mode,
             "skipped": True,
-            "reason": f"already published ({published_url_field(platform, config, upload_video=upload_video, mode=mode)})",
+            "reason": skip_reason,
         }
 
     from daily_quota import check_publish_quota
@@ -1186,7 +1223,8 @@ def main() -> int:
             pid = page["id"]
             print(f"\n--- Processing {pid} ---")
             try:
-                force = args.force
+                fields = config["notion"]["fields"]
+                bypass_lock = args.force or is_agent6_locked(page, fields)
                 for job_mode, job_time in platform_jobs(
                     args.platform, scheduled, config, post_mode
                 ):
@@ -1196,12 +1234,13 @@ def main() -> int:
                         job_time,
                         args.dry_run,
                         config,
-                        force=force,
+                        force=args.force,
+                        bypass_lock=bypass_lock,
                         mode=job_mode,
                     )
                     print(json.dumps(out, indent=2, ensure_ascii=False))
                     if not out.get("skipped") and not args.dry_run:
-                        force = True
+                        bypass_lock = True
             except Exception as e:
                 print(f"ERROR {pid}: {e}", file=sys.stderr)
         return 0
@@ -1218,7 +1257,9 @@ def main() -> int:
         parser.error("--platform required")
 
     if args.page_id:
-        force = args.force
+        fields = config["notion"]["fields"]
+        page0 = notion_get_page(args.page_id)
+        bypass_lock = args.force or is_agent6_locked(page0, fields)
         exit_code = 0
         for platform in platforms:
             for job_mode, job_time in platform_jobs(platform, scheduled, config, post_mode):
@@ -1229,7 +1270,8 @@ def main() -> int:
                         job_time,
                         args.dry_run,
                         config,
-                        force=force,
+                        force=args.force,
+                        bypass_lock=bypass_lock,
                         mode=job_mode,
                     )
                 except Exception as e:
@@ -1237,9 +1279,8 @@ def main() -> int:
                     exit_code = 1
                     continue
                 print(json.dumps(out, indent=2, ensure_ascii=False))
-                # После первой публикации/пропуска «уже есть» — не блокировать lock на остальных сетях.
-                if not args.dry_run:
-                    force = True
+                if not out.get("skipped") and not args.dry_run:
+                    bypass_lock = True
         return exit_code
 
     parser.error("--page-id required unless --queue")
