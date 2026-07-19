@@ -22,8 +22,10 @@ import {
   pageObjectId,
   pageMontageEnabled,
   pageVideoOverlayMeta,
+  pageVideoEngineId,
   setSeedanceUrl,
   setError,
+  setMontageStart,
 } from "../notionCrm.mjs";
 import { listKeys } from "../r2list.mjs";
 import { selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
@@ -42,7 +44,14 @@ function loadWanConfig() {
   return JSON.parse(readFileSync(resolve(ROOT, "config/wan.json"), "utf8"));
 }
 
-function loadVideoEngine() {
+function loadVideoEngine(page, fields) {
+  const fromNotion = pageVideoEngineId(page, fields);
+  if (fromNotion === "seedance") {
+    return { engine: "seedance", cfg: loadSeedanceConfig() };
+  }
+  if (fromNotion === "wan") {
+    return { engine: "wan", cfg: loadWanConfig() };
+  }
   const engine = (process.env.VIDEO_ENGINE || "wan").toLowerCase();
   if (engine === "seedance") {
     return { engine, cfg: loadSeedanceConfig() };
@@ -161,17 +170,31 @@ async function resolvePage(fields, { objectId, latest }) {
 async function main() {
   loadEnv();
   const notionCfg = loadNotionConfig();
-  const { engine, cfg: videoCfg } = loadVideoEngine();
+  const fields = notionCfg.fields;
   const { dryRun, force, skipOverlay, skipSchemaCheck, ...lookup } = parseArgs();
   runSchemaCheck(skipSchemaCheck);
-  const fields = notionCfg.fields;
-  const allowedStatuses = notionCfg.statuses?.allowed || ["ready_for_video", "ready_to_post", "video_failed"];
+  const allowedStatuses = notionCfg.statuses?.allowed || [
+    "ready_for_video",
+    "video_in_progress",
+    "ready_to_post",
+    "video_failed",
+  ];
+  const videoStart = notionCfg.statuses?.video_start || "video_in_progress";
 
   const { page, objectId } = await resolvePage(fields, lookup);
 
   if (!pageMontageEnabled(page, fields)) {
     console.log(`Skip ${objectId}: «Монтаж» = НЕТ — объект только для базы, монтаж и Seedance не нужны.`);
     process.exit(0);
+  }
+
+  const { engine, cfg: videoCfg } = loadVideoEngine(page, fields);
+  const engineFromNotion = pageVideoEngineId(page, fields);
+  if (!engineFromNotion && !process.env.VIDEO_ENGINE) {
+    throw new Error(
+      "Видео-движок не выбран в Notion (Seedance 2.0 / Wan 2.7). " +
+        "Выберите в TG-боте или задайте VIDEO_ENGINE в .env для ручного запуска."
+    );
   }
 
   console.log(`\n=== Video Agent (${engine}): ${objectId} ===\n`);
@@ -189,12 +212,22 @@ async function main() {
   if (existingSeedance) console.log(`Existing seedance: ${existingSeedance}`);
 
   if (existingSeedance && !force) {
+    const doneStatus = notionCfg.statuses?.video_done || "ready_to_post";
+    if (status !== doneStatus) {
+      await setSeedanceUrl(page, fields, existingSeedance, doneStatus);
+      console.log(`Status → ${doneStatus} (video already in Notion)`);
+    }
     console.log("Seedance URL already set — skip (use --force to regenerate)");
     process.exit(0);
   }
 
   if (status && !allowedStatuses.includes(status)) {
     throw new Error(`Wrong status '${status}' — expected one of: ${allowedStatuses.join(", ")}`);
+  }
+
+  if (status !== videoStart) {
+    await setMontageStart(page, fields, videoStart);
+    console.log(`Status → ${videoStart}`);
   }
 
   const prefix = `${objectId}/photos/`;

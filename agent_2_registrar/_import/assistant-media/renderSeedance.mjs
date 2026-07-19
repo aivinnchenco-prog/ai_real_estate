@@ -103,7 +103,7 @@ export async function renderSeedance({ object_id, image_keys, cfg }) {
   const batches = chunkImages(imageUrls, maxBatch);
   const template =
     cfg.prompt_template ||
-    "Cinematic luxury Phuket property tour for Instagram Reels, vertical 9:16. Multi-shot real estate walkthrough using references {tags}. Smooth camera movement, bright professional lighting, magazine quality interiors, no people. Upbeat ambient background music.";
+    "Vertical 9:16 real estate video from references {tags}: a montage of {count} separate static shots, one per reference, in order. Each shot starts as an exact frozen replica of its reference image, then a very slow smooth stabilized dolly-in straight forward only. Plain hard cuts between shots, no morphing, no invented transitions or objects, no people. Photorealistic.";
 
   const tmpDir = `/tmp/seedance-${object_id}-${Date.now()}`;
   fs.mkdirSync(tmpDir, { recursive: true });

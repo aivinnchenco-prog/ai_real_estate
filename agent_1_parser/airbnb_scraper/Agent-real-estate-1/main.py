@@ -440,12 +440,12 @@ async def process_agent_query(message: Message, text: str):
             return
         await message.reply(f'Ошибка: {e}')
 
-# ---------- Кнопки «Монтаж / Публикация» после парсинга ----------
-# При выводе кнопок оба флага сразу пишутся в Notion как НЕТ (объект ждёт
+# ---------- Кнопки «Монтаж / Видео-движок / Публикация» после парсинга ----------
+# При выводе кнопок флаги сразу пишутся в Notion как НЕТ (объект ждёт
 # решения) — иначе вотчер цепочки (опрос ~30с) успеет запустить монтаж до
 # ответа. Нажатие ДА снимает паузу, и цепочка подхватывает объект.
 import uuid
-from notion_flags import set_flags
+from notion_flags import VIDEO_ENGINE_CODES, set_flags
 
 _flag_choices: dict[str, dict] = {}
 
@@ -459,34 +459,70 @@ def _flag_btn(token: str, kind: str, value: str, chosen: str | None) -> InlineKe
     )
 
 
+def _engine_btn(token: str, code: str, chosen: str | None) -> InlineKeyboardButton:
+    label = VIDEO_ENGINE_CODES[code]
+    mark = "✅ " if chosen == label else ""
+    return InlineKeyboardButton(
+        text=f"{mark}{label}",
+        callback_data=f"flag:{token}:engine:{code}",
+    )
+
+
 def _flags_keyboard(token: str) -> InlineKeyboardMarkup:
     c = _flag_choices.get(token, {})
-    return InlineKeyboardMarkup(inline_keyboard=[
+    rows = [
         [_flag_btn(token, "montage", "ДА", c.get("montage")),
          _flag_btn(token, "montage", "НЕТ", c.get("montage"))],
         [_flag_btn(token, "publish", "ДА", c.get("publish")),
          _flag_btn(token, "publish", "НЕТ", c.get("publish"))],
-    ])
+    ]
+    if c.get("montage") == "ДА":
+        rows.append([
+            _engine_btn(token, "seedance", c.get("video_engine")),
+            _engine_btn(token, "wan", c.get("video_engine")),
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _flags_ready(entry: dict) -> bool:
+    montage, publish = entry.get("montage"), entry.get("publish")
+    if not (montage and publish):
+        return False
+    if montage == "ДА" and not entry.get("video_engine"):
+        return False
+    return True
 
 
 async def send_flags_question(message: Message, object_id: str) -> None:
-    """Спросить про монтаж/публикацию; до ответа объект стоит на паузе."""
+    """Спросить про монтаж/публикацию/движок; до ответа объект стоит на паузе."""
     token = uuid.uuid4().hex[:8]
-    _flag_choices[token] = {"object_id": object_id, "montage": None, "publish": None}
+    _flag_choices[token] = {
+        "object_id": object_id,
+        "montage": None,
+        "publish": None,
+        "video_engine": None,
+    }
     ok, note = await asyncio.to_thread(set_flags, object_id, "НЕТ", "НЕТ")
     if not ok:
         logger.error(f"notion_flags: не удалось поставить паузу для {object_id}: {note}")
     await message.answer(
         f"🎬 Что делать с объектом <b>{object_id}</b>?\n"
-        "Монтаж — генерировать ли видео (Seedance).\n"
+        "Монтаж — генерировать ли видео.\n"
+        "При монтаж=ДА — выберите нейросеть: Seedance 2.0 или Wan 2.7.\n"
         "Публикация — постить ли в соц.сети (при монтаж=НЕТ выйдет карусель фото).\n"
         "Пока не выбрано — объект ждёт в базе, цепочка не запускается.",
         reply_markup=_flags_keyboard(token),
     )
 
 
-def _flags_summary(object_id: str, montage: str, publish: str) -> str:
-    text = f"Объект <b>{object_id}</b>: монтаж — {montage}, публикация — {publish}."
+def _flags_summary(object_id: str, montage: str, publish: str, video_engine: str | None) -> str:
+    engine_part = ""
+    if montage == "ДА" and video_engine:
+        engine_part = f", нейросеть — {video_engine}"
+    text = (
+        f"Объект <b>{object_id}</b>: монтаж — {montage}, "
+        f"публикация — {publish}{engine_part}."
+    )
     if montage == "ДА" and publish == "ДА":
         return text + "\nПолная цепочка: видео + публикация во все площадки."
     if montage == "НЕТ" and publish == "ДА":
@@ -525,35 +561,59 @@ async def on_flag_choice(callback: CallbackQuery):
         await callback.answer()
         return
     entry = _flag_choices.get(token)
-    if entry is None or kind not in ("montage", "publish"):
+    if entry is None or kind not in ("montage", "publish", "engine"):
         await callback.answer(
             "Кнопки устарели (бот перезапускался). Поставьте флажки "
-            "«Монтаж» и «Публикация» прямо в Notion.",
+            "«Монтаж», «Видео-движок» и «Публикация» прямо в Notion.",
             show_alert=True,
         )
         return
 
-    entry[kind] = value
-    ok, note = await asyncio.to_thread(
-        set_flags,
-        entry["object_id"],
-        value if kind == "montage" else None,
-        value if kind == "publish" else None,
-    )
-    if not ok:
-        entry[kind] = None
-        await callback.answer(f"Ошибка записи в Notion: {note}", show_alert=True)
-        return
+    if kind == "engine":
+        if value not in VIDEO_ENGINE_CODES:
+            await callback.answer()
+            return
+        entry["video_engine"] = VIDEO_ENGINE_CODES[value]
+        ok, note = await asyncio.to_thread(
+            set_flags, entry["object_id"], None, None, entry["video_engine"]
+        )
+        if not ok:
+            entry["video_engine"] = None
+            await callback.answer(f"Ошибка записи в Notion: {note}", show_alert=True)
+            return
+    else:
+        entry[kind] = value
+        if kind == "montage" and value == "НЕТ":
+            entry["video_engine"] = None
+        ok, note = await asyncio.to_thread(
+            set_flags,
+            entry["object_id"],
+            value if kind == "montage" else None,
+            value if kind == "publish" else None,
+        )
+        if not ok:
+            entry[kind] = None
+            await callback.answer(f"Ошибка записи в Notion: {note}", show_alert=True)
+            return
 
-    montage, publish = entry["montage"], entry["publish"]
-    if montage and publish:
+    if _flags_ready(entry):
         await callback.message.edit_text(
-            _flags_summary(entry["object_id"], montage, publish)
+            _flags_summary(
+                entry["object_id"],
+                entry["montage"],
+                entry["publish"],
+                entry.get("video_engine"),
+            )
         )
         _flag_choices.pop(token, None)
         asyncio.create_task(_kick_chain_after_flags(entry["object_id"]))
     else:
+        hint = ""
+        if entry.get("montage") == "ДА" and not entry.get("video_engine"):
+            hint = " Выберите нейросеть для видео."
         await callback.message.edit_reply_markup(reply_markup=_flags_keyboard(token))
+        await callback.answer(f"Записано в Notion.{hint}")
+        return
     await callback.answer("Записано в Notion")
 
 

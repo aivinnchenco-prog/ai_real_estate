@@ -67,10 +67,36 @@ higgsfield-seedance-agent/
 
 ## Параметры (`config/seedance.json`)
 
-- **9 фото** — diverse selection (через curator `/select-diverse`)
+- **9 фото** — diverse selection (каскад селекторов, см. ниже)
 - **9:16**, 480p/720p, **14 сек**, один ролик
 - До **9 ref-фото** за один запрос Seedance (без склейки)
 - Output: `{object_id}/video_seedance_9x16.mp4` в R2
+
+---
+
+## Отбор фото (автономный каскад)
+
+`selectPhotosSeedance.mjs` — общий для Wan и Seedance. Ступени:
+
+1. **CLIP-куратор** (`curator_service.py`, порт 8077) — если жив по `/health`.
+   URL: env `CURATOR_BASE_URL` (Docker на VPS: `http://curator:8077`)
+   либо `curator_diverse_url` из `config/seedance.json` / `config/wan.json`.
+   Если куратор вернул меньше `image_count` (жёсткие пороги aesthetic/MMR) —
+   недостающее добирается из кадров, которые куратор **не** отбраковал.
+2. **Gemini vision** (`selectPhotosGemini.mjs`) — если куратор недоступен/упал.
+   Нужен только `GEMINI_API_KEY` (root `.env` → `python3 scripts/sync_env.py`).
+   Скачивает фото из R2, шлёт байты в `generateContent`, JSON-ответ со списком
+   ключей и категориями. Отключается: `"gemini_selector": {"enabled": false}`.
+3. **Fallback по имени файла** — последний рубеж (для `photo_NNN.jpg` слабый).
+
+Ручной запуск куратора не нужен: без него отбор идёт «мозгами Gemini».
+
+Проверить отбор без Notion и рендера:
+
+```bash
+node scripts/select_photos.mjs --object-id F_20260719_008 --engine seedance
+node scripts/select_photos.mjs --object-id F_20260719_008 --no-curator  # форс Gemini
+```
 
 ---
 
@@ -100,19 +126,19 @@ node scripts/test_higgsfield_providers.mjs # какой provider выберет�
 
 ---
 
-## Проверенные параметры (2026-07-06)
+## Проверенные параметры (2026-07-19)
 
 | Параметр | Значение |
 |----------|----------|
 | Модель | `seedance_2_0` |
 | Провайдер | CLI OAuth |
-| Фото | 9 (макс. за запрос) |
+| Фото | 9 (макс. за запрос), max 2 на категорию |
 | Длительность | 14 сек |
 | Формат | 9:16, 480p |
 | Склейка | нет — один ролик |
-| Промпт | плавная стабилизированная проходка камеры вперёд |
+| Промпт | по-шотовый монтаж: каждый референс — отдельный статичный шот с точной копии фото, только медленный dolly-in, жёсткие каты, без морфинга и выдумки предметов (единственный рабочий промпт, старый walkthrough-вариант удалён) |
 
-Пример: `20260702_001` → `video_seedance_9x16.mp4` в R2.
+Пример: `F_20260719_008` → `video_seedance_9x16.mp4` в R2.
 
 ---
 

@@ -64,6 +64,9 @@ AGENT_ENV_MAP: dict[str, dict[str, str]] = {
         "CONTACT_PHONE": "WHATSAPP_NUMBER",
     },
     "agent_3_director/.env": {
+        # Gemini-селектор фото (fallback, когда CLIP-куратор не запущен)
+        "GEMINI_API_KEY": "GEMINI_API_KEY",
+        "GEMINI_MODEL": "GEMINI_MODEL",
         "NOTION_API_KEY": "NOTION_API_KEY",
         "NOTION_DB_ID": "NOTION_DB_ID",
         "CLOUDFLARE_ACCOUNT_ID": "CLOUDFLARE_ACCOUNT_ID",

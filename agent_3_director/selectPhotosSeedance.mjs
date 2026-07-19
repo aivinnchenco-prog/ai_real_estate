@@ -1,3 +1,5 @@
+import { geminiSelectDiverse, isGeminiSelectorAvailable } from "./selectPhotosGemini.mjs";
+
 const JUNK_RE =
   /kettle|dryer|cutting|board|meeting|playroom|pinball|arcade|foosball|index\.html|logo|floorplan|план|схем/i;
 
@@ -162,6 +164,36 @@ export function fallbackSelectDiverse(imageItems, topK, maxPerCategory = 1) {
   return orderAndCapCategories(selected, topK, maxPerCategory).map((i) => i.key);
 }
 
+/**
+ * Добор до topK, когда куратор вернул меньше (жёсткие пороги перцентиля/MMR).
+ * Кандидаты — фото, которые куратор НЕ отбраковал явно (не мусор, не брак),
+ * а просто не взял в топ. Жадно берём кадр с максимальным разрывом по номеру
+ * от уже выбранных — меньше шанс почти-дубля соседнего кадра.
+ * Экспортирована для юнит-тестов.
+ */
+export function topUpSelection(selectedKeys, allKeys, rejectedKeys, topK) {
+  const result = [...selectedKeys];
+  if (result.length >= topK) return result.slice(0, topK);
+
+  const excluded = new Set([...selectedKeys, ...rejectedKeys]);
+  const candidates = allKeys.filter((k) => !excluded.has(k));
+
+  while (result.length < topK && candidates.length) {
+    let bestIdx = 0;
+    let bestGap = -1;
+    for (let i = 0; i < candidates.length; i++) {
+      const num = photoNum(candidates[i]);
+      const gap = Math.min(...result.map((k) => Math.abs(photoNum(k) - num)));
+      if (gap > bestGap) {
+        bestGap = gap;
+        bestIdx = i;
+      }
+    }
+    result.push(candidates.splice(bestIdx, 1)[0]);
+  }
+  return result;
+}
+
 async function curatorHealthy(healthUrl) {
   try {
     const res = await fetch(healthUrl, { signal: AbortSignal.timeout(3000) });
@@ -189,28 +221,67 @@ async function curatorSelectDiverse(imageItems, cfg, diverseUrl) {
   if (!res.ok) throw new Error(`Curator diverse HTTP ${res.status}`);
   const data = await res.json();
   if (data.warning) console.warn(`Curator diverse: ${data.warning}`);
-  return orderAndCapCategories(data.selected, topK, maxPerCategory).map((s) => s.key);
+  const keys = orderAndCapCategories(data.selected, topK, maxPerCategory).map((s) => s.key);
+  const rejectedKeys = (data.rejected || []).map((r) => r.key);
+  return { keys, rejectedKeys };
 }
 
+function resolveDiverseUrl(cfg) {
+  // На сервере (docker-compose) куратор доступен как http://curator:8077 —
+  // env-переопределение важнее локального 127.0.0.1 из config/*.json
+  const base = (process.env.CURATOR_BASE_URL || "").replace(/\/$/, "");
+  if (base) return `${base}/select-diverse`;
+  return cfg.curator_diverse_url;
+}
+
+/**
+ * Каскад отбора (каждая ступень автономна, ручной запуск не нужен):
+ *   1. CLIP-куратор (curator_service.py) — если жив по health;
+ *      при нехватке до topK добираем из неотбракованных кадров.
+ *   2. Gemini vision (GEMINI_API_KEY) — работает без локальных сервисов.
+ *   3. Fallback по имени файла — последний рубеж (photo_NNN без категорий).
+ */
 export async function selectPhotosSeedance(imageItems, cfg, { curatorFallback = true } = {}) {
   const topK = Math.min(cfg.image_count || 9, cfg.max_images_per_request || 9);
   const maxPerCategory = cfg.max_per_category ?? 1;
-  const diverseUrl = cfg.curator_diverse_url;
+  const diverseUrl = resolveDiverseUrl(cfg);
   const healthUrl = diverseUrl?.replace(/\/select-diverse$/, "/health");
 
   if (diverseUrl && healthUrl && (await curatorHealthy(healthUrl))) {
     try {
-      const keys = await curatorSelectDiverse(imageItems, cfg, diverseUrl);
-      console.log(`Photo select: curator diverse, ${keys.length} images (max ${maxPerCategory}/category)`);
-      return keys;
+      const { keys, rejectedKeys } = await curatorSelectDiverse(imageItems, cfg, diverseUrl);
+      if (!keys.length) {
+        throw new Error("curator returned 0 images (all rejected)");
+      }
+      const full = topUpSelection(keys, imageItems.map((i) => i.key), rejectedKeys, topK);
+      if (full.length > keys.length) {
+        console.warn(`Curator diverse: topped up ${keys.length} → ${full.length} images`);
+      }
+      console.log(`Photo select: curator diverse, ${full.length} images (max ${maxPerCategory}/category)`);
+      return full;
     } catch (err) {
       if (!curatorFallback) throw err;
-      console.warn("Curator diverse failed, using fallback:", err.message);
+      console.warn("Curator diverse failed, trying next selector:", err.message);
     }
   } else if (!curatorFallback && diverseUrl) {
     throw new Error(`Curator unavailable at ${healthUrl}`);
   } else if (diverseUrl) {
-    console.warn("Curator offline — diverse photo fallback");
+    console.warn("Curator offline — trying Gemini selector");
+  }
+
+  if (isGeminiSelectorAvailable(cfg)) {
+    try {
+      const picked = await geminiSelectDiverse(imageItems, cfg);
+      // max_per_category тут не применяем: у виллы может быть несколько
+      // спален (разные локации) — за «1 кадр на локацию» отвечает промпт
+      const keys = picked.map((i) => i.key);
+      console.log(`Photo select: gemini vision, ${keys.length} images`);
+      return keys;
+    } catch (err) {
+      console.warn("Gemini selector failed, using filename fallback:", err.message);
+    }
+  } else {
+    console.warn("Gemini selector unavailable (no GEMINI_API_KEY) — filename fallback");
   }
 
   const keys = fallbackSelectDiverse(imageItems, topK, maxPerCategory);

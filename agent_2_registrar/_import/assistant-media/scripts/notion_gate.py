@@ -20,6 +20,7 @@ class NotionListing:
     video_seedance: str | None
     montage_flag: str = ""   # «Монтаж»: ДА/НЕТ, "" = дефолт из конфига
     publish_flag: str = ""   # «Публикация»: ДА/НЕТ, "" = дефолт из конфига
+    video_engine: str = ""   # «Видео-движок»: Seedance 2.0 / Wan 2.7
     tg_post_url: str = ""    # post_url_telegram: пост-витрина в TG-канале
     agent6_locked: bool = False
 
@@ -29,6 +30,19 @@ class NotionListing:
 
 
 _FLAG_OFF = {"НЕТ", "NO", "NET", "FALSE", "0"}
+
+VIDEO_ENGINE_SEEDANCE = "Seedance 2.0"
+VIDEO_ENGINE_WAN = "Wan 2.7"
+
+
+def video_engine_id(value: str | None) -> str | None:
+    """Notion select «Видео-движок» → внутренний id для Agent 3."""
+    v = (value or "").strip()
+    if v == VIDEO_ENGINE_SEEDANCE:
+        return "seedance"
+    if v == VIDEO_ENGINE_WAN:
+        return "wan"
+    return None
 
 
 def flag_enabled(value: str | None, default: bool = True) -> bool:
@@ -73,6 +87,7 @@ def parse_listing_page(page: dict[str, Any], fields: dict[str, str]) -> NotionLi
         video_seedance=(props.get(fields["video_seedance"], {}) or {}).get("url"),
         montage_flag=_select(props.get(fields.get("montage", "Монтаж"), {})),
         publish_flag=_select(props.get(fields.get("publish", "Публикация"), {})),
+        video_engine=_select(props.get(fields.get("video_engine", "Видео-движок"), {})),
         tg_post_url=(props.get(fields.get("tg_post", "post_url_telegram"), {}) or {}).get("url") or "",
         agent6_locked=_checkbox(props.get(fields.get("agent6_locked", "agent6_locked"), {})),
     )
@@ -94,6 +109,73 @@ def fetch_by_object_id(crm: NotionCRM, object_id: str, fields: dict[str, str]) -
     return parse_listing_page(page, fields)
 
 
+def fetch_montage_in_progress(
+    crm: NotionCRM,
+    statuses: dict[str, str],
+    fields: dict[str, str],
+) -> NotionListing | None:
+    """Объект, у которого сейчас идёт монтаж (Статус = video_in_progress)."""
+    st = statuses.get("video_start", "video_in_progress")
+    items = fetch_by_status(crm, st, fields, limit=1)
+    return items[0] if items else None
+
+
+def finish_montage_if_video_ready(
+    crm: NotionCRM,
+    listing: NotionListing,
+    statuses: dict[str, str],
+    fields: dict[str, str],
+) -> bool:
+    """Зависший video_in_progress при готовом видео → ready_to_post."""
+    video_start = statuses.get("video_start", "video_in_progress")
+    if listing.status != video_start or not listing.has_videos:
+        return False
+    crm.update_page(listing.page_id, {
+        fields["status"]: crm.build_status(statuses["video_done"]),
+    })
+    return True
+
+
+def try_claim_montage(
+    crm: NotionCRM,
+    listing: NotionListing,
+    statuses: dict[str, str],
+    fields: dict[str, str],
+) -> tuple[bool, str]:
+    """Занять слот монтажа: один объект, статус → video_in_progress."""
+    video_start = statuses.get("video_start", "video_in_progress")
+    after = statuses["after_structurize"]
+    failed = statuses.get("video_failed", "video_failed")
+
+    busy = fetch_montage_in_progress(crm, statuses, fields)
+    if busy and busy.object_id != listing.object_id:
+        return False, f"montage busy: {busy.object_id}"
+
+    fresh = fetch_by_object_id(crm, listing.object_id, fields)
+    if not fresh:
+        return False, "object not found in Notion"
+
+    if fresh.status == video_start:
+        if fresh.has_videos:
+            finish_montage_if_video_ready(crm, fresh, statuses, fields)
+            return False, "video ready — status fixed to ready_to_post"
+        return True, "ok: already in progress"
+
+    if fresh.has_videos:
+        crm.update_page(fresh.page_id, {
+            fields["status"]: crm.build_status(statuses["video_done"]),
+        })
+        return False, "video already exists — status → ready_to_post"
+
+    if fresh.status not in {after, failed}:
+        return False, f"status={fresh.status}, cannot claim montage"
+
+    crm.update_page(fresh.page_id, {
+        fields["status"]: crm.build_status(video_start),
+    })
+    return True, "claimed"
+
+
 def agent3_ready(
     listing: NotionListing,
     statuses: dict[str, str],
@@ -108,12 +190,18 @@ def agent3_ready(
     ok_status = {statuses["after_structurize"]}
     if allow_retry:
         ok_status.add(statuses.get("video_failed", "video_failed"))
+    video_start = statuses.get("video_start", "video_in_progress")
+    if listing.status == video_start:
+        return False, "montage already in progress"
     if listing.status not in ok_status:
         return False, f"status={listing.status}, need {statuses['after_structurize']}"
     if not listing.gallery_url:
         return False, "missing gallery URL in Notion (Фото)"
     if listing.has_videos and listing.status != statuses.get("video_failed", "video_failed"):
         return False, "videos already exist in Notion"
+    if flag_enabled(listing.montage_flag, default_montage) and not force:
+        if not video_engine_id(listing.video_engine):
+            return False, "не выбран видео-движок (Seedance 2.0 / Wan 2.7)"
     return True, "ok"
 
 

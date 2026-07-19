@@ -68,7 +68,7 @@ class ChainGateTests(unittest.TestCase):
         ok, reason = agent3_ready(listing, st)
         self.assertFalse(ok)
         listing2 = NotionListing("p1", "20260701_001", "ready_for_video", "T", "https://x/gallery", None, None,
-                                 montage_flag="ДА")
+                                 montage_flag="ДА", video_engine="Wan 2.7")
         ok2, _ = agent3_ready(listing2, st)
         self.assertTrue(ok2)
 
@@ -85,7 +85,11 @@ class ChainGateTests(unittest.TestCase):
 
     def test_montage_flag_gates_agent3(self):
         """Агент 3 только при явном «Монтаж»=ДА; пусто и НЕТ — пропуск."""
-        st = {"after_structurize": "ready_for_video", "video_failed": "video_failed"}
+        st = {
+            "after_structurize": "ready_for_video",
+            "video_failed": "video_failed",
+            "video_start": "video_in_progress",
+        }
         listing = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None,
                                 montage_flag="НЕТ")
         ok, reason = agent3_ready(listing, st)
@@ -94,8 +98,28 @@ class ChainGateTests(unittest.TestCase):
         empty = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None)
         self.assertFalse(agent3_ready(empty, st)[0])  # пусто = выключено
         yes = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None,
-                            montage_flag="ДА")
+                            montage_flag="ДА", video_engine="Seedance 2.0")
         self.assertTrue(agent3_ready(yes, st)[0])
+        busy = NotionListing("p1", "id", "video_in_progress", "T", "https://g", None, None,
+                             montage_flag="ДА", video_engine="Wan 2.7")
+        ok_busy, reason_busy = agent3_ready(busy, st)
+        self.assertFalse(ok_busy)
+        self.assertIn("in progress", reason_busy)
+
+    def test_agent3_requires_video_engine_when_montage_on(self):
+        st = {
+            "after_structurize": "ready_for_video",
+            "video_failed": "video_failed",
+            "video_start": "video_in_progress",
+        }
+        listing = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None,
+                                montage_flag="ДА")
+        ok, reason = agent3_ready(listing, st)
+        self.assertFalse(ok)
+        self.assertIn("видео-движок", reason)
+        with_engine = NotionListing("p1", "id", "ready_for_video", "T", "https://g", None, None,
+                                    montage_flag="ДА", video_engine="Seedance 2.0")
+        self.assertTrue(agent3_ready(with_engine, st)[0])
 
     def test_publish_flag_gates_agent6(self):
         """«Публикация» = НЕТ — постинг выключен даже при готовом видео."""

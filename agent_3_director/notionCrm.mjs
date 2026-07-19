@@ -61,6 +61,13 @@ export async function setSeedanceUrl(page, fields, url, statusName = null) {
   await updatePage(page.id, properties);
 }
 
+export async function setMontageStart(page, fields, statusName) {
+  await updatePage(page.id, {
+    [fields.status]: { status: { name: statusName } },
+    [fields.last_error]: { rich_text: [] },
+  });
+}
+
 export async function setError(page, fields, message, statusName = null) {
   const properties = {
     [fields.last_error]: {
@@ -211,6 +218,15 @@ export function pageMontageEnabled(page, fields) {
   if (!fields.montage) return false;
   const value = (readSelect(page, fields.montage) || "").trim().toUpperCase();
   return MONTAGE_ON.has(value);
+}
+
+/** «Видео-движок»: Seedance 2.0 → seedance, Wan 2.7 → wan. */
+export function pageVideoEngineId(page, fields) {
+  if (!fields.video_engine) return null;
+  const value = (readSelect(page, fields.video_engine) || "").trim();
+  if (value === "Seedance 2.0") return "seedance";
+  if (value === "Wan 2.7") return "wan";
+  return null;
 }
 
 export async function queryLatestPages(fields, { limit = 20 } = {}) {

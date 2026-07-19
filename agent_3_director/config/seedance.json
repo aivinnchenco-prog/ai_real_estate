@@ -7,7 +7,7 @@
   "model": "seedance_2_0",
   "image_count": 9,
   "max_images_per_request": 9,
-  "max_per_category": 1,
+  "max_per_category": 2,
   "max_similarity": 0.88,
   "mmr_lambda": 0.6,
   "aspect_ratio": "9:16",
@@ -23,6 +23,10 @@
   "poll_interval_seconds": 10,
   "timeout_seconds": 1200,
   "curator_diverse_url": "http://127.0.0.1:8077/select-diverse",
+  "gemini_selector": {
+    "enabled": true,
+    "model": null
+  },
   "title_overlay": {
     "enabled": true,
     "config": "config/title-overlay.json"
@@ -31,5 +35,5 @@
     "enabled": true,
     "r2_prefix": "music/"
   },
-  "prompt_template": "Vertical 9:16 real estate walkthrough using references {tags}. Treat all reference images as one single continuous, unbroken path through connected spaces — the camera flows from one room into the next through doorways and openings, as if walking through the entire property in one uninterrupted take.\n\nCamera: smooth, soft, stabilized forward dolly only, constant unchanging speed from start to end, no acceleration, no deceleration, no speed ramps, no zoom, no pans, no rotation.\n\nAbsolutely no hard cuts, no jump cuts, no scene changes, no abrupt transitions between reference images — the movement between spaces must feel like continuous physical motion through the property, not separate stitched clips.\n\nNo object animation, no moving furniture, no people. Bright natural lighting, cinematic but calm, photorealistic, single continuous shot from beginning to end."
+  "prompt_template": "Vertical 9:16 real estate video assembled from references {tags}. The video is a montage of {count} separate static shots — one shot per reference image, in the given order, each shot lasting an equal share of the total duration.\n\nEach shot begins as an exact frozen replica of its reference image: identical composition, framing, furniture, colors and lighting. Then the camera performs one motion only — a very slow, very smooth, perfectly stabilized dolly-in straight forward along the central axis, constant speed, extremely subtle: by the end of the shot the camera is only slightly closer. No panning, no tilting, no rotation, no zoom bursts, no lateral drift.\n\nBetween shots use a plain instant hard cut. No morphing, no cross-dissolve, no camera flying through walls or doorways, no invented transitions between rooms — each shot is an independent scene.\n\nScene content is locked to the reference: do not add, remove, move or redesign any furniture or objects, do not repaint surfaces, no people, no animals, no object animation, no lighting changes. Only the camera moves. Photorealistic, bright natural lighting, calm and stable."
 }

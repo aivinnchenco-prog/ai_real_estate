@@ -13,7 +13,8 @@
     "district": "Район",
     "video_seedance": "video_url_Seedance",
     "last_error": "last_error",
-    "montage": "Монтаж"
+    "montage": "Монтаж",
+    "video_engine": "Видео-движок"
   },
   "overlay_fields": {
     "housing_type": "Тип жилья",
@@ -26,9 +27,11 @@
   "statuses": {
     "allowed": [
       "ready_for_video",
+      "video_in_progress",
       "ready_to_post",
       "video_failed"
     ],
+    "video_start": "video_in_progress",
     "video_done": "ready_to_post",
     "video_failed": "video_failed"
   }

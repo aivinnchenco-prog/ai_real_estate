@@ -10,6 +10,10 @@
   "max_similarity": 0.88,
   "mmr_lambda": 0.6,
   "curator_diverse_url": "http://127.0.0.1:8077/select-diverse",
+  "gemini_selector": {
+    "enabled": true,
+    "model": null
+  },
   "wan_reel_script": "scripts/wan_reel.py",
   "title_overlay": {
     "enabled": true,

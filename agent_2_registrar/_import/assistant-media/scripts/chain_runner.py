@@ -35,8 +35,12 @@ from notion_gate import (  # noqa: E402
     agent6_ready,
     fetch_by_object_id,
     fetch_by_status,
+    fetch_montage_in_progress,
+    finish_montage_if_video_ready,
     flag_enabled,
+    try_claim_montage,
 )
+from montage_lock import MontageBusyError, montage_file_lock  # noqa: E402
 from event_log import log_event  # noqa: E402
 from pipeline_config import apply_env_overrides  # noqa: E402
 
@@ -234,6 +238,12 @@ def continue_chain(
                               code=code_tg)
 
         processed_3: set[str] = set()
+        montage_busy = fetch_montage_in_progress(crm, statuses, nf)
+        if montage_busy and finish_montage_if_video_ready(crm, montage_busy, statuses, nf):
+            print(f"[chain] {montage_busy.object_id}: video ready — "
+                  f"status → {statuses['video_done']} (unblock queue)")
+            montage_busy = fetch_montage_in_progress(crm, statuses, nf)
+        montage_started = False
         for listing in listings:
             if listing.object_id in processed_3:
                 continue
@@ -256,18 +266,40 @@ def continue_chain(
                           + ("" if publish_on else ", публикация=НЕТ — объект только для базы"))
                 processed_3.add(listing.object_id)
                 continue
+            if montage_busy:
+                if montage_busy.object_id == listing.object_id:
+                    print(f"[chain] Agent 3 skip {listing.object_id}: montage already in progress")
+                else:
+                    print(f"[chain] Agent 3 wait {listing.object_id}: "
+                          f"montage busy ({montage_busy.object_id})")
+                continue
+            if montage_started:
+                continue
             ready, reason = agent3_ready(listing, statuses,
                                          default_montage=default_montage,
                                          force=force_montage)
             if not ready:
                 print(f"[chain] Agent 3 skip {listing.object_id}: {reason}")
                 continue
-            log_event(listing.object_id, "chain", "agent3_start", page_id=listing.page_id)
-            code = run_agent3(listing.object_id)
+            try:
+                with montage_file_lock(listing.object_id, blocking=False):
+                    claimed, claim_reason = try_claim_montage(
+                        crm, listing, statuses, nf)
+                    if not claimed:
+                        print(f"[chain] Agent 3 skip {listing.object_id}: {claim_reason}")
+                        continue
+                    log_event(listing.object_id, "chain", "agent3_start",
+                              page_id=listing.page_id, claim=claim_reason)
+                    code = run_agent3(listing.object_id)
+            except MontageBusyError as exc:
+                print(f"[chain] Agent 3 skip {listing.object_id}: {exc}")
+                continue
             processed_3.add(listing.object_id)
+            montage_started = True
             if code != 0:
                 log_event(listing.object_id, "chain", "agent3_failed", code=code)
                 exit_code = code
+            break  # строго один объект за цикл — остальные ждут следующего poll
 
     fb_branches: list[str] = []
     if chain.get("publish_fb_groups"):
