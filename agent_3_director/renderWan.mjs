@@ -79,6 +79,8 @@ export async function renderWan({
       "--resolution", resolution,
     ];
     if (prompt) args.push("--prompt", prompt);
+    const endFade = cfg.end_fade_seconds ?? 0.6;
+    if (endFade > 0) args.push("--end-fade", String(endFade));
 
     const proc = spawnSync(process.env.WAN_PYTHON || "python3", args, {
         stdio: "inherit",

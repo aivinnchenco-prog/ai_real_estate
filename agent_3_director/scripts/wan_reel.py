@@ -34,6 +34,22 @@ def _ffmpeg() -> str:
     return path
 
 
+def _ffprobe() -> str:
+    path = os.environ.get("FFPROBE", "").strip() or shutil.which("ffprobe") or ""
+    if not path:
+        raise RuntimeError("ffprobe not found (install ffmpeg or set FFPROBE)")
+    return path
+
+
+def probe_duration(src: Path) -> float:
+    proc = subprocess.run(
+        [_ffprobe(), "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(src)],
+        capture_output=True, text=True, check=True,
+    )
+    return float(proc.stdout.strip())
+
+
 def _load_key() -> str:
     return os.environ.get("FAL_KEY", "").strip()
 
@@ -124,6 +140,23 @@ def concat(clips: list[Path], dest: Path, ffmpeg: str) -> None:
     lst.unlink()
 
 
+def apply_end_fade(src: Path, dest: Path, ffmpeg: str, fade_sec: float) -> None:
+    """Лёгкое затемнение в конце ролика (fade to black)."""
+    if fade_sec <= 0:
+        shutil.copy2(src, dest)
+        return
+    duration = probe_duration(src)
+    fade_sec = min(fade_sec, max(0.2, duration * 0.35))
+    fade_start = max(0.0, duration - fade_sec)
+    subprocess.run(
+        [ffmpeg, "-y", "-loglevel", "error", "-i", str(src),
+         "-vf", f"fade=t=out:st={fade_start:.3f}:d={fade_sec:.3f}",
+         "-c:v", "libx264", "-preset", "fast", "-crf", "19",
+         "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(dest)],
+        check=True,
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--photos", required=True)
@@ -133,6 +166,8 @@ def main() -> int:
     ap.add_argument("--duration", type=int, default=2)
     ap.add_argument("--resolution", default="720p", choices=["720p", "1080p"])
     ap.add_argument("--prompt", default=PROMPT)
+    ap.add_argument("--end-fade", type=float, default=0.6,
+                    help="длительность затемнения в конце ролика, сек (0 = выкл)")
     args = ap.parse_args()
 
     key = _load_key()
@@ -182,8 +217,15 @@ def main() -> int:
     if len(trimmed) < 2:
         print("Мало клипов для рила")
         return 1
+    reel_raw = outdir / "reel_wan_raw.mp4"
     reel = outdir / "reel_wan.mp4"
-    concat(trimmed, reel, ffmpeg)
+    concat(trimmed, reel_raw, ffmpeg)
+    if args.end_fade > 0:
+        apply_end_fade(reel_raw, reel, ffmpeg, args.end_fade)
+        reel_raw.unlink(missing_ok=True)
+        print(f"Конец ролика: fade-out {args.end_fade:.1f}с")
+    else:
+        reel_raw.rename(reel)
     print(f"Рил готов: {reel} (~{args.segment * len(trimmed):.1f}с, {len(trimmed)} кадров)")
     return 0
 
