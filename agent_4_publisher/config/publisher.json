@@ -242,9 +242,9 @@
     },
     "statuses": {
       "ready": "ready_to_post",
-      "taken": "video_in_progress",
+      "taken": "ready_to_post",
       "scheduled": "ready_to_post",
-      "failed": "video_failed"
+      "failed": "ready_to_post"
     },
     "caption_by_platform": {
       "instagram": "caption_social",

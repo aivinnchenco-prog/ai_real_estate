@@ -1,19 +1,16 @@
-"""Claude — запасной извлекатель данных, когда парсер не уверен."""
+"""Gemini — запасной извлекатель данных, когда парсер не уверен."""
 
 import json
 import re
 
 import config
+import gemini_llm
 from CustomLogger import logger
 
 
 class AiExtractor:
     def is_enabled(self):
-        return bool(config.ANTHROPIC_API_KEY)
-
-    def _client(self):
-        import anthropic
-        return anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        return gemini_llm.is_enabled()
 
     def _parse_json_response(self, raw: str) -> dict:
         raw = raw.strip()
@@ -101,12 +98,8 @@ URL: {url}
 amount — только цифры без пробелов."""
 
         try:
-            response = self._client().messages.create(
-                model=config.ANTHROPIC_MODEL,
-                max_tokens=400,
-                messages=[{'role': 'user', 'content': prompt}],
-            )
-            parsed = self._parse_json_response(response.content[0].text.strip())
+            raw = gemini_llm.generate(prompt, max_tokens=400)
+            parsed = self._parse_json_response(raw)
         except Exception as exc:
             logger.error(f'AI price extract error: {exc}')
             return {}
@@ -139,5 +132,5 @@ amount — только цифры без пробелов."""
             'Период': period,
             'Дата_заезд': url_dates.get('check_in', ''),
             'Дата_выезд': url_dates.get('check_out', ''),
-            'Цена_источник': 'claude',
+            'Цена_источник': 'ai',
         }

@@ -546,12 +546,22 @@ def publication_date(scheduled_time: str, tz_name: str) -> dict[str, str]:
     return {"dateTime": local.strftime("%Y-%m-%dT%H:%M:%S"), "timezone": tz_name}
 
 
+def caption_to_title(caption: str, limit: int = 95) -> str:
+    """Первая содержательная строка подписи → заголовок (YouTube требует ytTitle)."""
+    for line in caption.splitlines():
+        line = re.sub(r"[#@]\S+", "", line).strip(" \t-—•|")
+        if line:
+            return line[:limit].strip()
+    return "Real Estate Video"
+
+
 def build_network_data(
     platform: str,
     *,
     upload_video: bool,
     has_carousel: bool,
     config: dict[str, Any],
+    title: str = "",
 ) -> dict[str, Any]:
     mc = config.get("metricool_platform_settings", {})
     network = network_for(platform)
@@ -565,12 +575,20 @@ def build_network_data(
         data["facebookData"] = {**mc.get("facebook", {}), "type": fb_type}
     elif network == "tiktok":
         tk = dict(mc.get("tiktok", {"privacyOption": "PUBLIC_TO_EVERYONE"}))
-        if has_carousel and not upload_video:
+        if upload_video:
+            # Metricool 400: autoAddMusic/photoCoverIndex разрешены только для фото-постов
+            tk.pop("autoAddMusic", None)
+            tk.pop("photoCoverIndex", None)
+        elif has_carousel:
             tk.setdefault("autoAddMusic", True)
             tk.setdefault("photoCoverIndex", 0)
         data["tiktokData"] = tk
     elif network == "youtube":
-        data["youtubeData"] = mc.get("youtube", {"type": "short", "privacy": "public", "madeForKids": False})
+        yt = dict(mc.get("youtube", {"type": "short", "privacy": "public", "madeForKids": False}))
+        if not yt.get("title"):
+            # Metricool 400: ytTitle не может быть пустым
+            yt["title"] = title or "Real Estate Video"
+        data["youtubeData"] = yt
     elif network == "twitter":
         data["twitterData"] = mc.get("twitter", {"tags": []})
     elif network == "threads":
@@ -620,6 +638,7 @@ def metricool_schedule_post(
             upload_video=upload_video,
             has_carousel=bool(carousel_urls),
             config=config,
+            title=caption_to_title(caption),
         ),
     }
     if location:

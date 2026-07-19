@@ -42,12 +42,13 @@ from notion_gate import (  # noqa: E402
 )
 from montage_lock import MontageBusyError, montage_file_lock  # noqa: E402
 from event_log import log_event  # noqa: E402
+from error_notify import clear_tag, notify  # noqa: E402
 from pipeline_config import apply_env_overrides  # noqa: E402
 
 
 def load_dotenv() -> None:
-    for name in (".env.real-estate", ".env"):
-        p = ROOT / name
+    # Корень монорепы (.env с ERROR_BOT_TOKEN и т.п.) + локальные .env агента.
+    for p in (ROOT / ".env.real-estate", ROOT / ".env", ROOT.parents[2] / ".env"):
         if not p.exists():
             continue
         for line in p.read_text(encoding="utf-8").splitlines():
@@ -78,6 +79,71 @@ def run_agent3(object_id: str) -> int:
         cwd=director,
     )
     return proc.returncode
+
+
+HIGGSFIELD_AUTH_TAG = "higgsfield_auth"
+
+
+def check_higgsfield_auth() -> tuple[bool, str]:
+    """Preflight-проверка сессии Higgsfield CLI (для Seedance)."""
+    script = ROOT.parents[2] / "agent_3_director" / "scripts" / "check_higgsfield_auth.mjs"
+    if not script.exists():
+        return True, "check script not found — skip"
+    proc = subprocess.run(
+        ["node", str(script)],
+        cwd=script.parents[1],
+        capture_output=True,
+        text=True,
+    )
+    out = f"{proc.stdout or ''}{proc.stderr or ''}".strip()
+    return proc.returncode == 0, out
+
+
+def watch_higgsfield_auth() -> None:
+    """Уведомление в error-бот при протухшей авторизации Higgsfield.
+
+    Шлём один раз (cooldown в error_notify); после восстановления
+    сбрасываем дедуп и сообщаем, что всё снова работает.
+    """
+    ok, out = check_higgsfield_auth()
+    if ok:
+        if clear_tag_if_was_failing():
+            notify("Higgsfield CLI: авторизация восстановлена, монтаж снова работает.",
+                   force=True)
+        return
+    print(f"[chain] Higgsfield auth check FAILED:\n{out}", file=sys.stderr)
+    sent = notify(
+        "Higgsfield CLI: авторизация протухла — монтаж видео (Seedance) не запустится.\n\n"
+        "Починить на сервере:\n"
+        "ssh root@<VPS> \"HOME=/root higgsfield auth login\"\n"
+        "или локально: higgsfield auth login, затем скопировать\n"
+        "~/.config/higgsfield/credentials.json на сервер.",
+        tag=HIGGSFIELD_AUTH_TAG,
+    )
+    if sent:
+        _mark_auth_failing()
+
+
+_AUTH_FAIL_FLAG = ROOT / "data" / "higgsfield_auth_failing"
+
+
+def _mark_auth_failing() -> None:
+    try:
+        _AUTH_FAIL_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        _AUTH_FAIL_FLAG.touch()
+    except OSError:
+        pass
+
+
+def clear_tag_if_was_failing() -> bool:
+    if not _AUTH_FAIL_FLAG.exists():
+        return False
+    try:
+        _AUTH_FAIL_FLAG.unlink()
+    except OSError:
+        pass
+    clear_tag(HIGGSFIELD_AUTH_TAG)
+    return True
 
 
 def resolve_publish_platforms(chain: dict) -> list[str]:
@@ -298,6 +364,12 @@ def continue_chain(
             montage_started = True
             if code != 0:
                 log_event(listing.object_id, "chain", "agent3_failed", code=code)
+                notify(
+                    f"Агент 3 (монтаж видео) упал на объекте {listing.object_id} "
+                    f"(exit={code}). Детали в last_error объекта в Notion "
+                    "и в логах re-chain-watcher.",
+                    tag=f"agent3_failed:{listing.object_id}",
+                )
                 exit_code = code
             break  # строго один объект за цикл — остальные ждут следующего poll
 
@@ -323,6 +395,13 @@ def continue_chain(
                                            default_montage=default_montage)
             if not ready6:
                 print(f"[chain] Agent 6 skip {listing.object_id}: {reason6}")
+                if "error_count" in reason6:
+                    notify(
+                        f"Публикация {listing.object_id} остановлена: {reason6}.\n"
+                        "Часть сетей могла опубликоваться — проверьте last_error "
+                        "в Notion и сбросьте error_count для повтора.",
+                        tag=f"agent6_error_cap:{listing.object_id}",
+                    )
                 continue
             # Видео нет (монтаж выключен) — публикуем только карусель.
             mode6 = None if listing.has_videos else "carousel"
@@ -334,6 +413,11 @@ def continue_chain(
             if code6 != 0:
                 exit_code = code6
                 log_event(listing.object_id, "chain", "agent6_failed", platform=plat_arg)
+                notify(
+                    f"Агент 6 (публикация) упал на объекте {listing.object_id} "
+                    f"({plat_arg}). Детали в last_error объекта в Notion.",
+                    tag=f"agent6_failed:{listing.object_id}",
+                )
             for script_name in fb_branches:
                 branch = script_name.replace("_pipeline.py", "")
                 log_event(listing.object_id, "chain", f"{branch}_start", page_id=listing.page_id)
@@ -347,8 +431,17 @@ def continue_chain(
 
 def watch_loop(crm: NotionCRM, cfg: dict) -> None:
     interval = cfg.get("chain", {}).get("poll_interval_seconds", 30)
+    auth_interval = cfg.get("chain", {}).get("auth_check_interval_seconds", 900)
     print(f"[chain] Watching Notion CRM every {interval}s (Ctrl+C to stop)")
+    last_auth_check = 0.0
     while True:
+        now = time.time()
+        if now - last_auth_check >= auth_interval:
+            last_auth_check = now
+            try:
+                watch_higgsfield_auth()
+            except Exception as exc:
+                print(f"[chain] auth check error: {exc}", file=sys.stderr)
         try:
             continue_chain(crm, cfg, from_agent=3)
         except Exception as exc:

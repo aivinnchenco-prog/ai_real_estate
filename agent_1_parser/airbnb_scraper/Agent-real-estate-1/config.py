@@ -55,10 +55,10 @@ DRIVE_OAUTH_TOKEN_FILE = os.getenv(
     'credentials/drive-oauth-token.json',
 )
 
-# Claude — мозги агента Jarvis
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
-ANTHROPIC_MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-haiku-4-5')
-ANTHROPIC_CHAT_MODEL = os.getenv('ANTHROPIC_CHAT_MODEL', ANTHROPIC_MODEL)
+# Gemini — мозги агента Jarvis (голосовой поиск, чат, AI-фолбэки).
+# Anthropic/Claude удалён: ANTHROPIC_API_KEY больше не используется.
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
 
 AGENT_NAME = os.getenv('AGENT_NAME', 'Jarvis')
 CHAT_HISTORY_LIMIT = int(os.getenv('CHAT_HISTORY_LIMIT', '20'))
@@ -89,7 +89,7 @@ DRIVE_UPLOAD_WORKERS = int(os.getenv('DRIVE_UPLOAD_WORKERS', '3'))
 ENRICH_IN_BACKGROUND = os.getenv('ENRICH_IN_BACKGROUND', 'true').lower() in ('1', 'true', 'yes')
 PARSER_SAVE_DEBUG_JSON = os.getenv('PARSER_SAVE_DEBUG_JSON', 'false').lower() in ('1', 'true', 'yes')
 
-# Claude подключается, если парсер не уверен в цене/валюте
+# Gemini подключается, если парсер не уверен в цене/валюте
 ENABLE_AI_PRICE_FALLBACK = os.getenv('ENABLE_AI_PRICE_FALLBACK', 'true').lower() in ('1', 'true', 'yes')
 
 # --- Передача Агенту 2 (Notion CRM вместо Google Sheets/Drive) ---

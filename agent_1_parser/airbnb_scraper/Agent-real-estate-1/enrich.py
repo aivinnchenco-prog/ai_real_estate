@@ -1,17 +1,14 @@
 import json
 import re
 
-import config
+import config  # noqa: F401 — конфиг подтягивает .env
+import gemini_llm
 from CustomLogger import logger
 
 
 class ListingEnricher:
     def is_enabled(self):
-        return bool(config.ANTHROPIC_API_KEY)
-
-    def _client(self):
-        import anthropic
-        return anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        return gemini_llm.is_enabled()
 
     def fallback_texts(self, listing_data: dict, object_id: str = '', drive_url: str = '') -> dict:
         return self._fallback_texts(listing_data, object_id, drive_url)
@@ -20,9 +17,9 @@ class ListingEnricher:
         """Возвращает {'Текст для FB': str, 'Текст для TG': str}."""
         if self.is_enabled():
             try:
-                return self._enrich_with_claude(listing_data, object_id, drive_url)
+                return self._enrich_with_llm(listing_data, object_id, drive_url)
             except Exception as exc:
-                logger.error(f'enrich Claude error: {exc}')
+                logger.error(f'enrich LLM error: {exc}')
         return self.fallback_texts(listing_data, object_id, drive_url)
 
     def _listing_summary(self, listing_data: dict, object_id: str, drive_url: str) -> str:
@@ -40,7 +37,7 @@ class ListingEnricher:
         ]
         return '\n'.join(line for line in lines if line)
 
-    def _enrich_with_claude(self, listing_data: dict, object_id: str, drive_url: str) -> dict:
+    def _enrich_with_llm(self, listing_data: dict, object_id: str, drive_url: str) -> dict:
         summary = self._listing_summary(listing_data, object_id, drive_url)
         prompt = f"""Ты копирайтер по аренде недвижимости на Пхукете.
 
@@ -54,12 +51,7 @@ class ListingEnricher:
 Ответь ТОЛЬКО JSON без markdown:
 {{"fb": "...", "tg": "..."}}"""
 
-        response = self._client().messages.create(
-            model=config.ANTHROPIC_MODEL,
-            max_tokens=2000,
-            messages=[{'role': 'user', 'content': prompt}],
-        )
-        raw = response.content[0].text.strip()
+        raw = gemini_llm.generate(prompt, max_tokens=2000)
         parsed = self._parse_json_response(raw)
         return {
             'Текст для FB': parsed.get('fb', '').strip(),

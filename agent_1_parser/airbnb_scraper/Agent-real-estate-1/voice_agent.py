@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 import config
+import gemini_llm
 from CustomLogger import logger
 from google_sheets import CRM_HEADERS, GoogleSheetsWriter
 
@@ -72,16 +73,9 @@ last_actions: dict[int, dict] = {}
 class VoiceAgent:
     def __init__(self, sheets: GoogleSheetsWriter):
         self.sheets = sheets
-        self._anthropic = None
 
     def is_llm_enabled(self):
-        return bool(config.ANTHROPIC_API_KEY)
-
-    def _client(self):
-        if self._anthropic is None:
-            import anthropic
-            self._anthropic = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
-        return self._anthropic
+        return gemini_llm.is_enabled()
 
     def parse_query(self, text: str) -> dict:
         if self._looks_like_retrospective(text):
@@ -93,9 +87,9 @@ class VoiceAgent:
             return {'intent': 'chat'}
         if self.is_llm_enabled():
             try:
-                return self._parse_with_claude(text)
+                return self._parse_with_llm(text)
             except Exception as e:
-                logger.error(f'Claude parse error: {e}')
+                logger.error(f'LLM parse error: {e}')
         return self._parse_simple(text)
 
     def _looks_like_retrospective(self, text: str) -> bool:
@@ -127,7 +121,7 @@ class VoiceAgent:
             return False
         return any(trigger in text_lower for trigger in CHAT_TRIGGERS)
 
-    def _parse_with_claude(self, text: str) -> dict:
+    def _parse_with_llm(self, text: str) -> dict:
         columns_list = ', '.join(CRM_HEADERS)
         system = f"""Ты роутер запросов к AI-агенту Jarvis (CRM недвижимости на Пхукете).
 Колонки таблицы: {columns_list}
@@ -160,17 +154,7 @@ intent=retrospective — анализ работы за период, «как �
 "банг тао" = district. бассейн = pool true.
 field — только точное имя из списка колонок."""
 
-        response = self._client().messages.create(
-            model=config.ANTHROPIC_MODEL,
-            max_tokens=1024,
-            system=system,
-            messages=[{'role': 'user', 'content': text}],
-        )
-        raw = ''
-        for block in response.content:
-            if block.type == 'text':
-                raw += block.text
-        raw = raw.strip()
+        raw = gemini_llm.generate(text, system=system, max_tokens=1024).strip()
         if raw.startswith('```'):
             raw = re.sub(r'^```(?:json)?\s*', '', raw)
             raw = re.sub(r'\s*```$', '', raw)
@@ -382,7 +366,7 @@ field — только точное имя из списка колонок."""
     ) -> str:
         if not self.is_llm_enabled():
             return (
-                f'Ретроспектива за {days} дн. недоступна без ANTHROPIC_API_KEY.\n'
+                f'Ретроспектива за {days} дн. недоступна без GEMINI_API_KEY.\n'
                 f'{self._build_period_stats(self._load_activity(days), days)}'
             )
 
@@ -428,20 +412,14 @@ field — только точное имя из списка колонок."""
 Опирайся только на данные журнала. Если данных мало — честно скажи и предложи что начать логировать.
 Конкретика, без воды. По-русски, без HTML."""
 
-        response = self._client().messages.create(
-            model=config.ANTHROPIC_CHAT_MODEL,
-            max_tokens=4096,
+        reply = gemini_llm.generate(
+            prompt,
             system=(
                 f'Ты {config.AGENT_NAME}, стратегический AI-советник по аренде недвижимости на Пхукете. '
                 'Твоя задача — анализировать работу команды и предлагать улучшения для прибыли и простоты.'
             ),
-            messages=[{'role': 'user', 'content': prompt}],
-        )
-        reply = ''
-        for block in response.content:
-            if block.type == 'text':
-                reply += block.text
-        reply = reply.strip() or 'Не удалось сформировать анализ. Попробуйте позже.'
+            max_tokens=4096,
+        ).strip() or 'Не удалось сформировать анализ. Попробуйте позже.'
 
         self.record_activity(user_id, 'retrospective', days=days, question=question[:500])
         last_actions[user_id] = {'type': 'retrospective', 'days': days}
@@ -520,17 +498,11 @@ field — только точное имя из списка колонок."""
         history.append({'role': 'user', 'content': text})
         history[:] = history[-CHAT_HISTORY_LIMIT:]
 
-        response = self._client().messages.create(
-            model=config.ANTHROPIC_CHAT_MODEL,
-            max_tokens=2048,
+        reply = gemini_llm.generate(
             system=self._chat_system_prompt(user_name),
             messages=history,
-        )
-        reply = ''
-        for block in response.content:
-            if block.type == 'text':
-                reply += block.text
-        reply = reply.strip() or self._offline_chat_reply()
+            max_tokens=2048,
+        ).strip() or self._offline_chat_reply()
 
         history.append({'role': 'assistant', 'content': reply})
         history[:] = history[-CHAT_HISTORY_LIMIT:]
@@ -545,7 +517,7 @@ field — только точное имя из списка колонок."""
             '• показывать поля по ID (PHK-0001)\n'
             '• парсить Airbnb-ссылки в таблицу\n\n'
             'Пример: «Вилла Банг Тао 3 спальни бассейн»\n'
-            'Для полного диалога нужен ANTHROPIC_API_KEY в .env'
+            'Для полного диалога нужен GEMINI_API_KEY в .env'
         )
 
     def get_all_listings(self):

@@ -33,7 +33,6 @@ from description_validator import (
 _CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
 
 _GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models"
-_ANTHROPIC_API = "https://api.anthropic.com/v1/messages"
 
 
 # ---------- промпты ----------
@@ -82,38 +81,9 @@ def _call_gemini(prompt: str, timeout: int = 60) -> str | None:
         return None
 
 
-def _call_anthropic(prompt: str, timeout: int = 60) -> str | None:
-    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not key:
-        return None
-    model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
-    body = {
-        "model": model,
-        "max_tokens": 1024,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    req = urllib.request.Request(
-        _ANTHROPIC_API,
-        data=json.dumps(body).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": key,
-            "anthropic-version": "2023-06-01",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.load(resp)
-        return "".join(
-            b.get("text", "") for b in data.get("content", [])
-        ).strip() or None
-    except (urllib.error.URLError, KeyError, ValueError, TimeoutError):
-        return None
-
-
 def call_llm(prompt: str) -> str | None:
-    """Gemini → Claude → None (фолбэк на шаблон решает вызывающий)."""
-    return _call_gemini(prompt) or _call_anthropic(prompt)
+    """Gemini → None (фолбэк на шаблон решает вызывающий)."""
+    return _call_gemini(prompt)
 
 
 def cjk_ratio(text: str) -> float:

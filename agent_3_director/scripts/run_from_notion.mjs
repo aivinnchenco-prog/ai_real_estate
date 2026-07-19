@@ -297,25 +297,27 @@ async function main() {
     }
   }
 
-  if (engine === "wan") {
-    if (!isWanConfigured(videoCfg)) {
-      throw new Error("Wan not configured — set FAL_KEY in agent_3_director/.env");
-    }
-  } else if (!isSeedanceConfigured(videoCfg)) {
-    throw new Error("Higgsfield not configured — run: higgsfield auth login  OR set HIGGSFIELD_MCP_ACCESS_TOKEN");
-  }
-
-  if (engine === "seedance") {
-    const authCheck = spawnSync("node", [resolve(ROOT, "scripts/check_higgsfield_auth.mjs")], {
-      encoding: "utf8",
-      cwd: ROOT,
-    });
-    if (authCheck.status !== 0) {
-      throw new Error(authCheck.stderr?.trim() || "Higgsfield auth check failed");
-    }
-  }
-
   try {
+    // Конфиг/авторизация — внутри try: при ошибке setError снимет
+    // video_in_progress, иначе объект зависает и блокирует очередь.
+    if (engine === "wan") {
+      if (!isWanConfigured(videoCfg)) {
+        throw new Error("Wan not configured — set FAL_KEY in agent_3_director/.env");
+      }
+    } else if (!isSeedanceConfigured(videoCfg)) {
+      throw new Error("Higgsfield not configured — run: higgsfield auth login  OR set HIGGSFIELD_MCP_ACCESS_TOKEN");
+    }
+
+    if (engine === "seedance") {
+      const authCheck = spawnSync("node", [resolve(ROOT, "scripts/check_higgsfield_auth.mjs")], {
+        encoding: "utf8",
+        cwd: ROOT,
+      });
+      if (authCheck.status !== 0) {
+        throw new Error(authCheck.stderr?.trim() || "Higgsfield auth check failed");
+      }
+    }
+
     const result =
       engine === "wan"
         ? await renderWan({

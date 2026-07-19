@@ -23,6 +23,7 @@ class NotionListing:
     video_engine: str = ""   # «Видео-движок»: Seedance 2.0 / Wan 2.7
     tg_post_url: str = ""    # post_url_telegram: пост-витрина в TG-канале
     agent6_locked: bool = False
+    error_count: int = 0     # счётчик ошибок публикации (Агент 6)
 
     @property
     def has_videos(self) -> bool:
@@ -70,6 +71,11 @@ def _checkbox(prop: dict) -> bool:
     return bool((prop or {}).get("checkbox"))
 
 
+def _number(prop: dict) -> int:
+    value = (prop or {}).get("number")
+    return int(value) if isinstance(value, (int, float)) else 0
+
+
 def parse_listing_page(page: dict[str, Any], fields: dict[str, str]) -> NotionListing | None:
     props = page.get("properties", {})
     object_id = _rich_text(props.get(fields["object_id"], {}))
@@ -90,6 +96,7 @@ def parse_listing_page(page: dict[str, Any], fields: dict[str, str]) -> NotionLi
         video_engine=_select(props.get(fields.get("video_engine", "Видео-движок"), {})),
         tg_post_url=(props.get(fields.get("tg_post", "post_url_telegram"), {}) or {}).get("url") or "",
         agent6_locked=_checkbox(props.get(fields.get("agent6_locked", "agent6_locked"), {})),
+        error_count=_number(props.get(fields.get("error_count", "error_count"), {})),
     )
 
 
@@ -205,6 +212,9 @@ def agent3_ready(
     return True, "ok"
 
 
+MAX_PUBLISH_ERRORS = 5
+
+
 def agent6_ready(
     listing: NotionListing,
     statuses: dict[str, str],
@@ -219,6 +229,9 @@ def agent6_ready(
     """
     if not flag_enabled(listing.publish_flag, default_publish):
         return False, "«Публикация» = НЕТ (постинг выключен)"
+    if listing.error_count >= MAX_PUBLISH_ERRORS:
+        return False, (f"error_count={listing.error_count} >= {MAX_PUBLISH_ERRORS} — "
+                       "ретраи публикации остановлены (сбросьте error_count в Notion)")
     if listing.status != statuses["video_done"]:
         return False, f"status={listing.status}, need {statuses['video_done']}"
     if listing.has_videos:

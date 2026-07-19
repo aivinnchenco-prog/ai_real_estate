@@ -217,7 +217,7 @@ async def cmd_agent3(message: Message):
         await message.reply(
             "Использование: <code>/agent3 A_20260713_003</code>\n"
             "Или нажмите /agent3 и отправьте только ID объекта следующим сообщением.\n"
-            "Монтаж видео (Wan). Claude / ANTHROPIC_API_KEY не используется."
+            "Монтаж видео по выбранному движку (Seedance/Wan)."
         )
         return
     await _run_chain_for_object(
@@ -295,7 +295,7 @@ async def handle_text_message(message: Message, state: FSMContext) -> None:
             if oid:
                 await _run_chain_for_object(message, 6, oid, "Агент 4 (публикация)")
                 return
-            # После /agent3 из меню часто шлют только ID — не уводить в Claude-поиск
+            # После /agent3 из меню часто шлют только ID — не уводить в LLM-поиск
             oid = _object_id_from_text(text)
             if oid:
                 await _run_chain_for_object(
@@ -430,9 +430,9 @@ async def process_agent_query(message: Message, text: str):
     except Exception as e:
         logger.error(f'Ошибка запроса к базе: {e}')
         err = str(e)
-        if 'authentication_error' in err or 'API key is invalid' in err:
+        if 'API key' in err or 'API_KEY' in err or 'PERMISSION_DENIED' in err:
             await message.reply(
-                'Ошибка <b>голосового поиска</b> (Claude / ANTHROPIC_API_KEY).\n'
+                'Ошибка <b>голосового поиска</b> (Gemini / GEMINI_API_KEY).\n'
                 'К монтажу не относится.\n\n'
                 'Ручной монтаж: <code>/agent3 A_20260719_003</code> '
                 'или отправьте только ID объекта.'
@@ -470,18 +470,14 @@ def _engine_btn(token: str, code: str, chosen: str | None) -> InlineKeyboardButt
 
 def _flags_keyboard(token: str) -> InlineKeyboardMarkup:
     c = _flag_choices.get(token, {})
-    rows = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [_flag_btn(token, "montage", "ДА", c.get("montage")),
          _flag_btn(token, "montage", "НЕТ", c.get("montage"))],
         [_flag_btn(token, "publish", "ДА", c.get("publish")),
          _flag_btn(token, "publish", "НЕТ", c.get("publish"))],
-    ]
-    if c.get("montage") == "ДА":
-        rows.append([
-            _engine_btn(token, "seedance", c.get("video_engine")),
-            _engine_btn(token, "wan", c.get("video_engine")),
-        ])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+        [_engine_btn(token, "seedance", c.get("video_engine")),
+         _engine_btn(token, "wan", c.get("video_engine"))],
+    ])
 
 
 def _flags_ready(entry: dict) -> bool:
@@ -507,10 +503,10 @@ async def send_flags_question(message: Message, object_id: str) -> None:
         logger.error(f"notion_flags: не удалось поставить паузу для {object_id}: {note}")
     await message.answer(
         f"🎬 Что делать с объектом <b>{object_id}</b>?\n"
-        "Монтаж — генерировать ли видео.\n"
-        "При монтаж=ДА — выберите нейросеть: Seedance 2.0 или Wan 2.7.\n"
-        "Публикация — постить ли в соц.сети (при монтаж=НЕТ выйдет карусель фото).\n"
-        "Пока не выбрано — объект ждёт в базе, цепочка не запускается.",
+        "1) Монтаж — генерировать ли видео.\n"
+        "2) Нейросеть — Seedance 2.0 или Wan 2.7 (нужно, если монтаж = ДА).\n"
+        "3) Публикация — постить ли в соц.сети (при монтаж=НЕТ — карусель фото).\n"
+        "Пока не выбрано всё нужное — объект ждёт в базе.",
         reply_markup=_flags_keyboard(token),
     )
 
