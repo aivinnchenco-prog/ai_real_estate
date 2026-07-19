@@ -51,7 +51,7 @@
 - Триггер: **любой комментарий** (`commentAnyValue`)
 - Воронки: **carousel** и **reel** отдельно
 - Имя: **Объект ID** из CRM
-- `chatplace.enabled: false` — пока ручной запуск; см. `docs/SESSION_STATE.md`
+- `chatplace.enabled: true` — воронки IG carousel + reel после публикации (через 15 мин)
 
 ## Skills
 

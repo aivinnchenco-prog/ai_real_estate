@@ -467,7 +467,7 @@
     "chain_metricool_after_telegram": true
   },
   "chatplace": {
-    "enabled": false,
+    "enabled": true,
     "execution": "mcp",
     "use_structured_mcp": true,
     "mcp_url": "https://mcp.chatplace.io/mcp",
