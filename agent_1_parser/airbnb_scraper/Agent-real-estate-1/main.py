@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from CustomLogger import logger
 from google_sheets import GoogleSheetsWriter
-from voice_agent import VoiceAgent, format_listing_card, format_search_header
+from voice_agent import VoiceAgent
 from airbnb_url import normalize_airbnb_url, resolve_currency
 from fb_handoff import extract_fb_url, handoff_fb_to_agent2
 from parser_pool import close_parser
@@ -248,29 +248,6 @@ async def send_plain_text(message: Message, text: str):
         await message.answer(text[i:i + MAX_TEXT_LENGTH])
 
 
-@router.callback_query(F.data.startswith('search_more:'))
-async def on_search_more(callback: CallbackQuery):
-    user_id = callback.from_user.id
-    if user_id not in get_allowed_users():
-        await callback.answer('Нет доступа')
-        return
-
-    session_id = callback.data.split(':', 1)[1]
-    page, has_more = voice_agent.get_search_page(session_id, user_id)
-    if not page:
-        await callback.answer('Больше нет результатов', show_alert=True)
-        return
-
-    cards = '\n\n—\n\n'.join(format_listing_card(item) for item in page)
-    keyboard = None
-    if has_more:
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text='Показать ещё 10', callback_data=f'search_more:{session_id}')
-        ]])
-    await callback.message.answer(cards, reply_markup=keyboard)
-    await callback.answer()
-
-
 @router.message(F.content_type == ContentType.TEXT)
 async def handle_text_message(message: Message, state: FSMContext) -> None:
     current_state = await state.get_state()
@@ -295,7 +272,7 @@ async def handle_text_message(message: Message, state: FSMContext) -> None:
             if oid:
                 await _run_chain_for_object(message, 6, oid, "Агент 4 (публикация)")
                 return
-            # После /agent3 из меню часто шлют только ID — не уводить в LLM-поиск
+            # После /agent3 из меню часто шлют только ID — не уводить в LLM-чат
             oid = _object_id_from_text(text)
             if oid:
                 await _run_chain_for_object(
@@ -315,124 +292,23 @@ async def process_agent_query(message: Message, text: str):
 
     text = text.strip()
     if not text:
-        await message.reply('Отправьте текстовый запрос. /help — подсказки.')
+        await message.reply('Отправьте текстовый запрос или ссылку Airbnb / FB Marketplace.')
         return
 
     try:
-        if voice_agent.is_feedback(text):
-            await asyncio.to_thread(voice_agent.record_feedback, user_id, text)
-            await asyncio.to_thread(
-                voice_agent.record_activity, user_id, 'feedback', feedback=text[:500],
-            )
-            reply = await asyncio.to_thread(
-                voice_agent.chat,
-                user_id,
-                f'Пользователь дал обратную связь: «{text}». Запомни урок и предложи как улучшить работу.',
-                message.from_user.first_name or '',
-            )
-            await send_plain_text(message, reply)
-            return
-
-        parsed = await asyncio.to_thread(voice_agent.parse_query, text)
-        intent = parsed.get('intent', 'search')
-
-        if intent == 'retrospective':
-            days = int(parsed.get('days') or config.DEFAULT_RETRO_DAYS)
-            await message.reply(f'📊 Анализирую работу за {days} дн...')
-            reply = await asyncio.to_thread(
-                voice_agent.analyze_period,
-                user_id,
-                days,
-                text,
-                message.from_user.first_name or '',
-            )
-            await send_plain_text(message, reply)
-            return
-
-        if intent == 'chat':
-            reply = await asyncio.to_thread(
-                voice_agent.chat,
-                user_id,
-                text,
-                message.from_user.first_name or '',
-            )
-            await asyncio.to_thread(
-                voice_agent.record_activity, user_id, 'chat',
-                query=text[:500], reply_preview=reply[:200],
-            )
-            await send_plain_text(message, reply)
-            return
-
-        if intent == 'get_field':
-            object_id = (parsed.get('object_id') or '').strip().upper()
-            field = parsed.get('field') or 'Исходное описание'
-            if not object_id:
-                await message.reply('Укажите ID объекта, например PHK-0002.')
-                return
-            value = await asyncio.to_thread(voice_agent.get_listing_field, object_id, field)
-            if not value:
-                await asyncio.to_thread(
-                    voice_agent.record_activity, user_id, 'get_field_fail',
-                    object_id=object_id, field=field, query=text[:500],
-                )
-                await message.reply(f'Объект {object_id} не найден или поле пустое.')
-                return
-            await asyncio.to_thread(
-                voice_agent.record_activity, user_id, 'get_field_ok',
-                object_id=object_id, field=field, query=text[:500],
-            )
-            header = f'<b>{object_id}</b> — {field}\n\n'
-            if len(value) > MAX_TEXT_LENGTH:
-                await message.answer(header + value[:MAX_TEXT_LENGTH])
-                for i in range(MAX_TEXT_LENGTH, len(value), MAX_TEXT_LENGTH):
-                    await message.answer(value[i:i + MAX_TEXT_LENGTH])
-            else:
-                await message.answer(header + value)
-            return
-
-        listings = await asyncio.to_thread(voice_agent.search_listings, parsed.get('filters', {}))
-        if not listings:
-            await asyncio.to_thread(
-                voice_agent.record_failed_search,
-                user_id,
-                text,
-                parsed.get('filters', {}),
-            )
-            await asyncio.to_thread(
-                voice_agent.record_activity, user_id, 'search_fail',
-                query=text[:500], filters=parsed.get('filters', {}),
-            )
-            reply = await asyncio.to_thread(
-                voice_agent.chat,
-                user_id,
-                f'Поиск ничего не нашёл по запросу: «{text}». Объясни почему могло не сработать и предложи как переформулировать.',
-                message.from_user.first_name or '',
-            )
-            await send_plain_text(message, reply)
-            return
-
-        await asyncio.to_thread(
-            voice_agent.record_activity, user_id, 'search_ok',
-            query=text[:500], filters=parsed.get('filters', {}),
-            result_count=len(listings),
-            top_ids=[item.get('ID', '') for item in listings[:5]],
+        reply = await asyncio.to_thread(
+            voice_agent.chat,
+            user_id,
+            text,
+            message.from_user.first_name or '',
         )
-        session_id, page, has_more = voice_agent.start_search_session(user_id, listings, text)
-        header = format_search_header(text, len(listings), len(page))
-        cards = '\n\n—\n\n'.join(format_listing_card(item) for item in page)
-        keyboard = None
-        if has_more:
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text='Показать ещё 10', callback_data=f'search_more:{session_id}')
-            ]])
-        await message.answer(f'{header}\n\n{cards}', reply_markup=keyboard)
-
+        await send_plain_text(message, reply)
     except Exception as e:
-        logger.error(f'Ошибка запроса к базе: {e}')
+        logger.error(f'Ошибка обработки запроса: {e}')
         err = str(e)
         if 'API key' in err or 'API_KEY' in err or 'PERMISSION_DENIED' in err:
             await message.reply(
-                'Ошибка <b>голосового поиска</b> (Gemini / GEMINI_API_KEY).\n'
+                'Ошибка чата с ассистентом (Gemini / GEMINI_API_KEY).\n'
                 'К монтажу не относится.\n\n'
                 'Ручной монтаж: <code>/agent3 A_20260719_003</code> '
                 'или отправьте только ID объекта.'
@@ -681,16 +557,6 @@ async def handle_url_message(message: Message):
         logger.debug(f'Найдено {len(local_image_paths)} изображений.')
         if text:
             try:
-                if result.sheet_written:
-                    await asyncio.to_thread(
-                        voice_agent.record_activity,
-                        user_id,
-                        'airbnb_parse',
-                        url=url[:300],
-                        object_id=object_id or '',
-                        success=bool(object_id),
-                    )
-
                 logger.info('Обработка URL завершена.')
                 if result.object_id:
                     timing_line = ''

@@ -55,18 +55,13 @@ DRIVE_OAUTH_TOKEN_FILE = os.getenv(
     'credentials/drive-oauth-token.json',
 )
 
-# Gemini — мозги агента Jarvis (голосовой поиск, чат, AI-фолбэки).
+# Gemini — мозги агента Jarvis (чат, AI-фолбэки).
 # Anthropic/Claude удалён: ANTHROPIC_API_KEY больше не используется.
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
 
 AGENT_NAME = os.getenv('AGENT_NAME', 'Jarvis')
 CHAT_HISTORY_LIMIT = int(os.getenv('CHAT_HISTORY_LIMIT', '20'))
-LEARNINGS_FILE = os.getenv('LEARNINGS_FILE', 'data/agent_learnings.json')
-ACTIVITY_LOG_FILE = os.getenv('ACTIVITY_LOG_FILE', 'data/activity_log.jsonl')
-DEFAULT_RETRO_DAYS = int(os.getenv('DEFAULT_RETRO_DAYS', '7'))
-
-SEARCH_PAGE_SIZE = int(os.getenv('SEARCH_PAGE_SIZE', '10'))
 
 # Валюта для парсинга цен с Airbnb (THB или USD). Добавляется в URL как &currency=...
 AIRBNB_CURRENCY = os.getenv('AIRBNB_CURRENCY', 'THB').upper()

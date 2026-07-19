@@ -6,7 +6,7 @@
 
 - Парсинг ссылок Airbnb → CRM (Google Sheets), фото на Drive
 - Описания для FB/TG через Claude
-- Jarvis: поиск по базе, чат, ретроспектива
+- Jarvis: чат-помощник
 - `/task` — очередь задач Claude → Supabase
 - `/cursor` — Cursor SDK, код на локальной машине
 

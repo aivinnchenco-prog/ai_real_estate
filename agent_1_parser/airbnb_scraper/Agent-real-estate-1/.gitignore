@@ -1,7 +1,5 @@
 .env
 .env.local
-data/agent_learnings.json
-data/activity_log.jsonl
 data/cursor_sessions.json
 data/agent_tasks.db
 data/task_instructions/
@@ -10,7 +8,6 @@ credentials/
 credentials/oauth-client.json
 credentials/drive-oauth-token.json
 temp_images/
-temp_voice/
 Users.txt
 Logs/
 __pycache__/
