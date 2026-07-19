@@ -292,12 +292,6 @@ def publish_telegram_page(
 
     if not dry_run and result.get("post_url"):
         updates: dict[str, Any] = {url_field: {"url": result["post_url"]}}
-        lock_field = fields.get("agent6_locked")
-        if lock_field:
-            updates[lock_field] = notion_checkbox_property(True)
-        taken_at_field = fields.get("agent6_taken_at")
-        if taken_at_field and not get_prop(page, taken_at_field, "date"):
-            updates[taken_at_field] = notion_date_property(utc_today_iso())
         notion_update_fields(page_id, updates)
         result["notion_updated"] = list(updates.keys())
 

@@ -145,7 +145,7 @@
   "chain": {
     "poll_interval_seconds": 30,
     "auto_continue_after_agent2": true,
-    "auto_agent6": false,
+    "auto_agent6": true,
     "auto_agent4": false,
     "publish_platforms": [
       "instagram"

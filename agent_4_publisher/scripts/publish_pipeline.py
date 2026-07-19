@@ -252,7 +252,12 @@ def is_agent6_locked(page: dict[str, Any], fields: dict[str, str]) -> bool:
     lock_field = fields.get("agent6_locked")
     if not lock_field:
         return False
-    return bool(get_prop(page, lock_field, "checkbox"))
+    if not get_prop(page, lock_field, "checkbox"):
+        return False
+    # TG-витрина могла поставить lock без Metricool — не блокируем соцсети.
+    post_id_field = fields.get("metricool_post_id", "metricool_post_id")
+    post_id = (get_prop(page, post_id_field, "rich_text") or "").strip()
+    return bool(post_id)
 
 
 def utc_today_iso() -> str:
