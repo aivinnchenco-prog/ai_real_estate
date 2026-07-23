@@ -199,6 +199,7 @@
       "object_id": "Объект ID",
       "status": "Статус",
       "photo": "Фото",
+      "carousel_url": "carousel_url",
       "description": "Описание",
       "caption": "Описание соц.сети",
       "caption_social": "Описание соц.сети",

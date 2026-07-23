@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Carousel Slide Template</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 1080px;
+    height: 1350px;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+    background: #0c0c0c;
+  }
+
+  /* --- Фото на весь слайд --- */
+  .bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* --- Градиенты: лёгкое затемнение сверху (лого/бейджи) и снизу (колонтитул) --- */
+  .grad-top {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 420px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0.22) 55%, rgba(0,0,0,0) 100%);
+  }
+  .grad-bottom {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 460px;
+    background: linear-gradient(0deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.38) 45%, rgba(0,0,0,0) 100%);
+  }
+
+  /* --- Прозрачный логотип (вверху слева) --- */
+  .logo {
+    position: absolute;
+    top: 52px;
+    left: 56px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    opacity: 0.88;
+  }
+  .logo svg { width: 62px; height: 62px; }
+  .logo .name {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 40px;
+    letter-spacing: 0.6px;
+    color: #ffffff;
+  }
+  .logo .name .accent { color: #e8c766; }
+
+  /* --- Бейджи как в референсе: скруглённые контурные плашки с иконками --- */
+  .badges {
+    position: absolute;
+    top: 150px;
+    left: 0; right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: 30px;
+    padding: 0 48px;
+  }
+  .badge {
+    min-width: 250px;
+    max-width: 320px;
+    border: 2.5px solid rgba(255,255,255,0.92);
+    border-radius: 40px;
+    background: rgba(10, 10, 10, 0.26);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 10px 34px rgba(0,0,0,0.22);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 34px 34px 30px 34px;
+  }
+  .badge svg { width: 64px; height: 64px; }
+  .badge .label {
+    font-weight: 600;
+    font-size: 33px;
+    line-height: 1.22;
+    text-align: center;
+    color: #ffffff;
+    letter-spacing: 0.3px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.35);
+  }
+
+  /* --- Колонтитул: слева TG, справа телефон --- */
+  .footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 56px 46px 56px;
+  }
+  .footer .item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-weight: 700;
+    font-size: 36px;
+    color: rgba(255,255,255,0.95);
+    letter-spacing: 0.4px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+  }
+  .footer .item svg { width: 42px; height: 42px; opacity: 0.95; }
+</style>
+</head>
+<body>
+
+  <img class="bg" src="{{PHOTO_SRC}}" alt="">
+  <div class="grad-top"></div>
+  <div class="grad-bottom"></div>
+
+  <div class="logo">
+    <!-- дом с пальмой — фирменный знак, как на хук-карточке -->
+    <svg viewBox="0 0 64 64" fill="none" stroke="#ffffff" stroke-width="2.4">
+      <path d="M8 30c4-10 14-14 14-14s-2 8-8 12" stroke-linecap="round"/>
+      <path d="M22 16c-2-6-10-8-10-8s2 8 8 10" stroke-linecap="round"/>
+      <path d="M22 16c4-4 12-3 12-3" stroke-linecap="round"/>
+      <path d="M20 20L20 34" stroke-linecap="round"/>
+      <rect x="26" y="26" width="30" height="24" rx="1.5"/>
+      <path d="M24 26 L41 14 L58 26" stroke-linejoin="round"/>
+      <rect x="36" y="34" width="10" height="16"/>
+    </svg>
+    <div class="name">Open<span class="accent">Home</span></div>
+  </div>
+
+  <div class="badges">{{BADGES}}</div>
+
+  <div class="footer">
+    <div class="item">
+      <!-- telegram -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.7">
+        <path d="M21.5 4.5L2.8 11.7c-.8.3-.8 1.4.05 1.7l4.7 1.6 1.8 5.5c.25.8 1.3.95 1.8.3l2.6-3.2 4.8 3.5c.7.5 1.7.1 1.85-.75l2.3-14.2c.15-.95-.8-1.7-1.7-1.35z" stroke-linejoin="round"/>
+        <path d="M8 15l11-9" stroke-linecap="round"/>
+      </svg>
+      <span>{{TG}}</span>
+    </div>
+    <div class="item">
+      <!-- phone -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8">
+        <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.13.96.36 1.9.7 2.8a2 2 0 0 1-.45 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.45c.9.34 1.84.57 2.8.7A2 2 0 0 1 22 16.9z" stroke-linejoin="round"/>
+      </svg>
+      <span>{{PHONE}}</span>
+    </div>
+  </div>
+
+  <script>
+    // Если бейджи не влезают по ширине — пропорционально ужать ряд,
+    // чтобы плашки не выходили за края слайда.
+    window.addEventListener('load', () => {
+      const row = document.querySelector('.badges');
+      const natural = row.scrollWidth;
+      const avail = 1080 - 64;
+      if (natural > avail) {
+        const ratio = avail / natural;
+        row.style.transform = `scale(${ratio})`;
+        row.style.transformOrigin = 'center top';
+      }
+    });
+  </script>
+
+</body>
+</html>

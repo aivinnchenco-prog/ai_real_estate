@@ -454,6 +454,29 @@ def resolve_carousel_urls(gallery_url: str, max_images: int) -> list[str]:
     return urls[:max_images]
 
 
+def designed_carousel_urls(page: dict[str, Any], fields: dict[str, str],
+                           max_images: int) -> list[str]:
+    """Слайды дизайн-карусели Агента 3 (R2 {id}/carousel/, колонка carousel_url).
+
+    Слайды уже отобраны куратором и оформлены (хук первым, бейджи,
+    колонтитул) — порядок из галереи сохраняем, диверсификация не нужна.
+    Пусто/ошибка → публикатор откатится на сырые фото из «Фото».
+    """
+    if max_images <= 0:
+        return []
+    field_name = fields.get("carousel_url", "carousel_url")
+    url = get_prop(page, field_name, "url")
+    if not url:
+        return []
+    try:
+        urls = parse_gallery_image_urls(url)
+    except (urllib.error.URLError, OSError) as exc:
+        print(f"[carousel] галерея {url} недоступна ({exc}) — беру сырые фото",
+              file=sys.stderr)
+        return []
+    return urls[:max_images]
+
+
 def carousel_enabled_for(platform: str, config: dict[str, Any]) -> bool:
     carousel = config.get("carousel", {})
     if not carousel.get("enabled", True):
@@ -1016,11 +1039,16 @@ def publish_one(
     gallery_url = get_prop(page, photo_field, "url")
     carousel_cfg = config.get("carousel", {})
     carousel_urls: list[str] = []
-    if carousel_enabled_for(platform, config) and gallery_url:
+    if carousel_enabled_for(platform, config):
         max_img = max_images_for_platform(platform, config)
         min_img = min_images_for_platform(platform, config)
-        all_urls = parse_gallery_image_urls(gallery_url)
-        carousel_urls, _ = select_diverse_images(all_urls, max_img, config, context="carousel")
+        # Приоритет — дизайн-слайды Агента 3 (carousel_url); фолбэк — сырые фото
+        carousel_urls = designed_carousel_urls(page, fields, max_img)
+        if carousel_urls:
+            print(f"[carousel] дизайн-слайды Агента 3: {len(carousel_urls)} шт.")
+        elif gallery_url:
+            all_urls = parse_gallery_image_urls(gallery_url)
+            carousel_urls, _ = select_diverse_images(all_urls, max_img, config, context="carousel")
         if mode != "video" and carousel_urls and len(carousel_urls) < min_img:
             raise ValueError(
                 f"{platform} needs at least {min_img} images, got {len(carousel_urls)} (max {max_img})"

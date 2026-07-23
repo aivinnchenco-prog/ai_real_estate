@@ -81,6 +81,26 @@ def run_agent3(object_id: str) -> int:
     return proc.returncode
 
 
+def run_build_carousel(object_id: str) -> int:
+    """Дизайн-карусель Агента 3 (слайды с бейджами в R2 {id}/carousel/).
+
+    Для пути «монтаж=НЕТ, публикация=ДА» — монтаж не запускается, а
+    публикатору нужны оформленные слайды. Идемпотентно: если carousel_url
+    в Notion уже заполнен, скрипт выходит сразу.
+    """
+    director = ROOT.parents[2] / "agent_3_director"
+    script = director / "scripts" / "build_carousel.mjs"
+    if not script.exists():
+        print(f"[chain] SKIP carousel: not found {script}", file=sys.stderr)
+        return 0
+    print(f"\n[chain] Carousel (Agent 3 design) → {object_id}")
+    proc = subprocess.run(
+        ["node", str(script), "--object-id", object_id],
+        cwd=director,
+    )
+    return proc.returncode
+
+
 HIGGSFIELD_AUTH_TAG = "higgsfield_auth"
 
 
@@ -322,6 +342,12 @@ def continue_chain(
                         and listing.status == statuses["after_structurize"]):
                     print(f"[chain] {listing.object_id}: монтаж=НЕТ, публикация=ДА → "
                           f"сразу {statuses['video_done']} (карусель без видео)")
+                    # Дизайн-карусель до публикации (best effort: при ошибке
+                    # публикатор возьмёт сырые фото из «Фото»)
+                    code_car = run_build_carousel(listing.object_id)
+                    if code_car != 0:
+                        log_event(listing.object_id, "chain", "carousel_failed",
+                                  code=code_car)
                     crm.update_page(listing.page_id, {
                         nf["status"]: crm.build_status(statuses["video_done"]),
                     })

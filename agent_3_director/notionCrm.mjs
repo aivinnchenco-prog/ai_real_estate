@@ -61,6 +61,12 @@ export async function setSeedanceUrl(page, fields, url, statusName = null) {
   await updatePage(page.id, properties);
 }
 
+export async function setCarouselUrl(page, fields, url) {
+  await updatePage(page.id, {
+    [fields.carousel_url || "carousel_url"]: { url },
+  });
+}
+
 export async function setMontageStart(page, fields, statusName) {
   await updatePage(page.id, {
     [fields.status]: { status: { name: statusName } },
@@ -103,6 +109,11 @@ function readNumber(page, fieldName) {
 
 function readSelect(page, fieldName) {
   return page.properties?.[fieldName]?.select?.name || null;
+}
+
+function readMultiSelect(page, fieldName) {
+  const opts = page.properties?.[fieldName]?.multi_select || [];
+  return opts.map((o) => o.name || "").filter(Boolean);
 }
 
 const MONTHS_RU = [
@@ -205,6 +216,19 @@ export function pageVideoOverlayMeta(page, fields, overlayFields = {}) {
     price,
     period,
     district,
+  };
+}
+
+/** Метаданные для бейджей дизайн-карусели: спальни, санузлы, тип жилья, удобства. */
+export function pageCarouselMeta(page, fields) {
+  const rooms = readNumber(page, fields.rooms || "Количество комнат");
+  const bathrooms = readNumber(page, fields.bathrooms || "Количество сан.узлов");
+  return {
+    bedrooms: rooms != null ? String(rooms) : "",
+    bathrooms: bathrooms != null ? String(bathrooms) : "",
+    housing_type: readSelect(page, fields.housing_type || "Тип жилья") || "",
+    amenities: readMultiSelect(page, fields.amenities || "Удобства"),
+    view: readSelect(page, fields.view || "Вид") || "",
   };
 }
 

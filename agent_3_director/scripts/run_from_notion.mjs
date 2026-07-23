@@ -22,13 +22,16 @@ import {
   pageObjectId,
   pageMontageEnabled,
   pageVideoOverlayMeta,
+  pageCarouselMeta,
   pageVideoEngineId,
   setSeedanceUrl,
+  setCarouselUrl,
   setError,
   setMontageStart,
 } from "../notionCrm.mjs";
 import { listKeys } from "../r2list.mjs";
 import { selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
+import { buildCarousel } from "../carouselSlides.mjs";
 import { renderSeedance, isSeedanceConfigured } from "../renderSeedance.mjs";
 import { renderWan, isWanConfigured } from "../renderWan.mjs";
 import { renderHookCover, isTitleOverlayEnabled, loadTitleOverlayConfig } from "../applyTitleOverlay.mjs";
@@ -294,6 +297,25 @@ async function main() {
       console.log(`✓ hook cover (карусель): ${coverUrl}`);
     } catch (err) {
       console.warn(`Hook cover failed (non-blocking): ${err.message}`);
+    }
+  }
+
+  // Дизайн-карусель для соц.сетей: те же отобранные фото → слайды с бейджами
+  // и колонтитулом → R2 {id}/carousel/ + carousel_url в Notion.
+  // Ошибка не блокирует видео (карусель можно доделать build_carousel.mjs).
+  if (!skipOverlay) {
+    try {
+      const carousel = await buildCarousel({
+        objectId,
+        photoKeys: image_keys,
+        overlayMeta,
+        carouselMeta: pageCarouselMeta(page, fields),
+        videoCfg,
+      });
+      await setCarouselUrl(page, fields, carousel.url);
+      console.log(`✓ дизайн-карусель: ${carousel.slides} слайдов → ${carousel.url}`);
+    } catch (err) {
+      console.warn(`Carousel failed (non-blocking): ${err.message}`);
     }
   }
 
