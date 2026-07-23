@@ -2,6 +2,10 @@
 /**
  * Дизайн-карусель объекта: отбор лучших фото → слайды 1080×1350 →
  * R2 {id}/carousel/ → ссылка на галерею в Notion (carousel_url).
+ * Хук с ценой на слайде 1 — только для FB-объектов (F_*).
+ *
+ * Плюс «brand open home»: ВСЕ фото объекта дублируются с бренд-шаблоном
+ * (лого + контакты, без хука и бейджей) в R2 {id}/brand_open_home/.
  *
  * Запускается:
  *   - из run_from_notion.mjs (вместе с монтажом);
@@ -24,7 +28,7 @@ import {
 } from "../notionCrm.mjs";
 import { listKeys } from "../r2list.mjs";
 import { selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
-import { buildCarousel } from "../carouselSlides.mjs";
+import { buildCarousel, buildBrandFolder } from "../carouselSlides.mjs";
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -103,6 +107,19 @@ async function main() {
     console.log(`✓ carousel_url → Notion: ${url}`);
   }
   console.log(`CAROUSEL_DONE ${objectId}: ${slides} слайдов → ${url}`);
+
+  // «brand open home»: ВСЕ фото объекта с бренд-шаблоном (без хука и бейджей).
+  // Ошибка не блокирует результат карусели.
+  try {
+    const brand = await buildBrandFolder({
+      objectId,
+      photoKeys,
+      outDir: dryRun ? resolve(ROOT, "data/brand_preview", objectId) : null,
+    });
+    console.log(`BRAND_DONE ${objectId}: ${brand.count} фото → ${brand.url}`);
+  } catch (err) {
+    console.warn(`Brand folder failed (non-blocking): ${err.message}`);
+  }
 }
 
 main().catch((err) => {

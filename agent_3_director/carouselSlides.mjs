@@ -1,11 +1,15 @@
 /**
  * Дизайн-карусель для соц.сетей: из отобранных фото объекта собираем
- * до 9 слайдов 1080×1350 (4:5):
+ * до 9 слайдов 1080×1350 (4:5).
  *
+ * Объекты из FB (ID F_*) — цена фиксированная, хук с ценой уместен:
  *   слайд 1 — хук-обложка (шаблон hook_card, как в видео);
- *   слайд 2 — фото + бейджи «спальни / санузлы»;
- *   слайды 3+ — фото + бейджи «спальни / бассейн / парковка»
- *              (Private для виллы/дома, Shared для кондо/апартаментов).
+ *   слайд 2 — фото + три бейджа «спальни / бассейн / парковка»;
+ *   слайды 3+ — только логотип и контакты (без бейджей).
+ *
+ * Объекты из Airbnb (ID A_*) — цена сезонная, хук с ценой НЕ используем:
+ *   слайд 1 — фото + три бейджа;
+ *   слайды 2+ — только логотип и контакты.
  *
  * На каждом слайде: затемняющий градиент снизу, прозрачный логотип OpenHome,
  * колонтитул: слева «TG @OpenHome_th», справа телефон.
@@ -13,8 +17,11 @@
  * Готовые слайды льются в R2: {object_id}/carousel/slide_NN.jpg
  * + {object_id}/carousel/index.html (галерея — её URL пишется в Notion
  * в колонку carousel_url; публикатор Агента 4 берёт слайды из неё).
+ *
+ * Плюс buildBrandFolder(): ВСЕ фото объекта дублируются с бренд-шаблоном
+ * (лого + контакты, без хука и бейджей) в R2 {object_id}/brand_open_home/.
  */
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join, resolve } from "path";
 import { tmpdir } from "os";
 import { ROOT } from "./env.mjs";
@@ -22,6 +29,7 @@ import { downloadFromR2, uploadFileToR2 } from "./r2util.mjs";
 import { renderHookCover, loadTitleOverlayConfig } from "./applyTitleOverlay.mjs";
 
 export const CAROUSEL_PREFIX = "carousel";
+export const BRAND_PREFIX = "brand_open_home";
 const SLIDE_WIDTH = 1080;
 const SLIDE_HEIGHT = 1350;
 const MAX_SLIDES = 9;
@@ -82,35 +90,33 @@ export function hasPool(meta) {
   return blob.includes("бассейн") || blob.includes("pool");
 }
 
+/** Объекты, спарсенные из Facebook (F_*): цена фиксированная → хук с ценой уместен. */
+export function isFbObject(objectId) {
+  return /^F[_-]/i.test(String(objectId || "").trim());
+}
+
 /**
- * Набор бейджей для слайда.
- * slideNo — номер слайда в карусели (2 — первый после хука).
+ * Три бейджа инфо-слайда: спальни / бассейн (или санузлы) / парковка.
+ * Private для виллы/дома, Shared для кондо/апартаментов.
+ * Используются только на одном слайде карусели (первом после хука).
  */
-export function slideBadges(meta, slideNo) {
+export function slideBadges(meta) {
   const priv = isPrivateHousing(meta.housing_type);
   const badges = [];
 
   const bedrooms = String(meta.bedrooms || "").trim();
-  const bedroomsLabel = bedrooms
-    ? `${bedrooms} ${priv ? "Private " : ""}Bedrooms`
-    : null;
-
-  const bathrooms = String(meta.bathrooms || "").trim();
-  const bathroomsLabel = bathrooms ? `${bathrooms} Bathrooms` : null;
-
-  if (slideNo === 2) {
-    // Слайд 2 — комнаты и санузлы из таблицы
-    if (bedroomsLabel) badges.push(badgeHtml("bed", bedroomsLabel));
-    if (bathroomsLabel) badges.push(badgeHtml("bath", bathroomsLabel));
-  } else {
-    if (bedroomsLabel) badges.push(badgeHtml("bed", bedroomsLabel));
-    if (hasPool(meta)) {
-      badges.push(badgeHtml("pool", priv ? "Private Pool" : "Shared Pool"));
-    } else if (bathroomsLabel) {
-      badges.push(badgeHtml("bath", bathroomsLabel));
-    }
-    badges.push(badgeHtml("car", priv ? "Private Parking" : "Shared Parking"));
+  if (bedrooms) {
+    badges.push(badgeHtml("bed", `${bedrooms} ${priv ? "Private " : ""}Bedrooms`));
   }
+
+  if (hasPool(meta)) {
+    badges.push(badgeHtml("pool", priv ? "Private Pool" : "Shared Pool"));
+  } else {
+    const bathrooms = String(meta.bathrooms || "").trim();
+    if (bathrooms) badges.push(badgeHtml("bath", `${bathrooms} Bathrooms`));
+  }
+
+  badges.push(badgeHtml("car", priv ? "Private Parking" : "Shared Parking"));
   return badges.join("\n");
 }
 
@@ -153,7 +159,7 @@ function slideName(n) {
   return `slide_${String(n).padStart(2, "0")}.jpg`;
 }
 
-function galleryIndexHtml(objectId, names) {
+function galleryIndexHtml(objectId, names, label = "дизайн-карусель") {
   const imgs = names
     .map((n) => `    <a href="${n}"><img src="${n}" alt="${escapeHtml(objectId)}"></a>`)
     .join("\n");
@@ -162,7 +168,7 @@ function galleryIndexHtml(objectId, names) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(objectId)} — карусель</title>
+<title>${escapeHtml(objectId)} — ${escapeHtml(label)}</title>
 <style>
   body { margin: 0; padding: 24px; background: #101010; font-family: sans-serif; }
   h1 { color: #eee; font-size: 18px; font-weight: 600; }
@@ -171,7 +177,7 @@ function galleryIndexHtml(objectId, names) {
 </style>
 </head>
 <body>
-<h1>${escapeHtml(objectId)} — дизайн-карусель (${names.length} слайдов)</h1>
+<h1>${escapeHtml(objectId)} — ${escapeHtml(label)} (${names.length} шт.)</h1>
 <div class="grid">
 ${imgs}
 </div>
@@ -201,21 +207,16 @@ export async function buildCarousel({
 }) {
   if (!photoKeys?.length) throw new Error("Carousel: нет отобранных фото");
 
+  // Хук с ценой — только для объектов из FB (цена там фиксированная).
+  // Для Airbnb цена сезонная — карусель начинается с инфо-слайда с бейджами.
+  const withHook = isFbObject(objectId);
+
   const tmpDir = mkdtempSync(join(tmpdir(), "carousel-"));
   try {
-    // --- слайд 1: хук-обложка (готовая {id}/hook_cover.jpg или рендерим) ---
-    const hookLocal = join(tmpDir, slideName(1));
-    let hookReady = false;
-    try {
-      await downloadFromR2(`${objectId}/hook_cover.jpg`, hookLocal);
-      hookReady = true;
-    } catch {
-      /* обложки ещё нет — рендерим ниже */
-    }
-
     // Фото для слайдов скачиваем заранее (первое — база для хука, если нужен рендер)
+    const maxPhotos = withHook ? MAX_SLIDES - 1 : MAX_SLIDES;
     const photoLocals = [];
-    for (let i = 0; i < photoKeys.length && photoLocals.length < MAX_SLIDES; i++) {
+    for (let i = 0; i < photoKeys.length && photoLocals.length < maxPhotos; i++) {
       const local = join(tmpDir, `photo_${i}${photoKeys[i].slice(photoKeys[i].lastIndexOf("."))}`);
       try {
         await downloadFromR2(photoKeys[i], local);
@@ -226,32 +227,48 @@ export async function buildCarousel({
     }
     if (!photoLocals.length) throw new Error("Carousel: не удалось скачать ни одного фото");
 
-    if (!hookReady) {
-      const overlayCfg = loadTitleOverlayConfig(videoCfg);
-      await renderHookCover({
-        photoPath: photoLocals[0],
-        outputPath: hookLocal,
-        meta: overlayMeta,
-        cfg: overlayCfg,
-      });
+    const names = [];
+    let firstPhotoSlideNo = 1;
+
+    // --- FB-объекты: слайд 1 — хук-обложка ({id}/hook_cover.jpg или рендерим) ---
+    if (withHook) {
+      const hookLocal = join(tmpDir, slideName(1));
+      let hookReady = false;
+      try {
+        await downloadFromR2(`${objectId}/hook_cover.jpg`, hookLocal);
+        hookReady = true;
+      } catch {
+        /* обложки ещё нет — рендерим ниже */
+      }
+      if (!hookReady) {
+        const overlayCfg = loadTitleOverlayConfig(videoCfg);
+        await renderHookCover({
+          photoPath: photoLocals[0],
+          outputPath: hookLocal,
+          meta: overlayMeta,
+          cfg: overlayCfg,
+        });
+      }
+      names.push(slideName(1));
+      firstPhotoSlideNo = 2;
     }
 
-    // --- слайды 2..N: фото + бейджи + колонтитул ---
+    // --- фото-слайды: первый — с тремя бейджами, остальные — только лого + контакты ---
     const slides = [];
-    const photoSlides = photoLocals.slice(0, MAX_SLIDES - 1);
-    photoSlides.forEach((photoPath, idx) => {
-      const n = idx + 2;
+    photoLocals.forEach((photoPath, idx) => {
+      const n = firstPhotoSlideNo + idx;
+      if (n > MAX_SLIDES) return;
       slides.push({
         name: slideName(n).replace(/\.jpg$/, ""),
         photoPath,
-        badges: slideBadges(carouselMeta, n),
+        badges: idx === 0 ? slideBadges(carouselMeta) : "",
         outPath: join(tmpDir, slideName(n)),
       });
+      names.push(slideName(n));
     });
     await renderSlides(slides, tmpDir);
 
-    const names = [slideName(1), ...photoSlides.map((_, idx) => slideName(idx + 2))];
-    const indexHtml = galleryIndexHtml(objectId, names);
+    const indexHtml = galleryIndexHtml(objectId, names, "дизайн-карусель");
     const indexLocal = join(tmpDir, "index.html");
     writeFileSync(indexLocal, indexHtml, "utf8");
 
@@ -264,17 +281,82 @@ export async function buildCarousel({
       return { url: join(outDir, "index.html"), slides: names.length };
     }
 
-    let url = null;
     for (const n of names) {
       const publicUrl = await uploadFileToR2(
         join(tmpDir, n), `${objectId}/${CAROUSEL_PREFIX}/${n}`, "image/jpeg"
       );
       console.log(`  ↑ ${publicUrl}`);
     }
-    url = await uploadFileToR2(
+    const url = await uploadFileToR2(
       indexLocal, `${objectId}/${CAROUSEL_PREFIX}/index.html`, "text/html; charset=utf-8"
     );
     return { url, slides: names.length };
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * «brand open home»: дублировать ВСЕ фото объекта с бренд-шаблоном
+ * (градиент, лого OpenHome, колонтитул с контактами; без хука и бейджей)
+ * в R2 {object_id}/brand_open_home/ + index.html галерея.
+ *
+ * @param objectId  ID объекта (папка в R2)
+ * @param photoKeys R2-ключи ВСЕХ фото объекта ({id}/photos/*)
+ * @param outDir    локальная папка вместо R2 (для --dry-run)
+ * @returns { url, count } — url галереи brand_open_home/index.html
+ */
+export async function buildBrandFolder({ objectId, photoKeys, outDir = null }) {
+  if (!photoKeys?.length) throw new Error("Brand: нет фото объекта");
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "brand-"));
+  try {
+    const slides = [];
+    const names = [];
+    for (const key of photoKeys) {
+      const base = key.split("/").pop();
+      const srcLocal = join(tmpDir, `src_${base}`);
+      try {
+        await downloadFromR2(key, srcLocal);
+      } catch (err) {
+        console.warn(`Brand: не скачалось ${key}: ${err.message}`);
+        continue;
+      }
+      const outName = base.replace(/\.(jpe?g|png|webp)$/i, "") + ".jpg";
+      slides.push({
+        name: `brand_${outName.replace(/\.jpg$/, "")}`,
+        photoPath: srcLocal,
+        badges: "", // только лого и контакты
+        outPath: join(tmpDir, outName),
+      });
+      names.push(outName);
+    }
+    if (!slides.length) throw new Error("Brand: не удалось скачать ни одного фото");
+
+    await renderSlides(slides, tmpDir);
+
+    const indexHtml = galleryIndexHtml(objectId, names, "brand open home");
+    const indexLocal = join(tmpDir, "brand_index.html");
+    writeFileSync(indexLocal, indexHtml, "utf8");
+
+    if (outDir) {
+      const { mkdirSync, copyFileSync } = await import("fs");
+      mkdirSync(outDir, { recursive: true });
+      for (const n of names) copyFileSync(join(tmpDir, n), join(outDir, n));
+      copyFileSync(indexLocal, join(outDir, "index.html"));
+      return { url: join(outDir, "index.html"), count: names.length };
+    }
+
+    for (const n of names) {
+      const publicUrl = await uploadFileToR2(
+        join(tmpDir, n), `${objectId}/${BRAND_PREFIX}/${n}`, "image/jpeg"
+      );
+      console.log(`  ↑ ${publicUrl}`);
+    }
+    const url = await uploadFileToR2(
+      indexLocal, `${objectId}/${BRAND_PREFIX}/index.html`, "text/html; charset=utf-8"
+    );
+    return { url, count: names.length };
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }

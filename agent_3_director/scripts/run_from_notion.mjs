@@ -31,7 +31,7 @@ import {
 } from "../notionCrm.mjs";
 import { listKeys } from "../r2list.mjs";
 import { selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
-import { buildCarousel } from "../carouselSlides.mjs";
+import { buildCarousel, buildBrandFolder } from "../carouselSlides.mjs";
 import { renderSeedance, isSeedanceConfigured } from "../renderSeedance.mjs";
 import { renderWan, isWanConfigured } from "../renderWan.mjs";
 import { renderHookCover, isTitleOverlayEnabled, loadTitleOverlayConfig } from "../applyTitleOverlay.mjs";
@@ -300,8 +300,9 @@ async function main() {
     }
   }
 
-  // Дизайн-карусель для соц.сетей: те же отобранные фото → слайды с бейджами
-  // и колонтитулом → R2 {id}/carousel/ + carousel_url в Notion.
+  // Дизайн-карусель для соц.сетей: отобранные фото → слайды (хук с ценой
+  // только у FB-объектов, бейджи только на инфо-слайде) → R2 {id}/carousel/
+  // + carousel_url в Notion.
   // Ошибка не блокирует видео (карусель можно доделать build_carousel.mjs).
   if (!skipOverlay) {
     try {
@@ -316,6 +317,15 @@ async function main() {
       console.log(`✓ дизайн-карусель: ${carousel.slides} слайдов → ${carousel.url}`);
     } catch (err) {
       console.warn(`Carousel failed (non-blocking): ${err.message}`);
+    }
+
+    // «brand open home»: ВСЕ фото объекта с бренд-шаблоном
+    // (лого + контакты, без хука и бейджей) → R2 {id}/brand_open_home/.
+    try {
+      const brand = await buildBrandFolder({ objectId, photoKeys });
+      console.log(`✓ brand open home: ${brand.count} фото → ${brand.url}`);
+    } catch (err) {
+      console.warn(`Brand folder failed (non-blocking): ${err.message}`);
     }
   }
 
