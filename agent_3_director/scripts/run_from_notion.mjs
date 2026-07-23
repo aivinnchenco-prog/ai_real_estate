@@ -31,7 +31,7 @@ import {
   setMontageStart,
 } from "../notionCrm.mjs";
 import { listKeys } from "../r2list.mjs";
-import { selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
+import { selectCarouselPhotos, selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
 import { buildCarousel, buildBrandFolder } from "../carouselSlides.mjs";
 import { renderSeedance, isSeedanceConfigured } from "../renderSeedance.mjs";
 import { renderWan, isWanConfigured } from "../renderWan.mjs";
@@ -307,9 +307,12 @@ async function main() {
   // Ошибка не блокирует видео (карусель можно доделать build_carousel.mjs).
   if (!skipOverlay) {
     try {
+      const carouselNames = await selectCarouselPhotos(imageItems, videoCfg, {
+        exteriorRatio: videoCfg.carousel_exterior_ratio ?? 0.3,
+      });
       const carousel = await buildCarousel({
         objectId,
-        photoKeys: image_keys,
+        photoKeys: carouselNames.map((name) => `${objectId}/photos/${name}`),
         overlayMeta,
         carouselMeta: pageCarouselMeta(page, fields),
         videoCfg,

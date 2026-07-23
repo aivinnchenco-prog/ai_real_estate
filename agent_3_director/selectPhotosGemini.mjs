@@ -90,7 +90,14 @@ async function downloadImages(imageItems) {
   return results;
 }
 
-function buildPrompt(topK) {
+function buildPrompt(topK, { exteriorRatio = null } = {}) {
+  const carouselRule =
+    exteriorRatio == null
+      ? []
+      : [
+          `7. This is an Instagram carousel: select about ${Math.round(exteriorRatio * 100)}% exterior shots and ${100 - Math.round(exteriorRatio * 100)}% interior shots.`,
+          "Treat facade, building grounds, pool, terrace/garden and scenic balcony views as exterior. If there are not enough acceptable photos in either group, fill the remaining slots from the other group.",
+        ];
   return [
     "You are a photo curator for a vertical (9:16) Instagram real-estate video.",
     `From the property photos below, select the BEST ${topK} photos (fewer only if there are not enough acceptable ones).`,
@@ -102,6 +109,7 @@ function buildPrompt(topK) {
     "4. Maximum ONE photo per physical location. Two different bedrooms are different locations; two angles of the same room are duplicates — pick the better one.",
     "5. No near-duplicate frames.",
     "6. Prefer covering diverse spaces: exterior, view, pool, living room, dining, kitchen, bedrooms, bathroom, terrace/garden.",
+    ...carouselRule,
     "",
     "Each image is preceded by a line 'KEY: <filename>'. Return the exact keys.",
     'Category must be one of: exterior, view, pool, living, dining, kitchen, bedroom, bathroom, garden, other.',
@@ -152,7 +160,7 @@ async function callGemini(model, apiKey, body) {
  * @param {object} cfg — seedance.json / wan.json
  * @returns {Promise<{key: string, category: string}[]>}
  */
-export async function geminiSelectDiverse(imageItems, cfg) {
+export async function geminiSelectDiverse(imageItems, cfg, { exteriorRatio = null } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");
   const model = cfg.gemini_selector?.model || process.env.GEMINI_MODEL || DEFAULT_MODEL;
@@ -161,7 +169,7 @@ export async function geminiSelectDiverse(imageItems, cfg) {
   const downloaded = await downloadImages(imageItems);
   if (!downloaded.length) throw new Error("Gemini selector: no images downloaded");
 
-  const parts = [{ text: buildPrompt(topK) }];
+  const parts = [{ text: buildPrompt(topK, { exteriorRatio }) }];
   let total = 0;
   let included = 0;
   for (const { key, buf } of downloaded) {

@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 import { buildPrompt } from "../higgsfieldClient.mjs";
 import { isSeedanceConfigured } from "../renderSeedance.mjs";
-import { fallbackSelectDiverse, inferPhotoCategory, topUpSelection } from "../selectPhotosSeedance.mjs";
+import {
+  fallbackSelectDiverse,
+  inferPhotoCategory,
+  isExteriorCategory,
+  selectWithExteriorRatio,
+  topUpSelection,
+} from "../selectPhotosSeedance.mjs";
 import { normalizeGeminiSelection, isGeminiSelectorAvailable } from "../selectPhotosGemini.mjs";
 
 let ok = 0;
@@ -41,6 +47,17 @@ assert("exterior first is photo_001", picked[0] === "photo_001.jpg");
 assert("no duplicate picks", new Set(picked).size === picked.length);
 assert("infer exterior", inferPhotoCategory("building_exterior.jpg") === "exterior");
 assert("infer kitchen", inferPhotoCategory("modern_kitchen.jpg") === "kitchen");
+assert("pool is exterior for carousel", isExteriorCategory("pool"));
+
+const carouselCandidates = [
+  { key: "front.jpg", category: "exterior" },
+  { key: "view.jpg", category: "view" },
+  { key: "pool.jpg", category: "pool" },
+  ...Array.from({ length: 8 }, (_, i) => ({ key: `room_${i}.jpg`, category: "living" })),
+];
+const carouselPicked = selectWithExteriorRatio(carouselCandidates, 9, 0.3);
+assert("carousel 9 selects 3 exterior", carouselPicked.filter((i) => isExteriorCategory(i.category)).length === 3);
+assert("carousel 9 selects 6 interior", carouselPicked.filter((i) => !isExteriorCategory(i.category)).length === 6);
 
 // --- topUpSelection: добор до topK после куратора ---
 const allKeys = Array.from({ length: 12 }, (_, i) => `photo_${String(i + 1).padStart(3, "0")}.jpg`);

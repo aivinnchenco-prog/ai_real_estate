@@ -27,6 +27,10 @@ const CATEGORY_ORDER = [
   "garden",
 ];
 
+// Для карусели бассейн, терраса/сад и панорамный вид — это внешняя часть объекта.
+// Остальные категории показывают интерьер.
+const EXTERIOR_CATEGORIES = new Set(["exterior", "view", "pool", "garden"]);
+
 function photoNum(key) {
   const m = key.match(/(\d+)/);
   return m ? Number(m[1]) : 0;
@@ -38,6 +42,43 @@ export function inferPhotoCategory(key) {
     if (re.test(name)) return cat;
   }
   return null;
+}
+
+export function isExteriorCategory(category) {
+  return EXTERIOR_CATEGORIES.has(String(category || "").toLowerCase());
+}
+
+/**
+ * Сохранить целевое соотношение экстерьер/интерьер, не жертвуя качеством:
+ * отбираем только из уже ранжированных кандидатов куратора/Gemini. Если
+ * подходящих фото одной группы недостаточно, свободные места получает другая.
+ */
+export function selectWithExteriorRatio(items, topK, exteriorRatio = 0.3) {
+  const unique = [];
+  const used = new Set();
+  for (const item of items) {
+    if (!item?.key || used.has(item.key)) continue;
+    used.add(item.key);
+    unique.push(item);
+  }
+
+  const exterior = unique.filter((item) => isExteriorCategory(item.category));
+  const interior = unique.filter((item) => !isExteriorCategory(item.category));
+  const desiredExterior = Math.round(topK * exteriorRatio);
+  const picked = [
+    ...exterior.slice(0, Math.min(desiredExterior, exterior.length)),
+    ...interior.slice(0, Math.min(topK - Math.min(desiredExterior, exterior.length), interior.length)),
+  ];
+  const pickedKeys = new Set(picked.map((item) => item.key));
+
+  for (const item of unique) {
+    if (picked.length >= topK) break;
+    if (!pickedKeys.has(item.key)) {
+      picked.push(item);
+      pickedKeys.add(item.key);
+    }
+  }
+  return picked.slice(0, topK);
 }
 
 function segmentCategory(index, total, topK) {
@@ -203,9 +244,13 @@ async function curatorHealthy(healthUrl) {
   }
 }
 
-async function curatorSelectDiverse(imageItems, cfg, diverseUrl) {
-  const topK = Math.min(cfg.image_count || 9, cfg.max_images_per_request || 9);
-  const maxPerCategory = cfg.max_per_category ?? 1;
+async function curatorSelectDiverse(
+  imageItems,
+  cfg,
+  diverseUrl,
+  { topK = Math.min(cfg.image_count || 9, cfg.max_images_per_request || 9),
+    maxPerCategory = cfg.max_per_category ?? 1 } = {}
+) {
   const body = {
     images: imageItems,
     top_k: topK,
@@ -221,9 +266,14 @@ async function curatorSelectDiverse(imageItems, cfg, diverseUrl) {
   if (!res.ok) throw new Error(`Curator diverse HTTP ${res.status}`);
   const data = await res.json();
   if (data.warning) console.warn(`Curator diverse: ${data.warning}`);
-  const keys = orderAndCapCategories(data.selected, topK, maxPerCategory).map((s) => s.key);
+  const selected = (data.selected || [])
+    .filter((item) => item?.key)
+    .map((item) => ({
+      key: item.key,
+      category: item.category || inferPhotoCategory(item.key) || "other",
+    }));
   const rejectedKeys = (data.rejected || []).map((r) => r.key);
-  return { keys, rejectedKeys };
+  return { selected, rejectedKeys };
 }
 
 function resolveDiverseUrl(cfg) {
@@ -249,7 +299,8 @@ export async function selectPhotosSeedance(imageItems, cfg, { curatorFallback = 
 
   if (diverseUrl && healthUrl && (await curatorHealthy(healthUrl))) {
     try {
-      const { keys, rejectedKeys } = await curatorSelectDiverse(imageItems, cfg, diverseUrl);
+      const { selected, rejectedKeys } = await curatorSelectDiverse(imageItems, cfg, diverseUrl);
+      const keys = orderAndCapCategories(selected, topK, maxPerCategory).map((item) => item.key);
       if (!keys.length) {
         throw new Error("curator returned 0 images (all rejected)");
       }
@@ -286,5 +337,57 @@ export async function selectPhotosSeedance(imageItems, cfg, { curatorFallback = 
 
   const keys = fallbackSelectDiverse(imageItems, topK, maxPerCategory);
   console.log(`Photo select: fallback diverse, ${keys.length} images (exterior first, max ${maxPerCategory}/category)`);
+  return keys;
+}
+
+/**
+ * Отбор только для карусели: 30% экстерьера / 70% интерьера по умолчанию.
+ * Видео продолжает использовать selectPhotosSeedance() с обычным разнообразием.
+ */
+export async function selectCarouselPhotos(imageItems, cfg, { exteriorRatio = 0.3 } = {}) {
+  const topK = Math.min(cfg.image_count || 9, cfg.max_images_per_request || 9);
+  const diverseUrl = resolveDiverseUrl(cfg);
+  const healthUrl = diverseUrl?.replace(/\/select-diverse$/, "/health");
+
+  if (diverseUrl && healthUrl && (await curatorHealthy(healthUrl))) {
+    try {
+      // Получаем расширенный качественный пул, затем применяем пропорцию.
+      // Это важно: один топ-9 куратора может случайно не содержать 3 экстерьера,
+      // хотя подходящие кадры есть среди остальных.
+      const candidateCount = Math.min(imageItems.length, topK * 3);
+      const { selected } = await curatorSelectDiverse(imageItems, cfg, diverseUrl, {
+        topK: candidateCount,
+        maxPerCategory: candidateCount,
+      });
+      const picked = selectWithExteriorRatio(selected, topK, exteriorRatio);
+      if (!picked.length) throw new Error("curator returned 0 images (all rejected)");
+      const exteriorCount = picked.filter((item) => isExteriorCategory(item.category)).length;
+      console.log(
+        `Carousel select: curator, ${picked.length} images (${exteriorCount} exterior / ${picked.length - exteriorCount} interior)`
+      );
+      return picked.map((item) => item.key);
+    } catch (err) {
+      console.warn("Carousel curator failed, trying Gemini selector:", err.message);
+    }
+  }
+
+  if (isGeminiSelectorAvailable(cfg)) {
+    try {
+      const selected = await geminiSelectDiverse(imageItems, cfg, { exteriorRatio });
+      const picked = selectWithExteriorRatio(selected, topK, exteriorRatio);
+      const exteriorCount = picked.filter((item) => isExteriorCategory(item.category)).length;
+      console.log(
+        `Carousel select: Gemini, ${picked.length} images (${exteriorCount} exterior / ${picked.length - exteriorCount} interior)`
+      );
+      return picked.map((item) => item.key);
+    } catch (err) {
+      console.warn("Carousel Gemini selector failed, using filename fallback:", err.message);
+    }
+  }
+
+  // Имена photo_NNN не содержат смысловых категорий, поэтому fallback не может
+  // честно гарантировать пропорцию. Он сохраняет прежний отбор разнообразных кадров.
+  const keys = fallbackSelectDiverse(imageItems, topK, cfg.max_per_category ?? 1);
+  console.warn(`Carousel select: filename fallback, ${keys.length} images (category ratio unavailable)`);
   return keys;
 }

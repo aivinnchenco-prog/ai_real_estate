@@ -5,6 +5,7 @@
   "segment_seconds": 1.6,
   "end_fade_seconds": 0.6,
   "image_count": 9,
+  "carousel_exterior_ratio": 0.3,
   "max_images_per_request": 9,
   "max_per_category": 1,
   "max_similarity": 0.88,

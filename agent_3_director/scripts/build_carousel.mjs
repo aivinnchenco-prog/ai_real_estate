@@ -28,7 +28,7 @@ import {
   setBrandOpenHomeUrl,
 } from "../notionCrm.mjs";
 import { listKeys } from "../r2list.mjs";
-import { selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
+import { selectCarouselPhotos } from "../selectPhotosSeedance.mjs";
 import { buildCarousel, buildBrandFolder } from "../carouselSlides.mjs";
 
 function parseArgs() {
@@ -48,7 +48,7 @@ function parseArgs() {
 }
 
 function loadSelectConfig() {
-  // Отбор фото как у Seedance: 9 лучших, max 1 кадр на локацию
+  // Отбор карусели: 9 лучших, 30% экстерьера / 70% интерьера.
   try {
     return JSON.parse(readFileSync(resolve(ROOT, "config/seedance.json"), "utf8"));
   } catch {
@@ -87,7 +87,9 @@ async function main() {
     key: key.split("/").pop(),
     url: `${publicBase}/${key}`,
   }));
-  const selectedNames = await selectPhotosSeedance(imageItems, selectCfg);
+  const selectedNames = await selectCarouselPhotos(imageItems, selectCfg, {
+    exteriorRatio: selectCfg.carousel_exterior_ratio ?? 0.3,
+  });
   const selectedKeys = selectedNames.map((name) => `${objectId}/photos/${name}`);
 
   const overlayMeta = pageVideoOverlayMeta(page, fields, notionCfg.overlay_fields);
