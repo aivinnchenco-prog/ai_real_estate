@@ -26,6 +26,7 @@ import {
   pageVideoEngineId,
   setSeedanceUrl,
   setCarouselUrl,
+  setBrandOpenHomeUrl,
   setError,
   setMontageStart,
 } from "../notionCrm.mjs";
@@ -323,6 +324,7 @@ async function main() {
     // (лого + контакты, без хука и бейджей) → R2 {id}/brand_open_home/.
     try {
       const brand = await buildBrandFolder({ objectId, photoKeys });
+      await setBrandOpenHomeUrl(page, fields, brand.url);
       console.log(`✓ brand open home: ${brand.count} фото → ${brand.url}`);
     } catch (err) {
       console.warn(`Brand folder failed (non-blocking): ${err.message}`);

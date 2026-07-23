@@ -67,6 +67,13 @@ export async function setCarouselUrl(page, fields, url) {
   });
 }
 
+/** Ссылка на все брендированные фото: R2 {id}/brand_open_home/index.html. */
+export async function setBrandOpenHomeUrl(page, fields, url) {
+  await updatePage(page.id, {
+    [fields.brand_open_home_url || "brand_open_home_url"]: { url },
+  });
+}
+
 export async function setMontageStart(page, fields, statusName) {
   await updatePage(page.id, {
     [fields.status]: { status: { name: statusName } },

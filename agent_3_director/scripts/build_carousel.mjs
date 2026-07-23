@@ -25,6 +25,7 @@ import {
   pageVideoOverlayMeta,
   pageCarouselMeta,
   setCarouselUrl,
+  setBrandOpenHomeUrl,
 } from "../notionCrm.mjs";
 import { listKeys } from "../r2list.mjs";
 import { selectPhotosSeedance } from "../selectPhotosSeedance.mjs";
@@ -116,6 +117,10 @@ async function main() {
       photoKeys,
       outDir: dryRun ? resolve(ROOT, "data/brand_preview", objectId) : null,
     });
+    if (!dryRun) {
+      await setBrandOpenHomeUrl(page, fields, brand.url);
+      console.log(`✓ brand_open_home_url → Notion: ${brand.url}`);
+    }
     console.log(`BRAND_DONE ${objectId}: ${brand.count} фото → ${brand.url}`);
   } catch (err) {
     console.warn(`Brand folder failed (non-blocking): ${err.message}`);

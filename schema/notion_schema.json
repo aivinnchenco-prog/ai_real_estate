@@ -41,6 +41,7 @@
     {"exact_name": "video_url_vertical", "type": "url", "writers": ["agent_3_director"], "readers": ["agent_4_publisher"]},
     {"exact_name": "video_url_Seedance", "type": "url", "writers": ["agent_3_director"], "readers": ["agent_4_publisher"]},
     {"exact_name": "carousel_url", "type": "url", "writers": ["agent_3_director"], "readers": ["agent_4_publisher"], "$comment": "Галерея дизайн-карусели: R2 {id}/carousel/index.html. Слайды с бейджами и колонтитулом — их постит Агент 4 вместо сырых фото."},
+    {"exact_name": "brand_open_home_url", "type": "url", "writers": ["agent_3_director"], "readers": ["manual"], "$comment": "Галерея всех фото объекта с шаблоном OpenHome: R2 {id}/brand_open_home/index.html. Без ценового хука и бейджей."},
     {"exact_name": "post_url_FB_marketplace", "type": "url", "writers": ["agent_4_publisher"], "readers": ["agent_6_qualifier"]},
     {"exact_name": "post_url_fb_groups", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_6_qualifier"], "$comment": "Все ссылки на посты в группах FB, по одной на строку (ветка fb_groups_pipeline)."},
     {"exact_name": "post_url_telegram", "type": "url", "writers": ["agent_4_publisher"], "readers": ["agent_5_usher", "agent_6_qualifier"]},
