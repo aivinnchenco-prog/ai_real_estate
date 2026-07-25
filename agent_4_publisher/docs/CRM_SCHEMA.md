@@ -13,59 +13,61 @@
 | 1 | Статус | status |
 | 2 | Тип аренды | select |
 | 3 | Описание для Telegram | rich_text |
-| 4 | agent6_taken_at | date |
-| 5 | Источник объявления | url |
-| 6 | video_url_Seedance | url |
-| 7 | Цена за год | number |
-| 8 | Можно с питомцами | checkbox |
-| 9 | last_error | rich_text |
-| 10 | post_url_telegram | url |
-| 11 | Дата добавления | created_time |
-| 12 | Площадь участка (м²) | number |
-| 13 | Описание сец.сети | rich_text |
-| 14 | metricool_post_group_id | rich_text _(legacy)_ |
-| 15 | Google Maps | url |
-| 16 | Количество сан.узлов | number |
-| 17 | Удобства | multi_select |
-| 18 | post_url_youtube | url |
-| 19 | Описание | rich_text |
-| 20 | Описание для FB Marketplace | rich_text |
-| 21 | Количество комнат | number |
-| 22 | agent6_video_done | checkbox |
-| 23 | post_url_linkedin | url |
-| 24 | Адрес | rich_text |
-| 25 | Цена за месяц | number |
-| 26 | post_url_x | url |
-| 27 | WhatsApp контакт | rich_text |
-| 28 | Залог | number |
-| 29 | **Фото** | url |
-| 30 | agent6_carousel_done | checkbox |
-| 31 | post_url_facebook | url |
-| 32 | Объект ID | rich_text |
-| 33 | Локация | place |
-| 34 | Этаж | number |
-| 35 | post_url_threads | url |
-| 36 | agent6_mode | select |
-| 37 | Год постройки | number |
-| 38 | Вид | select |
-| 39 | agent6_log | rich_text |
-| 40 | video_url_vertical | url |
-| 41 | post_url_tiktok | url |
-| 42 | Владелец / Агент | rich_text |
-| 43 | metricool_post_id | rich_text |
-| 44 | Тип жилья | select |
-| 45 | Район | rich_text |
-| 46 | error_count | number |
-| 47 | post_url_instagram_carousel | url |
-| 48 | post_url_instagram_reel | url |
-| 49 | agent6_locked | checkbox |
-| 50 | Telegram контакт | rich_text |
-| 51 | Название объекта | title |
+| 4 | Дата и время публикации | date + time |
+| 5 | agent6_taken_at | date |
+| 6 | Источник объявления | url |
+| 7 | video_url_Seedance | url |
+| 8 | Цена за год | number |
+| 9 | Можно с питомцами | checkbox |
+| 10 | last_error | rich_text |
+| 11 | post_url_telegram | url |
+| 12 | Дата добавления | created_time |
+| 13 | Площадь участка (м²) | number |
+| 14 | Описание сец.сети | rich_text |
+| 15 | metricool_post_group_id | rich_text _(legacy)_ |
+| 16 | Google Maps | url |
+| 17 | Количество сан.узлов | number |
+| 18 | Удобства | multi_select |
+| 19 | post_url_youtube | url |
+| 20 | Описание | rich_text |
+| 21 | Описание для FB Marketplace | rich_text |
+| 22 | Количество комнат | number |
+| 23 | agent6_video_done | checkbox |
+| 24 | post_url_linkedin | url |
+| 25 | Адрес | rich_text |
+| 26 | Цена за месяц | number |
+| 27 | post_url_x | url |
+| 28 | WhatsApp контакт | rich_text |
+| 29 | Залог | number |
+| 30 | **Фото** | url |
+| 31 | agent6_carousel_done | checkbox |
+| 32 | post_url_facebook | url |
+| 33 | Объект ID | rich_text |
+| 34 | Локация | place |
+| 35 | Этаж | number |
+| 36 | post_url_threads | url |
+| 37 | agent6_mode | select |
+| 38 | Год постройки | number |
+| 39 | Вид | select |
+| 40 | agent6_log | rich_text |
+| 41 | video_url_vertical | url |
+| 42 | post_url_tiktok | url |
+| 43 | Владелец / Агент | rich_text |
+| 44 | metricool_post_id | rich_text |
+| 45 | Тип жилья | select |
+| 46 | Район | rich_text |
+| 47 | error_count | number |
+| 48 | post_url_instagram_carousel | url |
+| 49 | post_url_instagram_reel | url |
+| 50 | agent6_locked | checkbox |
+| 51 | Telegram контакт | rich_text |
+| 52 | Название объекта | title |
 
 ## Agent 6 — служебные поля
 
 | Поле | Тип | Назначение |
 |------|-----|------------|
+| **Дата и время публикации** | date + time | Когда и во сколько выйдет пост в соцсети (слот Metricool, TZ `Asia/Bangkok`). Для календарного вида Notion |
 | agent6_locked | checkbox | Объект взят, без авто-повтора |
 | agent6_taken_at | date | Когда Agent 6 взял объект |
 | agent6_carousel_done | checkbox | Карусель отправлена в Metricool |
@@ -128,6 +130,7 @@
 | **Описание** | Rich Text | Полное описание объекта (CRM, не для публикации Agent 6) |
 | **Описание для Telegram** | Rich Text | Подпись для TG-канала | Agent 6 → `publish_telegram.py` |
 | **Описание сец.сети** | Rich Text | Универсальная подпись для Metricool | Agent 6 → `publish_pipeline.py` |
+| **Дата и время публикации** | Date + time | Дата и время выхода поста в соцсети | Agent 6 → Metricool `publicationDate` (ISO с временем); календарный вид Notion |
 | **metricool_post_id** | Rich Text | ID поста в Metricool после публикации (Agent 6) | Заполняется `publish_pipeline.py` |
 | **post_url_instagram_carousel** | URL | Ссылка на карусель в Instagram | Agent 6 после публикации |
 | **post_url_instagram_reel** | URL | Ссылка на Reel в Instagram | Agent 6 после публикации |

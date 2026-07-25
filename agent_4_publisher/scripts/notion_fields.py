@@ -49,6 +49,8 @@ POST_URL_INSTAGRAM_REEL = "post_url_instagram_reel"
 # --- Metricool ---
 METRICOOL_POST_GROUP_ID = "metricool_post_group_id"
 METRICOOL_POST_ID = "metricool_post_id"
+# Дата и время выхода поста в соцсети (календарный вид Notion)
+PUBLISH_AT = "Дата и время публикации"
 
 # --- Служебные поля Publisher (историческое имя agent6_*, будущее — publisher_*) ---
 AGENT6_CAROUSEL_DONE = "agent6_carousel_done"

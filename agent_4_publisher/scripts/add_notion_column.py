@@ -33,6 +33,7 @@ AGENT6_COLUMNS = {
     nfc.AGENT6_CAROUSEL_DONE: {"checkbox": {}},
     nfc.AGENT6_VIDEO_DONE: {"checkbox": {}},
     nfc.AGENT6_TAKEN_AT: {"date": {}},
+    nfc.PUBLISH_AT: {"date": {}},  # date + time via ISO datetime values
     nfc.CHATPLACE_FUNNEL_DONE: {"checkbox": {}},
     nfc.CHATPLACE_FUNNEL_ID: {"rich_text": {}},
     nfc.CHATPLACE_FUNNEL_CAROUSEL_DONE: {"checkbox": {}},
@@ -56,11 +57,17 @@ COLUMNS = {
     nfc.METRICOOL_POST_ID: {"rich_text": {}},
     "publora_post_group_id": {"rich_text": {}},
     nfc.DESCRIPTION_SOCIAL: {"rich_text": {}},
+    nfc.PUBLISH_AT: {"date": {}},
     **{name: {"url": {}} for name in PUBLISHED_URL_COLUMNS},
     **AGENT6_COLUMNS,
 }
 
-DEFAULT_COLUMNS = [nfc.METRICOOL_POST_ID, *PUBLISHED_URL_COLUMNS, *AGENT6_COLUMNS.keys()]
+DEFAULT_COLUMNS = [
+    nfc.METRICOOL_POST_ID,
+    nfc.PUBLISH_AT,
+    *PUBLISHED_URL_COLUMNS,
+    *AGENT6_COLUMNS.keys(),
+]
 
 
 def package_root() -> Path:

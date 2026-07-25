@@ -172,12 +172,73 @@ def resolve_publish_platforms(chain: dict) -> list[str]:
     pub_path = estate_root / "agent_4_publisher" / "config" / "publisher.json"
     try:
         with pub_path.open(encoding="utf-8") as f:
-            plats = json.load(f).get("publish_platforms")
+            pub_cfg = json.load(f)
+        if not pub_cfg.get("metricool", {}).get("enabled", True):
+            return []
+        plats = pub_cfg.get("publish_platforms")
         if plats:
             return list(plats)
     except (OSError, json.JSONDecodeError, AttributeError):
         pass
     return list(chain.get("publish_platforms") or ["instagram"])
+
+
+def load_agent4_publisher_config() -> dict:
+    pub_path = ROOT.parents[2] / "agent_4_publisher" / "config" / "publisher.json"
+    with pub_path.open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def phone_publisher_project_root(pub_cfg: dict) -> Path:
+    rel = pub_cfg.get("phone_publisher", {}).get("project_path", "Publisher social")
+    agents_root = ROOT.parents[2].parent  # папка «Агенты»
+    return (agents_root / rel).resolve()
+
+
+def run_phone_publisher(page_id: str, pub_cfg: dict, *, live: bool = False) -> int:
+    """Publisher social — публикация с Android-телефона (ADB)."""
+    pp = pub_cfg.get("phone_publisher", {})
+    if not pp.get("enabled"):
+        print("[chain] SKIP phone publisher: disabled in publisher.json", file=sys.stderr)
+        return 0
+    project = phone_publisher_project_root(pub_cfg)
+    if not project.exists():
+        print(f"[chain] SKIP phone publisher: not found {project}", file=sys.stderr)
+        return 1
+    cmd_name = pp.get("command", "publish-all")
+    cmd = [
+        sys.executable,
+        "-m",
+        "publisher_social",
+        cmd_name,
+        "--page-id",
+        page_id,
+    ]
+    if live:
+        cmd.append("--live")
+    else:
+        cmd.append("--dry-run")
+    env = os.environ.copy()
+    src = project / "src"
+    env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
+    print(f"\n[chain] Phone publisher ({cmd_name}) → {page_id}"
+          + (" [LIVE]" if live else " [dry-run]"))
+    proc = subprocess.run(cmd, cwd=project, env=env)
+    return proc.returncode
+
+
+def spawn_chatplace_for_reel(page_id: str) -> int:
+    """ChatPlace IG reel — после post_url_instagram_reel в Notion."""
+    script = ROOT.parents[2] / "agent_4_publisher" / "scripts" / "spawn_chatplace_for_reel.py"
+    if not script.exists():
+        print(f"[chain] SKIP chatplace reel: not found {script}", file=sys.stderr)
+        return 0
+    print(f"\n[chain] ChatPlace reel funnel → {page_id}")
+    proc = subprocess.run(
+        [sys.executable, str(script), "--page-id", page_id],
+        cwd=script.parent,
+    )
+    return proc.returncode
 
 
 def run_agent6(page_id: str, platform: str, publisher_script: Path,
@@ -400,13 +461,16 @@ def continue_chain(
             break  # строго один объект за цикл — остальные ждут следующего poll
 
     fb_branches: list[str] = []
-    if chain.get("publish_fb_groups"):
+    pub_cfg = load_agent4_publisher_config()
+    phone_on = bool(pub_cfg.get("phone_publisher", {}).get("enabled"))
+    metricool_on = bool(pub_cfg.get("metricool", {}).get("enabled", True))
+    if chain.get("publish_fb_groups") and not (phone_on and not metricool_on):
         fb_branches.append("fb_groups_pipeline.py")
-    if chain.get("publish_fb_marketplace"):
+    if chain.get("publish_fb_marketplace") and not (phone_on and not metricool_on):
         fb_branches.append("fb_marketplace_pipeline.py")
 
     should_run_agent6 = chain_auto_publish(cfg) or from_agent >= 6 or bool(publish_platforms)
-    if should_run_agent6 and (platforms or fb_branches):
+    if should_run_agent6 and (platforms or fb_branches or phone_on):
         listings6: list = []
         if object_id:
             one = fetch_by_object_id(crm, object_id, nf)
@@ -431,19 +495,34 @@ def continue_chain(
                 continue
             # Видео нет (монтаж выключен) — публикуем только карусель.
             mode6 = None if listing.has_videos else "carousel"
-            # Один процесс --platform all: все сети в одном запуске (как раньше через
-            # publisher.json), иначе после Instagram срабатывает agent6_locked.
-            plat_arg = "all" if len(platforms) > 1 else platforms[0]
-            log_event(listing.object_id, "chain", "agent6_start", platform=plat_arg)
-            code6 = run_agent6(listing.page_id, plat_arg, publisher, mode=mode6)
-            if code6 != 0:
-                exit_code = code6
-                log_event(listing.object_id, "chain", "agent6_failed", platform=plat_arg)
-                notify(
-                    f"Агент 6 (публикация) упал на объекте {listing.object_id} "
-                    f"({plat_arg}). Детали в last_error объекта в Notion.",
-                    tag=f"agent6_failed:{listing.object_id}",
-                )
+            if phone_on and not metricool_on:
+                log_event(listing.object_id, "chain", "phone_publisher_start", page_id=listing.page_id)
+                live = bool(chain.get("phone_publisher_live", False))
+                code6 = run_phone_publisher(listing.page_id, pub_cfg, live=live)
+                if code6 != 0:
+                    exit_code = code6
+                    log_event(listing.object_id, "chain", "phone_publisher_failed", code=code6)
+                    notify(
+                        f"Phone publisher упал на объекте {listing.object_id}. "
+                        "Проверьте ADB/телефон и last_error в Notion.",
+                        tag=f"phone_publisher_failed:{listing.object_id}",
+                    )
+                elif live:
+                    spawn_chatplace_for_reel(listing.page_id)
+            elif platforms:
+                # Один процесс --platform all: все сети в одном запуске (как раньше через
+                # publisher.json), иначе после Instagram срабатывает agent6_locked.
+                plat_arg = "all" if len(platforms) > 1 else platforms[0]
+                log_event(listing.object_id, "chain", "agent6_start", platform=plat_arg)
+                code6 = run_agent6(listing.page_id, plat_arg, publisher, mode=mode6)
+                if code6 != 0:
+                    exit_code = code6
+                    log_event(listing.object_id, "chain", "agent6_failed", platform=plat_arg)
+                    notify(
+                        f"Агент 6 (публикация) упал на объекте {listing.object_id} "
+                        f"({plat_arg}). Детали в last_error объекта в Notion.",
+                        tag=f"agent6_failed:{listing.object_id}",
+                    )
             for script_name in fb_branches:
                 branch = script_name.replace("_pipeline.py", "")
                 log_event(listing.object_id, "chain", f"{branch}_start", page_id=listing.page_id)

@@ -239,7 +239,7 @@ def prepare_chatplace_job(
     if not is_live_social_url(instagram_post_url, platform):
         raise ValueError(
             f"Live {platform} post URL not ready in {ig_field!r} "
-            f"(got {instagram_post_url!r}) — wait for Metricool publish + URL sync"
+            f"(got {instagram_post_url!r}) — дождитесь публикации и записи ссылки в Notion"
         )
 
     trigger_type = str(cp.get("instagram_comment_trigger", "commentAnyValue"))

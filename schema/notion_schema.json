@@ -55,6 +55,7 @@
     {"exact_name": "post_url_instagram_reel", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_5_usher", "agent_6_qualifier"]},
     {"exact_name": "metricool_post_group_id", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_5_usher"]},
     {"exact_name": "metricool_post_id", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_5_usher"]},
+    {"exact_name": "Дата и время публикации", "type": "date", "writers": ["agent_4_publisher", "manual"], "readers": ["agent_4_publisher", "manual"], "$comment": "Дата + время выхода поста в соцсети (Metricool, ISO с offset, TZ Asia/Bangkok). Для календарного вида Notion."},
     {"exact_name": "agent6_carousel_done", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
     {"exact_name": "agent6_video_done", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
     {"exact_name": "agent6_locked", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},

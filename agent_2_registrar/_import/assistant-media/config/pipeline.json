@@ -150,8 +150,11 @@
     "auto_agent4": false,
     "publish_platforms": null,
     "publisher_script": null,
-    "publish_fb_groups": true,
-    "publish_fb_marketplace": true,
+    "publish_fb_groups": false,
+    "publish_fb_marketplace": false,
+    "$comment_fb": "FB Groups/Marketplace — через Publisher social (телефон), не Playwright.",
+    "phone_publisher_live": false,
+    "$comment_phone_live": "true = chain_runner вызывает publish-all --live (боевой пост с телефона). Локально оставляем false.",
     "default_montage": "НЕТ",
     "default_publish": "НЕТ",
     "telegram_showcase": true

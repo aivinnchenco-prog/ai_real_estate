@@ -38,6 +38,7 @@ EXPECTED_TYPES: dict[str, str] = {
     "carousel_url": "url",
     "brand_open_home_url": "url",
     "metricool_post_id": "rich_text",
+    "publish_at": "date",
     "agent6_locked": "checkbox",
     "agent6_carousel_done": "checkbox",
     "agent6_video_done": "checkbox",

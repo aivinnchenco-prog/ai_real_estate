@@ -176,13 +176,65 @@ function monthNameRu(yyyyMm) {
   return MONTHS_RU[month] || "";
 }
 
-function formatOverlayPrice(page, priceField, fallbackField, monthlyField) {
+/** Объекты Facebook (F_*): годовой контракт, фиксированная цена. */
+export function isFbObject(objectId) {
+  return /^F[_-]/i.test(String(objectId || "").trim());
+}
+
+/** Объекты Airbnb (A_*): сезонные monthly_prices. */
+export function isAirbnbObject(objectId) {
+  return /^A[_-]/i.test(String(objectId || "").trim());
+}
+
+function formatOverlayPrice(page, priceField, fallbackField, monthlyField, objectId) {
   const monthlyMap = monthlyField ? parseMonthlyPrices(page, monthlyField) : {};
+
+  // Airbnb: первый предстоящий месяц из monthly_prices → «в месяц · август»
+  if (isAirbnbObject(objectId)) {
+    const upcoming = firstUpcomingMonthKey(monthlyMap);
+    if (upcoming && monthlyMap[upcoming]?.price) {
+      return {
+        price: Number(monthlyMap[upcoming].price).toLocaleString("en-US"),
+        period: `в месяц · ${monthNameRu(upcoming)}`,
+      };
+    }
+    const monthly = priceField ? readNumber(page, priceField) : null;
+    if (monthly) {
+      return { price: monthly.toLocaleString("en-US"), period: "в месяц" };
+    }
+    const yearly = fallbackField ? readNumber(page, fallbackField) : null;
+    if (yearly) {
+      return { price: yearly.toLocaleString("en-US"), period: "в год" };
+    }
+    return { price: "", period: "" };
+  }
+
+  // Facebook: годовой контракт — показываем помесячный эквивалент
+  if (isFbObject(objectId)) {
+    const yearly = fallbackField ? readNumber(page, fallbackField) : null;
+    const monthly = priceField ? readNumber(page, priceField) : null;
+    if (yearly) {
+      const perMonth = Math.round(yearly / 12);
+      return {
+        price: perMonth.toLocaleString("en-US"),
+        period: "в месяц · годовой контракт",
+      };
+    }
+    if (monthly) {
+      return {
+        price: monthly.toLocaleString("en-US"),
+        period: "в месяц · годовой контракт",
+      };
+    }
+    return { price: "", period: "" };
+  }
+
+  // Прочие источники — прежний фолбэк
   const upcoming = firstUpcomingMonthKey(monthlyMap);
   if (upcoming && monthlyMap[upcoming]?.price) {
     return {
       price: Number(monthlyMap[upcoming].price).toLocaleString("en-US"),
-      period: monthNameRu(upcoming),
+      period: `в месяц · ${monthNameRu(upcoming)}`,
     };
   }
 
@@ -198,7 +250,7 @@ function formatOverlayPrice(page, priceField, fallbackField, monthlyField) {
   return { price: "", period: "" };
 }
 
-export function pageVideoOverlayMeta(page, fields, overlayFields = {}) {
+export function pageVideoOverlayMeta(page, fields, overlayFields = {}, objectId = null) {
   const housingField = overlayFields.housing_type || fields.housing_type || "Тип жилья";
   const roomsField = overlayFields.rooms || fields.rooms || "Количество комнат";
   const priceField = overlayFields.price || fields.price_monthly || "Цена за месяц";
@@ -207,6 +259,8 @@ export function pageVideoOverlayMeta(page, fields, overlayFields = {}) {
     overlayFields.monthly_prices || fields.monthly_prices || "monthly_prices";
   const districtField = overlayFields.district || fields.district || "Район";
 
+  const oid = objectId || pageObjectId(page, fields);
+
   const housingType = readSelect(page, housingField);
   const rooms = readNumber(page, roomsField);
   const district = readRichText(page, districtField);
@@ -214,7 +268,8 @@ export function pageVideoOverlayMeta(page, fields, overlayFields = {}) {
     page,
     priceField,
     priceFallback,
-    monthlyField
+    monthlyField,
+    oid
   );
 
   return {

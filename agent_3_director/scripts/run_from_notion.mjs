@@ -207,7 +207,7 @@ async function main() {
   const status = pageStatus(page, fields);
   const existingSeedance = pageSeedanceUrl(page, fields);
 
-  const overlayMeta = pageVideoOverlayMeta(page, fields, notionCfg.overlay_fields);
+  const overlayMeta = pageVideoOverlayMeta(page, fields, notionCfg.overlay_fields, objectId);
 
   console.log(`Notion: ${title || objectId}`);
   console.log(`Status: ${status}`);
@@ -286,30 +286,32 @@ async function main() {
     return;
   }
 
-  // Хук-обложка карусели — до видео, чтобы она была даже при падении рендера
-  if (!skipOverlay && isTitleOverlayEnabled(videoCfg)) {
-    try {
-      const coverUrl = await makeHookCover({
-        objectId,
-        firstPhotoKey: photoKeys.sort()[0],
-        overlayMeta,
-        seedanceCfg: videoCfg,
-      });
-      console.log(`✓ hook cover (карусель): ${coverUrl}`);
-    } catch (err) {
-      console.warn(`Hook cover failed (non-blocking): ${err.message}`);
-    }
-  }
-
-  // Дизайн-карусель для соц.сетей: отобранные фото → слайды (хук с ценой
-  // только у FB-объектов, бейджи только на инфо-слайде) → R2 {id}/carousel/
-  // + carousel_url в Notion.
-  // Ошибка не блокирует видео (карусель можно доделать build_carousel.mjs).
+  // Дизайн-карусель + brand open home (хук с ценой на лучшем фото).
+  let carouselHeroKey = photoKeys.sort()[0];
   if (!skipOverlay) {
     try {
       const carouselNames = await selectCarouselPhotos(imageItems, videoCfg, {
         exteriorRatio: videoCfg.carousel_exterior_ratio ?? 0.3,
       });
+      if (carouselNames.length) {
+        carouselHeroKey = `${objectId}/photos/${carouselNames[0]}`;
+      }
+
+      // Хук-обложка карусели — до видео, на лучшем отобранном фото
+      if (isTitleOverlayEnabled(videoCfg) && overlayMeta?.price) {
+        try {
+          const coverUrl = await makeHookCover({
+            objectId,
+            firstPhotoKey: carouselHeroKey,
+            overlayMeta,
+            seedanceCfg: videoCfg,
+          });
+          console.log(`✓ hook cover (карусель): ${coverUrl}`);
+        } catch (err) {
+          console.warn(`Hook cover failed (non-blocking): ${err.message}`);
+        }
+      }
+
       const carousel = await buildCarousel({
         objectId,
         photoKeys: carouselNames.map((name) => `${objectId}/photos/${name}`),
@@ -323,10 +325,15 @@ async function main() {
       console.warn(`Carousel failed (non-blocking): ${err.message}`);
     }
 
-    // «brand open home»: ВСЕ фото объекта с бренд-шаблоном
-    // (лого + контакты, без хука и бейджей) → R2 {id}/brand_open_home/.
+    // «brand open home»: все фото с бренд-шаблоном + хук на лучшем фото.
     try {
-      const brand = await buildBrandFolder({ objectId, photoKeys });
+      const brand = await buildBrandFolder({
+        objectId,
+        photoKeys,
+        heroPhotoKey: carouselHeroKey,
+        overlayMeta,
+        videoCfg,
+      });
       await setBrandOpenHomeUrl(page, fields, brand.url);
       console.log(`✓ brand open home: ${brand.count} фото → ${brand.url}`);
     } catch (err) {

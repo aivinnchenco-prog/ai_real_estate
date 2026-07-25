@@ -2,24 +2,17 @@
  * Дизайн-карусель для соц.сетей: из отобранных фото объекта собираем
  * до 9 слайдов 1080×1350 (4:5).
  *
- * Объекты из FB (ID F_*) — цена фиксированная, хук с ценой уместен:
- *   слайд 1 — хук-обложка (шаблон hook_card, как в видео);
- *   слайд 2 — фото + три бейджа «спальни / бассейн / парковка»;
- *   слайды 3+ — только логотип и контакты (без бейджей).
+ * Объекты из FB (ID F_*) — годовой контракт: хук «в месяц · годовой контракт».
+ * Объекты из Airbnb (ID A_*) — сезонная цена: хук «в месяц · {месяц}».
  *
- * Объекты из Airbnb (ID A_*) — цена сезонная, хук с ценой НЕ используем:
- *   слайд 1 — фото + три бейджа;
- *   слайды 2+ — только логотип и контакты.
+ * Карусель (carousel/):
+ *   слайд 1 — хук-обложка на лучшем «инстаграмном» фото;
+ *   слайд 2 — фото + три бейджа;
+ *   слайды 3+ — только логотип и контакты.
  *
- * На каждом слайде: затемняющий градиент снизу, прозрачный логотип OpenHome,
- * колонтитул: слева «TG @OpenHome_th», справа телефон.
- *
- * Готовые слайды льются в R2: {object_id}/carousel/slide_NN.jpg
- * + {object_id}/carousel/index.html (галерея — её URL пишется в Notion
- * в колонку carousel_url; публикатор Агента 4 берёт слайды из неё).
- *
- * Плюс buildBrandFolder(): ВСЕ фото объекта дублируются с бренд-шаблоном
- * (лого + контакты, без хука и бейджей) в R2 {object_id}/brand_open_home/.
+ * Brand open home (brand_open_home/):
+ *   ВСЕ фото с бренд-шаблоном (лого + контакты);
+ *   на первом лучшем фото дополнительно хук с ценой.
  */
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join, resolve } from "path";
@@ -27,6 +20,7 @@ import { tmpdir } from "os";
 import { ROOT } from "./env.mjs";
 import { downloadFromR2, uploadFileToR2 } from "./r2util.mjs";
 import { renderHookCover, loadTitleOverlayConfig } from "./applyTitleOverlay.mjs";
+import { isFbObject } from "./notionCrm.mjs";
 
 export const CAROUSEL_PREFIX = "carousel";
 export const BRAND_PREFIX = "brand_open_home";
@@ -90,10 +84,8 @@ export function hasPool(meta) {
   return blob.includes("бассейн") || blob.includes("pool");
 }
 
-/** Объекты, спарсенные из Facebook (F_*): цена фиксированная → хук с ценой уместен. */
-export function isFbObject(objectId) {
-  return /^F[_-]/i.test(String(objectId || "").trim());
-}
+/** Объекты, спарсенные из Facebook (F_*): годовой контракт. */
+export { isFbObject };
 
 /**
  * Три бейджа инфо-слайда: спальни / бассейн (или санузлы) / парковка.
@@ -207,13 +199,11 @@ export async function buildCarousel({
 }) {
   if (!photoKeys?.length) throw new Error("Carousel: нет отобранных фото");
 
-  // Хук с ценой — только для объектов из FB (цена там фиксированная).
-  // Для Airbnb цена сезонная — карусель начинается с инфо-слайда с бейджами.
-  const withHook = isFbObject(objectId);
+  // Хук с ценой — на лучшем фото, если в overlayMeta есть цена (FB и Airbnb).
+  const withHook = Boolean(overlayMeta?.price && overlayMeta?.period);
 
   const tmpDir = mkdtempSync(join(tmpdir(), "carousel-"));
   try {
-    // Фото для слайдов скачиваем заранее (первое — база для хука, если нужен рендер)
     const maxPhotos = withHook ? MAX_SLIDES - 1 : MAX_SLIDES;
     const photoLocals = [];
     for (let i = 0; i < photoKeys.length && photoLocals.length < maxPhotos; i++) {
@@ -230,7 +220,7 @@ export async function buildCarousel({
     const names = [];
     let firstPhotoSlideNo = 1;
 
-    // --- FB-объекты: слайд 1 — хук-обложка ({id}/hook_cover.jpg или рендерим) ---
+    // --- слайд 1 (если есть цена): хук-обложка на лучшем фото ---
     if (withHook) {
       const hookLocal = join(tmpDir, slideName(1));
       let hookReady = false;
@@ -298,16 +288,31 @@ export async function buildCarousel({
 
 /**
  * «brand open home»: дублировать ВСЕ фото объекта с бренд-шаблоном
- * (градиент, лого OpenHome, колонтитул с контактами; без хука и бейджей)
- * в R2 {object_id}/brand_open_home/ + index.html галерея.
+ * (градиент, лого OpenHome, колонтитул с контактами).
+ * На heroPhotoKey (лучшее «инстаграмное» фото) дополнительно хук с ценой.
  *
- * @param objectId  ID объекта (папка в R2)
- * @param photoKeys R2-ключи ВСЕХ фото объекта ({id}/photos/*)
- * @param outDir    локальная папка вместо R2 (для --dry-run)
+ * @param objectId      ID объекта (папка в R2)
+ * @param photoKeys     R2-ключи ВСЕХ фото объекта ({id}/photos/*)
+ * @param heroPhotoKey  R2-ключ лучшего фото для хука (первое из отбора карусели)
+ * @param overlayMeta   метаданные хука (цена, период, район…)
+ * @param videoCfg      конфиг движка (для title-overlay конфига хука)
+ * @param outDir        локальная папка вместо R2 (для --dry-run)
  * @returns { url, count } — url галереи brand_open_home/index.html
  */
-export async function buildBrandFolder({ objectId, photoKeys, outDir = null }) {
+export async function buildBrandFolder({
+  objectId,
+  photoKeys,
+  heroPhotoKey = null,
+  overlayMeta = null,
+  videoCfg = {},
+  outDir = null,
+}) {
   if (!photoKeys?.length) throw new Error("Brand: нет фото объекта");
+
+  const withHook = Boolean(
+    heroPhotoKey && overlayMeta?.price && overlayMeta?.period
+  );
+  const overlayCfg = loadTitleOverlayConfig(videoCfg);
 
   const tmpDir = mkdtempSync(join(tmpdir(), "brand-"));
   try {
@@ -322,11 +327,29 @@ export async function buildBrandFolder({ objectId, photoKeys, outDir = null }) {
         console.warn(`Brand: не скачалось ${key}: ${err.message}`);
         continue;
       }
+
+      let photoForSlide = srcLocal;
+      if (withHook && key === heroPhotoKey) {
+        const hookLocal = join(tmpDir, `hook_${base.replace(/\.[^.]+$/, "")}.jpg`);
+        try {
+          await renderHookCover({
+            photoPath: srcLocal,
+            outputPath: hookLocal,
+            meta: overlayMeta,
+            cfg: overlayCfg,
+          });
+          photoForSlide = hookLocal;
+          console.log(`  brand hook cover: ${base}`);
+        } catch (err) {
+          console.warn(`Brand: hook cover failed for ${base}: ${err.message}`);
+        }
+      }
+
       const outName = base.replace(/\.(jpe?g|png|webp)$/i, "") + ".jpg";
       slides.push({
         name: `brand_${outName.replace(/\.jpg$/, "")}`,
-        photoPath: srcLocal,
-        badges: "", // только лого и контакты
+        photoPath: photoForSlide,
+        badges: "",
         outPath: join(tmpDir, outName),
       });
       names.push(outName);

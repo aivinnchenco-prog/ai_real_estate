@@ -137,6 +137,59 @@ def build_session(
     return session_id, session_path
 
 
+def object_id_from_session(agent2_root: Path, session_id: str) -> str:
+    """object_id из session.json после structurize (надёжнее regex по stdout)."""
+    path = agent2_root / "data" / "sessions" / session_id / "session.json"
+    if not path.exists():
+        return ""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return (data.get("object_id") or "").strip()
+    except (OSError, json.JSONDecodeError, TypeError):
+        return ""
+
+
+def object_id_from_agent2_output(output: str) -> str:
+    """Достаёт object_id из JSON stdout agent2_structurize; иначе — regex без session timestamp."""
+    marker = '"object_id"'
+    idx = output.find(marker)
+    if idx >= 0:
+        start = output.rfind("{", 0, idx)
+        if start >= 0:
+            depth = 0
+            for i in range(start, len(output)):
+                ch = output[i]
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            data = json.loads(output[start : i + 1])
+                            oid = (data.get("object_id") or "").strip()
+                            if oid:
+                                return oid
+                        except json.JSONDecodeError:
+                            pass
+                        break
+    # A_20260724_003 / F_20260724_012 — не путаем с session A_20260724_180630 (HHMMSS).
+    for m in re.finditer(r"\b([FA]_\d{8}_(\d{3,4}))\b", output):
+        return m.group(1)
+    return ""
+
+
+def resolve_object_id(agent2_root: Path, session_id: str, output: str = "") -> str:
+    """Лучший доступный object_id после Агента 2."""
+    oid = object_id_from_session(agent2_root, session_id)
+    if oid:
+        return oid
+    if output:
+        oid = object_id_from_agent2_output(output)
+        if oid:
+            return oid
+    return ""
+
+
 def run_agent2(agent2_root: Path, session_id: str, source_url: str, timeout: int = 900) -> tuple[bool, str]:
     """Запускает agent2_structurize.py. Возвращает (ok, object_id)."""
     cmd = [
@@ -154,8 +207,7 @@ def run_agent2(agent2_root: Path, session_id: str, source_url: str, timeout: int
         return False, ""
 
     output = (proc.stdout or "") + (proc.stderr or "")
-    m = re.search(r"\b([FA]_\d{8}_\d{3,})\b", output)
-    object_id = m.group(1) if m else ""
+    object_id = resolve_object_id(agent2_root, session_id, output)
 
     if proc.returncode != 0:
         logger.error(f"Agent2 structurize failed ({proc.returncode}): {output[-1500:]}")

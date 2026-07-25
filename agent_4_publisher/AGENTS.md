@@ -14,6 +14,7 @@
 | F3 | `--force` | По `page_id` от оператора | Всё выше, срочно, вне лимита |
 
 **Лимит:** не более **4 постов в одну соцсеть за сутки** (счёт по календарю Metricool / `Asia/Bangkok`).  
+**Сейчас:** Metricool **выключен** (`metricool.enabled: false`). Соцсети — через **Publisher social** (телефон + ADB). Код Metricool остаётся для будущей 2-й волны на остальные аккаунты.  
 Подтипы по умолчанию: 1 карусель + до 3 видео. Проверка в `daily_quota.py` перед планированием.  
 **Telegram:** только **фото** из `Фото` → [@OpenHome_th](https://t.me/OpenHome_th), **без Seedance**.  
 **Telegram:** колонка **Описание для Telegram**.  
@@ -40,6 +41,7 @@
 | `Описание` | Полное описание объекта (не для публикации Agent 6) |
 | `video_url_Seedance` | Видео Reel (Metricool only, не в TG) |
 | `agent6_locked` | Объект взят, без повтора |
+| `Дата и время публикации` | Когда выйдет пост — дата + время (календарь Notion / Metricool) |
 | `post_url_telegram` | Ссылка для ChatPlace DM |
 | `CTA Instagram` | Текст «Оставьте +…» на IG-посте |
 | `chatplace_funnel_carousel_done` / `_reel_done` | Воронка ChatPlace по типу поста |
@@ -51,7 +53,7 @@
 - Триггер: **любой комментарий** (`commentAnyValue`)
 - Воронки: **carousel** и **reel** отдельно
 - Имя: **Объект ID** из CRM
-- `chatplace.enabled: true` — воронки IG carousel + reel после публикации (через 15 мин)
+- `chatplace.enabled: true` — воронка IG **reel** после `post_url_instagram_reel` в Notion (телефон или Metricool)
 
 ## Skills
 

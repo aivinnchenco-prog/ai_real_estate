@@ -191,7 +191,7 @@ async def is_logged_in(page) -> bool:
     cookies = await page.context.cookies()
     if any(c.get("name") == "c_user" and "facebook.com" in c.get("domain", "") for c in cookies):
         return True
-    return "marketplace" in url
+    return False
 
 
 async def perform_login(page, email: str, password: str) -> None:
@@ -208,11 +208,16 @@ async def perform_login(page, email: str, password: str) -> None:
     await page.fill(pass_sel, password)
     await human_delay()
 
-    login_btn = page.locator('button[name="login"], button[type="submit"]')
+    login_btn = page.locator(
+        'button[name="login"], button[type="submit"], input[type="submit"]'
+    )
     if await login_btn.count():
-        await login_btn.first.click()
+        try:
+            await login_btn.first.click(timeout=5000)
+        except Exception:
+            await page.locator(pass_sel).press("Enter")
     else:
-        await page.keyboard.press("Enter")
+        await page.locator(pass_sel).press("Enter")
 
     await page.wait_for_load_state("domcontentloaded", timeout=90000)
     await human_delay("post-login")

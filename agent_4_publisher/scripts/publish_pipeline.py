@@ -98,6 +98,25 @@ def load_config() -> dict[str, Any]:
         return json.load(f)
 
 
+def metricool_enabled(config: dict[str, Any] | None = None) -> bool:
+    """Metricool-ветка включена? По умолчанию true для обратной совместимости."""
+    cfg = load_config() if config is None else config
+    return bool(cfg.get("metricool", {}).get("enabled", True))
+
+
+def phone_publisher_enabled(config: dict[str, Any] | None = None) -> bool:
+    cfg = load_config() if config is None else config
+    return bool(cfg.get("phone_publisher", {}).get("enabled", False))
+
+
+def phone_publisher_root(config: dict[str, Any] | None = None) -> Path:
+    """Корень проекта Publisher social (сосед Real Estate Agent в папке «Агенты»)."""
+    cfg = config or load_config()
+    rel = cfg.get("phone_publisher", {}).get("project_path", "Publisher social")
+    agents_root = package_root().parent.parent
+    return (agents_root / rel).resolve()
+
+
 def _publish_platforms_from_config() -> list[str]:
     try:
         platforms = load_config().get("publish_platforms")
@@ -309,6 +328,22 @@ def notion_checkbox_property(checked: bool) -> dict[str, Any]:
 
 def notion_date_property(iso_date: str) -> dict[str, Any]:
     return {"date": {"start": iso_date}}
+
+
+def notion_datetime_property(scheduled_time: str, tz_name: str) -> dict[str, Any]:
+    """Notion date+time (всегда с часами/минутами) для календарного вида.
+
+    Пишем ISO с явным offset (напр. 2026-07-25T15:30:00+07:00), чтобы UI
+    Notion показывал время, а не только дату.
+    """
+    if scheduled_time.endswith("Z"):
+        dt = datetime.fromisoformat(scheduled_time.replace("Z", "+00:00"))
+    else:
+        dt = datetime.fromisoformat(scheduled_time)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    local = dt.astimezone(ZoneInfo(tz_name))
+    return {"date": {"start": local.isoformat(timespec="seconds")}}
 
 
 def notion_get_page(page_id: str) -> dict[str, Any]:
@@ -1005,6 +1040,46 @@ def spawn_deferred_chatplace_funnel(
     }
 
 
+def spawn_chatplace_if_reel_url_ready(
+    page_id: str,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Отложенная ChatPlace-воронка reel, когда post_url_instagram_reel уже в Notion."""
+    try:
+        from setup_chatplace_funnel import (
+            is_chatplace_kind_done,
+            is_live_social_url,
+            should_run_chatplace,
+        )
+    except ImportError:
+        return None
+
+    cfg = config or load_config()
+    if not should_run_chatplace("instagram", cfg, upload_video=True, mode="video"):
+        return None
+
+    page = notion_get_page(page_id)
+    if is_chatplace_kind_done(page, cfg, "instagram", "reel"):
+        return None
+
+    fields = cfg["notion"]["fields"]
+    published = cfg["notion"]["published_url_fields"]
+    reel_field = published.get("instagram_reel", nfc.POST_URL_INSTAGRAM_REEL)
+    reel_url = get_prop(page, reel_field, "url")
+    if not is_live_social_url(reel_url, "instagram"):
+        return None
+
+    # Пауза от момента появления ссылки (не от Metricool publicationDate)
+    scheduled = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    return spawn_deferred_chatplace_funnel(
+        page_id,
+        "instagram",
+        scheduled,
+        cfg,
+        post_kind="reel",
+    )
+
+
 def publish_one(
     page_id: str,
     platform: str,
@@ -1016,6 +1091,16 @@ def publish_one(
     bypass_lock: bool = False,
     mode: str | None = None,
 ) -> dict[str, Any]:
+    if not metricool_enabled(config):
+        return {
+            "page_id": page_id,
+            "platform": platform,
+            "mode": mode or "auto",
+            "skipped": True,
+            "reason": "metricool_disabled",
+            "hint": "Публикация в соцсети — через Publisher social (телефон).",
+        }
+
     cfg_notion = config["notion"]
     fields = cfg_notion["fields"]
     mapping = config["video_format_by_platform"]
@@ -1196,6 +1281,12 @@ def publish_one(
         )
         if url_field and url_to_save:
             notion_props[url_field] = notion_url_property(url_to_save)
+        publish_at_field = fields.get("publish_at") or nfc.PUBLISH_AT
+        if publish_at_field and scheduled_time:
+            # Календарь CRM: дата/время выхода поста (перезаписываем на фактический слот)
+            notion_props[publish_at_field] = notion_datetime_property(
+                scheduled_time, metricool_timezone(config)
+            )
 
         notion_update_fields(page_id, notion_props)
 
@@ -1269,6 +1360,21 @@ def main() -> int:
         help="Skip Notion schema validation on start",
     )
     args = parser.parse_args()
+
+    if not metricool_enabled(config) and not args.dry_run:
+        print(
+            json.dumps(
+                {
+                    "skipped": True,
+                    "reason": "metricool_disabled",
+                    "hint": "Включите metricool.enabled в config/publisher.json "
+                    "или публикуйте через Publisher social (телефон).",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
 
     run_schema_check(args.skip_schema_check)
 

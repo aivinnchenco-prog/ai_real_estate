@@ -20,6 +20,7 @@ from google_sheets import GoogleSheetsWriter
 from voice_agent import VoiceAgent
 from airbnb_url import normalize_airbnb_url, resolve_currency
 from fb_handoff import extract_fb_url, handoff_fb_to_agent2
+from agent2_handoff import find_agent2_root, resolve_object_id
 from parser_pool import close_parser
 from workflow import finalize_take_work, take_listing_to_work
 from queue_worker import ensure_agent_listener_task, poll_loop, poll_once
@@ -493,6 +494,20 @@ async def on_flag_choice(callback: CallbackQuery):
 _FB_PARSE_LOCK = asyncio.Lock()
 
 
+async def _resolve_listing_object_id(result) -> str:
+    """object_id из результата парсинга; fallback — session.json Агента 2."""
+    oid = (getattr(result, "object_id", None) or "").strip()
+    if oid:
+        return oid
+    session_id = (getattr(result, "session_id", None) or "").strip()
+    if not session_id:
+        return ""
+    agent2_root = find_agent2_root()
+    if agent2_root is None:
+        return ""
+    return resolve_object_id(agent2_root, session_id)
+
+
 async def handle_fb_url_message(message: Message, fb_url: str):
     """FB Marketplace: парсер → сессия → Агент 2 (Notion)."""
     await message.reply("Ссылка Facebook Marketplace. Парсю и передаю Агенту 2...")
@@ -501,12 +516,13 @@ async def handle_fb_url_message(message: Message, fb_url: str):
         result = await asyncio.to_thread(handoff_fb_to_agent2, fb_url)
 
     if result.ok:
+        object_id = await _resolve_listing_object_id(result)
         await message.answer(
-            f"✅ {result.object_id or result.session_id} добавлен в CRM\n"
+            f"✅ {object_id or result.session_id} добавлен в CRM\n"
             f"📷 Фото: {result.photos}\n{result.note}"
         )
-        if result.object_id:
-            await send_flags_question(message, result.object_id)
+        if object_id:
+            await send_flags_question(message, object_id)
     else:
         await message.answer(result.note or "Неизвестная ошибка FB-парсера")
 
@@ -552,13 +568,13 @@ async def handle_url_message(message: Message):
         )
         text = result.message_text
         local_image_paths = result.image_paths
-        object_id = result.object_id
+        object_id = await _resolve_listing_object_id(result)
 
         logger.debug(f'Найдено {len(local_image_paths)} изображений.')
         if text:
             try:
                 logger.info('Обработка URL завершена.')
-                if result.object_id:
+                if object_id:
                     timing_line = ''
                     if result.timings:
                         t = result.timings
@@ -569,8 +585,7 @@ async def handle_url_message(message: Message):
                             f'за {t.get("photos_download_sec", "?")}с, '
                             f'drive {t.get("drive_upload_sec", "—")}с)'
                         )
-                    await message.answer(f'✅ {result.object_id} добавлен в CRM{timing_line}')
-                    await send_flags_question(message, result.object_id)
+                    await message.answer(f'✅ {object_id} добавлен в CRM{timing_line}')
                 if result.drive_note:
                     await message.answer(result.drive_note)
                 if len(text) > MAX_TEXT_LENGTH:
@@ -609,6 +624,10 @@ async def handle_url_message(message: Message):
 
                     if len(media_group.build()) > 0:
                         await message.answer_media_group(media=media_group.build())
+
+                # Кнопки — последним сообщением, иначе теряются под альбомами фото.
+                if object_id:
+                    await send_flags_question(message, object_id)
 
             finally:
                 finalize_take_work(result)

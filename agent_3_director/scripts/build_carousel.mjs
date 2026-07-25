@@ -2,7 +2,7 @@
 /**
  * Дизайн-карусель объекта: отбор лучших фото → слайды 1080×1350 →
  * R2 {id}/carousel/ → ссылка на галерею в Notion (carousel_url).
- * Хук с ценой на слайде 1 — только для FB-объектов (F_*).
+ * Хук с ценой на слайде 1 — для FB и Airbnb (разная логика цены в overlayMeta).
  *
  * Плюс «brand open home»: ВСЕ фото объекта дублируются с бренд-шаблоном
  * (лого + контакты, без хука и бейджей) в R2 {id}/brand_open_home/.
@@ -92,7 +92,7 @@ async function main() {
   });
   const selectedKeys = selectedNames.map((name) => `${objectId}/photos/${name}`);
 
-  const overlayMeta = pageVideoOverlayMeta(page, fields, notionCfg.overlay_fields);
+  const overlayMeta = pageVideoOverlayMeta(page, fields, notionCfg.overlay_fields, objectId);
   const carouselMeta = pageCarouselMeta(page, fields);
   console.log(`Carousel meta: ${JSON.stringify(carouselMeta)}`);
 
@@ -111,12 +111,14 @@ async function main() {
   }
   console.log(`CAROUSEL_DONE ${objectId}: ${slides} слайдов → ${url}`);
 
-  // «brand open home»: ВСЕ фото объекта с бренд-шаблоном (без хука и бейджей).
-  // Ошибка не блокирует результат карусели.
+  // «brand open home»: ВСЕ фото с бренд-шаблоном; хук с ценой на лучшем фото.
   try {
     const brand = await buildBrandFolder({
       objectId,
       photoKeys,
+      heroPhotoKey: selectedKeys[0] || null,
+      overlayMeta,
+      videoCfg: selectCfg,
       outDir: dryRun ? resolve(ROOT, "data/brand_preview", objectId) : null,
     });
     if (!dryRun) {
