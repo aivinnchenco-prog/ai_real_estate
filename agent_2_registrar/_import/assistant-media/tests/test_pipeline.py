@@ -130,6 +130,16 @@ class ChainGateTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("Публикация", reason)
 
+    def test_phone_mode_ignores_stale_error_count(self):
+        """При phone publisher старый Metricool error_count не блокирует."""
+        st = {"video_done": "ready_to_post"}
+        listing = NotionListing(
+            "p1", "id", "ready_to_post", "T", "https://g",
+            None, "https://v", publish_flag="ДА", error_count=1033,
+        )
+        self.assertFalse(agent6_ready(listing, st)[0])
+        self.assertTrue(agent6_ready(listing, st, ignore_error_count=True)[0])
+
     def test_agent6_carousel_without_video_when_montage_off(self):
         """Монтаж=НЕТ + Публикация=ДА — публикуем карусель, видео не требуем."""
         st = {"video_done": "ready_to_post"}

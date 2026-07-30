@@ -221,15 +221,22 @@ def agent6_ready(
     *,
     default_publish: bool = False,
     default_montage: bool = False,
+    ignore_error_count: bool = False,
 ) -> tuple[bool, str]:
     """Agent 4/6 Publisher: флаг «Публикация» + ready_to_post + видео.
 
     Исключение: монтаж выключен («Монтаж» = НЕТ) — публикуем
     карусель без видео, поэтому наличие video_url не требуем.
+
+    ignore_error_count=True — режим телефона (Metricool выключен): старый
+    error_count от Metricool/монтажа не блокирует публикацию.
     """
     if not flag_enabled(listing.publish_flag, default_publish):
         return False, "«Публикация» = НЕТ (постинг выключен)"
-    if listing.error_count >= MAX_PUBLISH_ERRORS:
+    if (
+        not ignore_error_count
+        and listing.error_count >= MAX_PUBLISH_ERRORS
+    ):
         return False, (f"error_count={listing.error_count} >= {MAX_PUBLISH_ERRORS} — "
                        "ретраи публикации остановлены (сбросьте error_count в Notion)")
     if listing.status != statuses["video_done"]:
