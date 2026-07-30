@@ -3,7 +3,8 @@
 Публикация объектов недвижимости **с Android-телефона** (один аккаунт на сеть).
 
 > Канон в монорепе: `Real Estate Agent/agent_4_publisher_social/`.  
-> Отдельный репозиторий [`publisher-social`](https://github.com/bvinnchenco-cmyk/publisher-social) — зеркало/Termux; Agent 4 смотрит сюда через `phone_publisher.project_path`.
+> Отдельный репозиторий [`publisher-social`](https://github.com/bvinnchenco-cmyk/publisher-social) — зеркало для Termux.  
+> **Боевой постинг только с телефона** (`termux/` → `pub start`). VPS chain с `runner=termux` очередь не трогает.
 
 Источник контента — тот же пайплайн, что у Real Estate Agent:
 

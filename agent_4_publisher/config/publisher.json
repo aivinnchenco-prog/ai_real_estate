@@ -475,10 +475,12 @@
   },
   "phone_publisher": {
     "enabled": true,
+    "runner": "termux",
     "project_path": "agent_4_publisher_social",
     "command": "publish-all",
     "scheduled_command": "publish-scheduled",
-    "$comment": "Путь относительно корня Real Estate Agent. Legacy fallback: «Publisher social» в папке Агенты."
+    "$comment": "enabled=true держит Metricool/Playwright FB выключенными. runner=termux — VPS/chain НЕ вызывает publish-all; телефон сам (Termux run_loop) забирает Notion queue. Legacy: runner=chain.",
+    "$comment_path": "Путь относительно корня Real Estate Agent. Fallback: «Publisher social» в папке Агенты."
   },
   "chatplace": {
     "enabled": true,

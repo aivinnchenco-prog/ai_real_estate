@@ -518,6 +518,22 @@ def continue_chain(
             # Видео нет (монтаж выключен) — публикуем только карусель.
             mode6 = None if listing.has_videos else "carousel"
             if phone_mode:
+                runner = str(
+                    (pub_cfg.get("phone_publisher") or {}).get("runner") or "termux"
+                ).strip().lower()
+                if runner in ("termux", "phone", "external"):
+                    # Телефон сам забирает ready_to_post через Termux run_loop.
+                    print(
+                        f"[chain] Agent 6 defer {listing.object_id}: "
+                        "phone publisher = Termux (VPS не постит)"
+                    )
+                    log_event(
+                        listing.object_id,
+                        "chain",
+                        "phone_publisher_deferred_termux",
+                        page_id=listing.page_id,
+                    )
+                    continue
                 log_event(listing.object_id, "chain", "phone_publisher_start", page_id=listing.page_id)
                 live = bool(chain.get("phone_publisher_live", False))
                 code6 = run_phone_publisher(listing.page_id, pub_cfg, live=live)
