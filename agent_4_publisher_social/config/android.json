@@ -1,0 +1,42 @@
+{
+  "$comment": "Параметры Android-устройства. TikTok UI: uiautomator2. serial/wifi — через ANDROID_SERIAL или локальный override, не хардкодить IP в git.",
+  "adb_bin": "adb",
+  "serial": "",
+  "wifi": {
+    "host": "",
+    "port": 5555
+  },
+  "media_dir": "/sdcard/Download/publisher_social",
+  "post_url_capture": {
+    "enabled": false,
+    "source": "api",
+    "$comment": "После публикации Android не открывает профиль/share-sheet и не копирует ссылку. URL поступит позже через API."
+  },
+  "packages": {
+    "tiktok": "com.ss.android.ugc.trill",
+    "instagram": "com.instagram.android",
+    "facebook": "com.facebook.katana",
+    "linkedin": "com.linkedin.android",
+    "twitter": "com.twitter.android",
+    "youtube": "com.google.android.youtube"
+  },
+  "human_delay_ms": {
+    "min": 1200,
+    "max": 2800
+  },
+  "tiktok": {
+    "location": "Пхукет",
+    "profile_username": "openhome.th",
+    "post_url_max_age_seconds": 1800,
+    "post_url_resolve_timeout_seconds": 8
+  },
+  "instagram": {
+    "location": "Phuket, Thailand",
+    "album": "publisher_social"
+  },
+  "ui_automation": {
+    "enabled": true,
+    "engine": "uiautomator2",
+    "notes": "TikTok ✅ / carousel ✅; IG Reel+Carousel ✅; FB Marketplace ✅; LinkedIn/Twitter ✅; YouTube Shorts ✅"
+  }
+}

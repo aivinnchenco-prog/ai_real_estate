@@ -110,11 +110,24 @@ def phone_publisher_enabled(config: dict[str, Any] | None = None) -> bool:
 
 
 def phone_publisher_root(config: dict[str, Any] | None = None) -> Path:
-    """Корень проекта Publisher social (сосед Real Estate Agent в папке «Агенты»)."""
+    """Корень Publisher social: в монорепе или legacy рядом в «Агенты»."""
     cfg = config or load_config()
-    rel = cfg.get("phone_publisher", {}).get("project_path", "Publisher social")
-    agents_root = package_root().parent.parent
-    return (agents_root / rel).resolve()
+    rel = cfg.get("phone_publisher", {}).get("project_path", "agent_4_publisher_social")
+    path = Path(rel).expanduser()
+    if path.is_absolute():
+        return path.resolve()
+    monorepo = package_root().parent  # Real Estate Agent
+    inside = (monorepo / rel).resolve()
+    if inside.exists():
+        return inside
+    # Legacy: …/Агенты/Publisher social
+    legacy = (monorepo.parent / rel).resolve()
+    if legacy.exists():
+        return legacy
+    legacy_default = (monorepo.parent / "Publisher social").resolve()
+    if legacy_default.exists():
+        return legacy_default
+    return inside
 
 
 def _publish_platforms_from_config() -> list[str]:

@@ -190,9 +190,22 @@ def load_agent4_publisher_config() -> dict:
 
 
 def phone_publisher_project_root(pub_cfg: dict) -> Path:
-    rel = pub_cfg.get("phone_publisher", {}).get("project_path", "Publisher social")
-    agents_root = ROOT.parents[2].parent  # папка «Агенты»
-    return (agents_root / rel).resolve()
+    """Корень Publisher social: monorepo/agent_4_publisher_social или legacy sibling."""
+    rel = pub_cfg.get("phone_publisher", {}).get("project_path", "agent_4_publisher_social")
+    path = Path(rel).expanduser()
+    if path.is_absolute():
+        return path.resolve()
+    monorepo = ROOT.parents[2]  # Real Estate Agent
+    inside = (monorepo / rel).resolve()
+    if inside.exists():
+        return inside
+    legacy = (monorepo.parent / rel).resolve()
+    if legacy.exists():
+        return legacy
+    legacy_default = (monorepo.parent / "Publisher social").resolve()
+    if legacy_default.exists():
+        return legacy_default
+    return inside
 
 
 def run_phone_publisher(page_id: str, pub_cfg: dict, *, live: bool = False) -> int:
@@ -479,13 +492,19 @@ def continue_chain(
         else:
             listings6 = fetch_by_status(crm, statuses["video_done"], nf)
 
+        # Телефон вместо Metricool: не блокируем и не спамим из‑за старого error_count
+        phone_mode = phone_on and not metricool_on
         for listing in listings6:
-            ready6, reason6 = agent6_ready(listing, statuses,
-                                           default_publish=default_publish,
-                                           default_montage=default_montage)
+            ready6, reason6 = agent6_ready(
+                listing,
+                statuses,
+                default_publish=default_publish,
+                default_montage=default_montage,
+                ignore_error_count=phone_mode,
+            )
             if not ready6:
                 print(f"[chain] Agent 6 skip {listing.object_id}: {reason6}")
-                if "error_count" in reason6:
+                if "error_count" in reason6 and not phone_mode:
                     notify(
                         f"Публикация {listing.object_id} остановлена: {reason6}.\n"
                         "Часть сетей могла опубликоваться — проверьте last_error "
@@ -495,7 +514,7 @@ def continue_chain(
                 continue
             # Видео нет (монтаж выключен) — публикуем только карусель.
             mode6 = None if listing.has_videos else "carousel"
-            if phone_on and not metricool_on:
+            if phone_mode:
                 log_event(listing.object_id, "chain", "phone_publisher_start", page_id=listing.page_id)
                 live = bool(chain.get("phone_publisher_live", False))
                 code6 = run_phone_publisher(listing.page_id, pub_cfg, live=live)

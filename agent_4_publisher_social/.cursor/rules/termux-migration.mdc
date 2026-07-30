@@ -1,0 +1,35 @@
+---
+description: Current Termux phone-runner migration state and next gates
+alwaysApply: true
+---
+
+# Termux migration (active)
+
+## Goal
+
+Phone is its own runner: Termux + loopback ADB + uiautomator2, no social APIs.
+
+## Already done on device
+
+- Samsung SM-A075F, Android 16, USB ADB authorized.
+- On Samsung the feature is named **«Отладка по Wi-Fi»**, not «Беспроводная отладка».
+- Screen stay-on / timeout / portrait / Doze whitelist applied for Termux family.
+- Termux 0.118.3 + Termux:Boot 0.8.1 + Termux:API 0.53.0 installed (matching UID).
+- Project extracted to `~/publisher-social` from clean zip (no `.env` / `.git` / logs).
+- Bootstrap completed; `uiautomator2 import: ok`; safe `RUN_CMD="queue --dry-run"`.
+- Loopback ADB works: `check-device` → `"ok": true`, serial like `127.0.0.1:XXXXX`.
+- Notion keys copied from Real Estate Agent `.env` (lengths verified; values not printed).
+- `queue --dry-run` succeeded for object `A_20260725_001` (pending youtube_shorts, linkedin).
+
+## Next gates
+
+1. Make `~/bin` permanent in Termux PATH (`source ~/.bashrc` / reopen Termux).
+2. Supervised `--ui` for one channel under observation — still no live.
+3. Reboot test for Termux:Boot + Wi-Fi debugging reconnect.
+4. Only later: explicit arming of live mode.
+
+## Do not
+
+- Start `pub start` in live mode.
+- Treat boot autostart as proven until a reboot test passes.
+- Skip pairing / Notion / `pub test` and jump to publishing.

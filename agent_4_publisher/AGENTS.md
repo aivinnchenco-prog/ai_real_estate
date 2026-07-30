@@ -14,7 +14,7 @@
 | F3 | `--force` | По `page_id` от оператора | Всё выше, срочно, вне лимита |
 
 **Лимит:** не более **4 постов в одну соцсеть за сутки** (счёт по календарю Metricool / `Asia/Bangkok`).  
-**Сейчас:** Metricool **выключен** (`metricool.enabled: false`). Соцсети — через **Publisher social** (телефон + ADB). Код Metricool остаётся для будущей 2-й волны на остальные аккаунты.  
+**Сейчас:** Metricool **выключен** (`metricool.enabled: false`). Соцсети — через **`agent_4_publisher_social`** (телефон + ADB; legacy-папка `Publisher social` тоже находится). Код Metricool остаётся для будущей 2-й волны на остальные аккаунты.  
 Подтипы по умолчанию: 1 карусель + до 3 видео. Проверка в `daily_quota.py` перед планированием.  
 **Telegram:** только **фото** из `Фото` → [@OpenHome_th](https://t.me/OpenHome_th), **без Seedance**.  
 **Telegram:** колонка **Описание для Telegram**.  

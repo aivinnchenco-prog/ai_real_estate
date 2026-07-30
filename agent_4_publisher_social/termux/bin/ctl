@@ -1,0 +1,150 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# pub — пульт раннера в Termux.
+#   pub start | stop | status | logs | test | once | connect
+# =============================================================================
+set -uo pipefail
+
+HOME_DIR="${HOME:-/data/data/com.termux/files/home}"
+BIN_DIR="$HOME_DIR/bin"
+CONF="$HOME_DIR/.publisher/runner.env"
+LOG="$HOME_DIR/.publisher/runner.log"
+PIDFILE="$HOME_DIR/.publisher/runner.pid"
+UI_LOCK="$HOME_DIR/.publisher/ui.flock"
+CONTROL_LOCK="$HOME_DIR/.publisher/control.flock"
+
+PROJECT_DIR="$HOME_DIR/publisher-social"
+# shellcheck disable=SC1090
+[ -f "$CONF" ] && . "$CONF"
+
+running_pid() {
+  [ -f "$PIDFILE" ] || return 1
+  local p cmdline
+  p="$(cat "$PIDFILE" 2>/dev/null)"
+  if [ -n "$p" ] && kill -0 "$p" 2>/dev/null; then
+    cmdline="$(tr '\0' ' ' <"/proc/$p/cmdline" 2>/dev/null)"
+    case "$cmdline" in
+      *run_loop.sh*) echo "$p"; return 0 ;;
+    esac
+  fi
+  return 1
+}
+
+acquire_control_lock() {
+  exec 8>>"$CONTROL_LOCK"
+  if ! flock -w 10 8; then
+    echo "другая команда pub start/stop ещё выполняется" >&2
+    exit 3
+  fi
+}
+
+acquire_ui_lock() {
+  exec 9>>"$UI_LOCK"
+  if ! flock -n 9; then
+    echo "UI занят другим процессом; дождись его завершения или выполни pub stop" >&2
+    exit 3
+  fi
+  trap 'flock -u 9 2>/dev/null || true' EXIT INT TERM
+}
+
+case "${1:-}" in
+  start)
+    acquire_control_lock
+    if pid="$(running_pid)"; then echo "уже работает (pid $pid)"; exit 0; fi
+    nohup setsid "$BIN_DIR/run_loop.sh" >/dev/null 2>&1 &
+    echo $! > "$PIDFILE"
+    sleep 1
+    if pid="$(running_pid)"; then
+      if [ -f "$HOME_DIR/.publisher/live.armed" ] && grep -qE '^RUN_CMD=.*--live' "$CONF" 2>/dev/null; then
+        echo "раннер запущен в LIVE (pid $pid)"
+      else
+        echo "раннер запущен в dry-run (pid $pid)"
+      fi
+    else
+      rm -f "$PIDFILE"
+      echo "раннер не смог запуститься; проверь $LOG" >&2
+      exit 1
+    fi
+    ;;
+  stop)
+    acquire_control_lock
+    if pid="$(running_pid)"; then
+      kill -TERM -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+      for _ in 1 2 3 4 5; do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 1
+      done
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+      fi
+      rm -f "$PIDFILE"; echo "остановлен"
+    else
+      echo "не запущен"
+    fi
+    ;;
+  restart)
+    "$0" stop; sleep 1; "$0" start
+    ;;
+  status)
+    if pid="$(running_pid)"; then echo "🟢 работает (pid $pid)"; else echo "🔴 остановлен"; fi
+    echo "--- устройство ---"
+    adb devices | grep -E '127\.0\.0\.1' || echo "нет loopback-подключения"
+    echo "--- последние строки лога ---"
+    tail -n 8 "$LOG" 2>/dev/null || echo "лога пока нет"
+    ;;
+  logs)
+    tail -n "${2:-40}" -f "$LOG"
+    ;;
+  once)
+    cd "$PROJECT_DIR"; export PYTHONPATH=src
+    acquire_ui_lock
+    "$BIN_DIR/connect_self.sh"
+    python -m publisher_social queue --dry-run
+    ;;
+  test)
+    cd "$PROJECT_DIR"; export PYTHONPATH=src
+    acquire_ui_lock
+    "$BIN_DIR/connect_self.sh"
+    python -m publisher_social check-device
+    python - <<'PY'
+from publisher_social.android.ui import connect_device
+from publisher_social.config import load_android_config
+from publisher_social.dotenv_util import load_dotenv
+
+load_dotenv()
+device = connect_device(load_android_config())
+xml = device.dump_hierarchy()
+print(f"uiautomator2: ok, hierarchy={len(xml or '')} chars")
+PY
+    echo "--- очередь (dry-run) ---"
+    python -m publisher_social queue --dry-run
+    ;;
+  connect)
+    acquire_ui_lock
+    "$BIN_DIR/connect_self.sh"
+    ;;
+  notify)
+    # проверка, что Telegram настроен верно
+    if "$BIN_DIR/notify.sh" "🔔 Тест уведомлений: связь работает."; then
+      echo "отправлено"
+    else
+      echo "не отправлено; проверь TG_BOT_TOKEN, TG_CHAT_ID и сеть" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    cat <<TXT
+pub — управление раннером Publisher social
+
+  pub start      запустить фоновый раннер
+  pub stop       остановить
+  pub restart    перезапустить
+  pub status     состояние + устройство + хвост лога
+  pub logs [N]   следить за логом (по умолч. 40 строк)
+  pub once       один безопасный dry-run очереди
+  pub test       проверка устройства + очередь без публикации
+  pub connect    переподключиться к телефону (loopback ADB)
+  pub notify     отправить тестовое сообщение в Telegram
+TXT
+    ;;
+esac

@@ -1,0 +1,37 @@
+# secrets / local env
+.env
+.env.local
+.env.*.local
+runner.env
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# runtime data (local phone runs)
+data/media/
+data/jobs/
+data/state.json
+data/logs/
+data/*.lock
+data/*.lock.*
+*.log
+*.xml
+
+# adb / dumps
+*.apk
+*.png
+*.jpg
+!docs/**/*.png

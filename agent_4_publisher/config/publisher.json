@@ -475,10 +475,10 @@
   },
   "phone_publisher": {
     "enabled": true,
-    "project_path": "Publisher social",
+    "project_path": "agent_4_publisher_social",
     "command": "publish-all",
     "scheduled_command": "publish-scheduled",
-    "$comment": "Путь относительно папки «Агенты» (родитель Real Estate Agent)."
+    "$comment": "Путь относительно корня Real Estate Agent. Legacy fallback: «Publisher social» в папке Агенты."
   },
   "chatplace": {
     "enabled": true,
