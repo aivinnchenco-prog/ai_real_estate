@@ -218,9 +218,11 @@ def run_phone_publisher(page_id: str, pub_cfg: dict, *, live: bool = False) -> i
     if not project.exists():
         print(f"[chain] SKIP phone publisher: not found {project}", file=sys.stderr)
         return 1
+    venv_python = project / ".venv" / "bin" / "python"
+    python_bin = str(venv_python) if venv_python.exists() else sys.executable
     cmd_name = pp.get("command", "publish-all")
     cmd = [
-        sys.executable,
+        python_bin,
         "-m",
         "publisher_social",
         cmd_name,
@@ -235,7 +237,8 @@ def run_phone_publisher(page_id: str, pub_cfg: dict, *, live: bool = False) -> i
     src = project / "src"
     env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
     print(f"\n[chain] Phone publisher ({cmd_name}) → {page_id}"
-          + (" [LIVE]" if live else " [dry-run]"))
+          + (" [LIVE]" if live else " [dry-run]")
+          + f" via {python_bin}")
     proc = subprocess.run(cmd, cwd=project, env=env)
     return proc.returncode
 
