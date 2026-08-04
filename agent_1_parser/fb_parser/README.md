@@ -47,8 +47,11 @@ python3 agent1b/fb_parser.py \
 - If Facebook returns login wall, script exits with `AUTH_REQUIRED` (exit code 2).
 - If no photos could be saved, script exits with `NO_PHOTOS` (exit code 3).
 - If feed/browse page is opened instead of listing card: `WRONG_PAGE` (exit code 4).
-- Canonical URL is auto-normalized to:
+- Accepted item URL hosts: `www.facebook.com`, `m.facebook.com`, `mbasic.facebook.com`, bare `facebook.com`.
+- Accepted path forms (auto-normalized to www):
   - `https://www.facebook.com/marketplace/item/{ITEM_ID}/`
+  - `https://www.facebook.com/share/{CODE}/` (short share link — resolved to marketplace item in the logged-in browser)
+  (mobile hosts are rewritten because `m.facebook.com` often shows an unsupported-browser page)
 
 ## Facebook login (required for real listing cards)
 

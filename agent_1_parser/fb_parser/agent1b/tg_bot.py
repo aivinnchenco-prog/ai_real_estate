@@ -14,7 +14,17 @@ from aiogram.types import FSInputFile, InputMediaPhoto, Message
 from dotenv import load_dotenv
 
 
-FB_URL_REGEX = re.compile(r"https?://(?:www\.)?facebook\.com/marketplace/item/\d+[^\s]*", re.IGNORECASE)
+# www / m / mbasic / bare facebook.com — Marketplace item or /share/ short link.
+FB_ITEM_URL_REGEX = re.compile(
+    r"https?://(?:(?:www|m|mbasic)\.)?facebook\.com/marketplace/item/(\d+)[^\s]*",
+    re.IGNORECASE,
+)
+FB_SHARE_URL_REGEX = re.compile(
+    r"https?://(?:(?:www|m|mbasic)\.)?facebook\.com/share/([A-Za-z0-9][A-Za-z0-9/_-]*)[^\s]*",
+    re.IGNORECASE,
+)
+# Back-compat alias used elsewhere / older docs.
+FB_URL_REGEX = FB_ITEM_URL_REGEX
 TG_TEXT_LIMIT = 3900
 TG_ALBUM_LIMIT = 10
 PARSER_TIMEOUT_SEC = 420
@@ -29,10 +39,21 @@ def build_session_id() -> str:
 
 
 def extract_fb_url(text: str) -> str | None:
-    match = FB_URL_REGEX.search(text or "")
-    if not match:
-        return None
-    return match.group(0)
+    """Accept Marketplace item or /share/ short links; return crawl-ready www URL.
+
+    Mobile hosts (m.facebook.com) often serve an unsupported-browser page, so we
+    rewrite to www before handing off to the parser. Share links are cleaned and
+    resolved to /marketplace/item/{id}/ inside fb_parser.
+    """
+    text = text or ""
+    match = FB_ITEM_URL_REGEX.search(text)
+    if match:
+        return f"https://www.facebook.com/marketplace/item/{match.group(1)}/"
+    match = FB_SHARE_URL_REGEX.search(text)
+    if match:
+        path = match.group(1).rstrip("/")
+        return f"https://www.facebook.com/share/{path}/"
+    return None
 
 
 def run_parser(parser_path: Path, workspace: Path, url: str, session_id: str, backend: str) -> tuple[int, str]:
@@ -180,7 +201,10 @@ async def main() -> None:
     @dp.message(Command("start"))
     async def start_cmd(message: Message) -> None:
         await message.answer(
-            "Отправь ссылку на Facebook Marketplace item.\n"
+            "Отправь ссылку на Facebook Marketplace.\n"
+            "Подходят:\n"
+            "• `…/marketplace/item/{id}/` (www / m)\n"
+            "• `…/share/…` (короткая share-ссылка)\n"
             f"Текущий backend: `{backend}`\n"
             "В ответ получишь описание + фото объекта.",
             parse_mode="Markdown",
@@ -199,7 +223,7 @@ async def main() -> None:
         text = message.text or ""
         url = extract_fb_url(text)
         if not url:
-            await message.answer("Не вижу валидной ссылки Facebook Marketplace item в сообщении.")
+            await message.answer("Не вижу валидной ссылки Facebook Marketplace (item или /share/) в сообщении.")
             return
 
         session_id = build_session_id()

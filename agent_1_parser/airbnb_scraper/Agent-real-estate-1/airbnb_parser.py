@@ -654,9 +654,10 @@ class AirbnbParser:
 
         for section in data['niobeClientData'][0][1]['data']['presentation']['stayProductDetailPage']['sections']['sections']:
             if section['sectionId'] == 'AVAILABILITY_CALENDAR_DEFAULT':
-                details['Название'] = section['section']['listingTitle']
+                sec = section.get('section') or {}
+                details['Название'] = sec.get('listingTitle', '')
             if section['sectionId'] == 'DESCRIPTION_DEFAULT':
-                details['Описание'] = section['section']['htmlDescription']['htmlText'].replace('<br />', '\n')
+                details['Описание'] = self._get_description(section)
             if section['sectionId'] == 'HIGHLIGHTS_DEFAULT':
                 details['Особенности'] = self._get_highlights(section)
             if section['sectionId'] == 'PHOTO_TOUR_SCROLLABLE_MODAL':
@@ -697,6 +698,26 @@ class AirbnbParser:
             details.setdefault(key, default)
 
         return details
+
+    def _normalize_html_text(self, text):
+        return str(text or '').replace('<br />', '\n').replace('<br>', '\n').strip()
+
+    def _get_description(self, section):
+        """Описание листинга: htmlDescription есть не у всех объявлений Airbnb."""
+        sec = section.get('section') or {}
+        html_desc = sec.get('htmlDescription')
+        if isinstance(html_desc, dict) and html_desc.get('htmlText'):
+            return self._normalize_html_text(html_desc['htmlText'])
+
+        summary = sec.get('descriptionSummary')
+        if isinstance(summary, dict):
+            for key in ('htmlText', 'text', 'title'):
+                if summary.get(key):
+                    return self._normalize_html_text(summary[key])
+        elif summary:
+            return self._normalize_html_text(summary)
+
+        return ''
 
     def _get_location(self, section):
         """Координаты с карты листинга (секция LOCATION_DEFAULT)."""

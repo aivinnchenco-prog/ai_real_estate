@@ -258,7 +258,8 @@ async def handle_text_message(message: Message, state: FSMContext) -> None:
         await process_delete_user(message, state)
     elif message.text:
         text = message.text.strip()
-        if text.startswith('http'):
+        # FB Marketplace (www/m) or any http(s) link → URL handler
+        if text.startswith('http') or extract_fb_url(text):
             await handle_url_message(message)
             return
         user_id = message.from_user.id
@@ -509,22 +510,44 @@ async def _resolve_listing_object_id(result) -> str:
 
 
 async def handle_fb_url_message(message: Message, fb_url: str):
-    """FB Marketplace: парсер → сессия → Агент 2 (Notion)."""
+    """FB Marketplace: парсер → сессия → Агент 2 (Notion) → текст+фото в чат."""
     await message.reply("Ссылка Facebook Marketplace. Парсю и передаю Агенту 2...")
 
     async with _FB_PARSE_LOCK:
         result = await asyncio.to_thread(handoff_fb_to_agent2, fb_url)
 
-    if result.ok:
-        object_id = await _resolve_listing_object_id(result)
-        await message.answer(
-            f"✅ {object_id or result.session_id} добавлен в CRM\n"
-            f"📷 Фото: {result.photos}\n{result.note}"
-        )
-        if object_id:
-            await send_flags_question(message, object_id)
-    else:
+    if not result.ok:
         await message.answer(result.note or "Неизвестная ошибка FB-парсера")
+        return
+
+    object_id = await _resolve_listing_object_id(result)
+    await message.answer(
+        f"✅ {object_id or result.session_id} добавлен в CRM\n"
+        f"📷 Фото: {result.photos}\n{result.note}"
+    )
+
+    if result.message_text:
+        await send_plain_text(message, result.message_text)
+
+    if result.image_paths:
+        media_group = MediaGroupBuilder(caption="")
+        for path in result.image_paths:
+            try:
+                media_group.add_photo(media=FSInputFile(path))
+            except Exception as e:
+                logger.error(f"Failed to add FB photo {path} to media group: {e}")
+                continue
+            if len(media_group.build()) >= 10:
+                await message.answer_media_group(media=media_group.build())
+                media_group = MediaGroupBuilder(caption="")
+        if len(media_group.build()) > 0:
+            await message.answer_media_group(media=media_group.build())
+    elif result.photos == 0:
+        await message.answer("Фото не найдены в session/photos/")
+
+    # Кнопки — последним сообщением, иначе теряются под альбомами фото.
+    if object_id:
+        await send_flags_question(message, object_id)
 
 
 async def handle_url_message(message: Message):

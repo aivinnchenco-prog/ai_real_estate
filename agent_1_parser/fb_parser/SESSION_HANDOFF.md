@@ -66,6 +66,8 @@ python agent1b/tg_bot.py
 
 В Telegram боту отправить URL вида:
 `https://www.facebook.com/marketplace/item/{ID}/`
+или mobile: `https://m.facebook.com/marketplace/item/{ID}/`
+(бот/парсер нормализуют в www — m.facebook.com часто отдаёт «browser not supported»)
 
 ## Что уже работает / чинили
 

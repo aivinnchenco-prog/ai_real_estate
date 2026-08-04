@@ -100,6 +100,7 @@ The Title Legendary Bang-Tao — современный курортный ко�
 {Район}, {Город/Провинция}, Thailand
 
 https://www.facebook.com/marketplace/item/{ITEM_ID}/
+(also accepted: m.facebook.com / mbasic.facebook.com — rewritten to www)
 
 {Полное описание с FB — как есть или слегка вычищенное}
 

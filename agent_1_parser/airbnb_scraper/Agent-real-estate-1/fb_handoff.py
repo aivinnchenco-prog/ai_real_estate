@@ -15,7 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -23,9 +23,16 @@ import config
 from agent2_handoff import find_agent2_root, run_agent2
 from CustomLogger import logger
 
-FB_URL_REGEX = re.compile(
-    r"https?://(?:www\.)?facebook\.com/marketplace/item/\d+[^\s]*", re.IGNORECASE
+# www / m / mbasic / bare facebook.com — item или /share/ short link.
+FB_ITEM_URL_REGEX = re.compile(
+    r"https?://(?:(?:www|m|mbasic)\.)?facebook\.com/marketplace/item/(\d+)[^\s]*",
+    re.IGNORECASE,
 )
+FB_SHARE_URL_REGEX = re.compile(
+    r"https?://(?:(?:www|m|mbasic)\.)?facebook\.com/share/([A-Za-z0-9][A-Za-z0-9/_-]*)[^\s]*",
+    re.IGNORECASE,
+)
+FB_URL_REGEX = FB_ITEM_URL_REGEX
 FB_PARSER_TIMEOUT_SEC = 420
 
 # Коды выхода fb_parser.py → подсказка пользователю
@@ -43,11 +50,25 @@ class FbHandoffResult:
     object_id: str = ""
     photos: int = 0
     note: str = ""
+    message_text: str = ""
+    image_paths: list[str] = field(default_factory=list)
 
 
 def extract_fb_url(text: str) -> str | None:
-    m = FB_URL_REGEX.search(text or "")
-    return m.group(0) if m else None
+    """Accept Marketplace item or /share/ short links; return crawl-ready www URL.
+
+    m.facebook.com often serves an unsupported-browser page, so rewrite to www
+    before handing off to fb_parser. Share links resolve to item URL inside parser.
+    """
+    text = text or ""
+    m = FB_ITEM_URL_REGEX.search(text)
+    if m:
+        return f"https://www.facebook.com/marketplace/item/{m.group(1)}/"
+    m = FB_SHARE_URL_REGEX.search(text)
+    if m:
+        path = m.group(1).rstrip("/")
+        return f"https://www.facebook.com/share/{path}/"
+    return None
 
 
 def find_fb_parser_root() -> Path | None:
@@ -106,14 +127,28 @@ def copy_session_to_agent2(fb_root: Path, agent2_root: Path, session_id: str) ->
     return dst
 
 
-def count_photos(session_path: Path) -> int:
+def list_photo_paths(session_path: Path) -> list[Path]:
     photos_dir = session_path / "photos"
     if not photos_dir.exists():
-        return 0
-    return sum(
-        1 for p in photos_dir.iterdir()
-        if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+        return []
+    return sorted(
+        p for p in photos_dir.iterdir()
+        if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} and p.is_file()
     )
+
+
+def count_photos(session_path: Path) -> int:
+    return len(list_photo_paths(session_path))
+
+
+def load_session_description(session_path: Path) -> str:
+    desc = session_path / "description.txt"
+    if desc.exists():
+        try:
+            return desc.read_text(encoding="utf-8").strip()
+        except OSError:
+            pass
+    return ""
 
 
 def handoff_fb_to_agent2(url: str) -> FbHandoffResult:
@@ -138,7 +173,10 @@ def handoff_fb_to_agent2(url: str) -> FbHandoffResult:
         return result
 
     session_path = fb_root / "data" / "sessions" / session_id
-    result.photos = count_photos(session_path)
+    photo_paths = list_photo_paths(session_path)
+    result.photos = len(photo_paths)
+    result.image_paths = [str(p) for p in photo_paths]
+    result.message_text = load_session_description(session_path)
 
     agent2_root = find_agent2_root()
     if agent2_root is None:

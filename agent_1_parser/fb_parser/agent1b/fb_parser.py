@@ -188,18 +188,70 @@ MARKETPLACE_JS_EXTRACT = r"""
 """
 
 
+# Mobile share links: facebook.com/share/{code}/ → redirects to marketplace/item/{id}
+_SHARE_PATH_RE = re.compile(
+    r"(?:(?:www|m|mbasic)\.)?facebook\.com/share/([A-Za-z0-9][A-Za-z0-9/_-]*)",
+    re.I,
+)
+_ITEM_ID_RE = re.compile(
+    r"(?:(?:www|m|mbasic)\.)?facebook\.com/marketplace/item/(\d+)",
+    re.I,
+)
+
+
+def is_share_url(url: str) -> bool:
+    return bool(_SHARE_PATH_RE.search(url or ""))
+
+
+def normalize_share_url(url: str) -> str:
+    """Clean facebook.com/share/... to desktop www without tracking query."""
+    match = _SHARE_PATH_RE.search(url or "")
+    if not match:
+        raise ValueError("URL does not look like Facebook share URL.")
+    path = match.group(1).rstrip("/")
+    return f"https://www.facebook.com/share/{path}/"
+
+
 def normalize_marketplace_url(url: str) -> str:
-    match = re.search(r"/marketplace/item/(\d+)", url)
+    """Rewrite any Marketplace item host (www / m / mbasic) to desktop canonical URL.
+
+    m.facebook.com often returns "Facebook is not available on this browser";
+    parsing always goes through www.facebook.com/marketplace/item/{id}/.
+    """
+    match = _ITEM_ID_RE.search(url)
+    if not match:
+        # Fallback: path-only (covers odd hosts / pasted fragments)
+        match = re.search(r"/marketplace/item/(\d+)", url)
     if not match:
         raise ValueError("URL does not look like Facebook Marketplace item URL.")
     return f"https://www.facebook.com/marketplace/item/{match.group(1)}/"
 
 
+def prepare_listing_url(url: str) -> str:
+    """Accept Marketplace item or /share/ short link; return crawl-ready www URL."""
+    if is_share_url(url):
+        return normalize_share_url(url)
+    return normalize_marketplace_url(url)
+
+
+def try_extract_item_id(*candidates: str) -> Optional[str]:
+    for text in candidates:
+        if not text:
+            continue
+        match = _ITEM_ID_RE.search(text)
+        if match:
+            return match.group(1)
+        match = re.search(r"/marketplace/item/(\d+)", text)
+        if match:
+            return match.group(1)
+    return None
+
+
 def extract_item_id(url: str) -> str:
-    match = re.search(r"/marketplace/item/(\d+)", url)
-    if not match:
+    item_id = try_extract_item_id(url)
+    if not item_id:
         raise ValueError("Cannot extract Marketplace item id.")
-    return match.group(1)
+    return item_id
 
 
 def extract_first(patterns: list[str], text: str) -> str:
@@ -601,8 +653,10 @@ def enrich_from_text(listing: ListingData, text: str) -> None:
 async def crawl_with_crawl4ai(url: str) -> ListingData:
     from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
 
+    share = is_share_url(url)
     listing = ListingData(source_url=url, backend="crawl4ai")
-    item_id = extract_item_id(url)
+    item_id = None if share else extract_item_id(url)
+    listing.debug["share_url"] = share
 
     profile_path = get_profile_path()
     if not has_saved_session(profile_path):
@@ -620,13 +674,22 @@ async def crawl_with_crawl4ai(url: str) -> ListingData:
 
     browser_config = BrowserConfig(**browser_kwargs)
     page_delay = float(os.getenv("FB_PAGE_DELAY_SEC", "4"))
-    run_config = CrawlerRunConfig(
-        cache_mode=CacheMode.BYPASS,
-        wait_until="domcontentloaded",
-        page_timeout=90000,
-        delay_before_return_html=page_delay,
-        js_code=[MARKETPLACE_JS_EXTRACT],
-    )
+    # Share links need time for client-side redirect to /marketplace/item/{id}.
+    if share:
+        page_delay = max(page_delay, 6.0)
+    run_kwargs: dict[str, Any] = {
+        "cache_mode": CacheMode.BYPASS,
+        "wait_until": "domcontentloaded",
+        "page_timeout": 90000,
+        "delay_before_return_html": page_delay,
+        "js_code": [MARKETPLACE_JS_EXTRACT],
+    }
+    if share:
+        run_kwargs["wait_for"] = (
+            "js:() => /\\/marketplace\\/item\\/\\d+/.test(window.location.href)"
+        )
+        run_kwargs["wait_for_timeout"] = 45000
+    run_config = CrawlerRunConfig(**run_kwargs)
 
     async with profile_lock():
         await human_delay()
@@ -636,6 +699,9 @@ async def crawl_with_crawl4ai(url: str) -> ListingData:
     html = getattr(result, "html", "") or ""
     error_message = str(getattr(result, "error_message", "") or "")
     listing.debug["crawl_error"] = error_message[:500]
+    redirected = getattr(result, "redirected_url", None) or ""
+    result_url = getattr(result, "url", None) or ""
+    listing.debug["redirected_url"] = (redirected or result_url)[:300]
 
     if "anti-bot" in error_message.lower() or ("<body" not in html.lower() and len(html) < 20000):
         raise RuntimeError(
@@ -654,6 +720,14 @@ async def crawl_with_crawl4ai(url: str) -> ListingData:
     if not js_payload:
         # Some crawl4ai versions put console / extracted content here.
         js_payload = parse_js_payload(getattr(result, "extracted_content", None))
+
+    item_id = item_id or try_extract_item_id(redirected, result_url, html, markdown)
+    if not item_id:
+        raise RuntimeError(
+            "WRONG_PAGE: share/link did not resolve to a Marketplace item. "
+            "Open the link in a browser — it must land on /marketplace/item/{id}/."
+        )
+    listing.source_url = f"https://www.facebook.com/marketplace/item/{item_id}/"
 
     combined_guard = "\n".join(
         [
@@ -918,7 +992,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Agent 1B parser for Facebook Marketplace using crawl4ai or ScrapeGraphAI."
     )
-    parser.add_argument("--url", required=True, help="Marketplace listing URL.")
+    parser.add_argument("--url", required=True, help="Marketplace item or /share/ URL.")
     parser.add_argument("--session", required=True, help="Session ID for Agent 2 handoff.")
     parser.add_argument(
         "--backend",
@@ -941,15 +1015,19 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    canonical_url = normalize_marketplace_url(args.url)
+    try:
+        crawl_url = prepare_listing_url(args.url)
+    except ValueError as e:
+        print(f"PARSER_FAILED: {e}", file=sys.stderr)
+        return 1
     workspace = Path(args.workspace).resolve()
     session_dir = create_session_folder(workspace, args.session)
 
     try:
         if args.backend == "crawl4ai":
-            listing = asyncio.run(crawl_with_crawl4ai(canonical_url))
+            listing = asyncio.run(crawl_with_crawl4ai(crawl_url))
         else:
-            listing = crawl_with_scrapegraph(canonical_url)
+            listing = crawl_with_scrapegraph(crawl_url)
     except RuntimeError as e:
         print(str(e), file=sys.stderr)
         code = 2 if str(e).startswith("AUTH_REQUIRED") else 1
@@ -999,6 +1077,7 @@ def main() -> int:
             json.dumps(payload, ensure_ascii=False, indent=2),
         )
 
+    canonical_url = listing.source_url
     print(f"OK: {session_dir}")
     print(f"photos: {len(saved_photos)}")
     print(f"SOURCE: Facebook Marketplace {canonical_url}")
