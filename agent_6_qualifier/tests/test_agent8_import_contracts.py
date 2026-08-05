@@ -1,4 +1,4 @@
-"""Import-contract tests: legacy agent8 paths re-export canonical public objects."""
+"""Import-contract tests: legacy, compatibility, and canonical paths share objects."""
 import importlib
 import sys
 from pathlib import Path
@@ -9,23 +9,41 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 
 @pytest.mark.parametrize(
+    "legacy, compat, canonical, symbol",
+    [
+        ("agent8.auto", "agent8.envoy.auto", "agent7_envoy.auto", "auto_outreach"),
+        ("agent8.auto", "agent8.envoy.auto", "agent7_envoy.auto", "busy_message_for_client"),
+        ("agent8.outreach", "agent8.envoy.outreach", "agent7_envoy.outreach", "build_outreach_plan"),
+        ("agent8.outreach", "agent8.envoy.outreach", "agent7_envoy.outreach", "OwnerBusyInfo"),
+        ("agent8.outreach", "agent8.envoy.outreach", "agent7_envoy.outreach", "precheck_alternatives"),
+        ("agent8.outreach", "agent8.envoy.outreach", "agent7_envoy.outreach", "register_owner_whatsapp"),
+        ("agent8.calendar_check", "agent8.envoy.calendar_check", "agent7_envoy.calendar_check", "check_calendar_dates"),
+        ("agent8.calendar_check", "agent8.envoy.calendar_check", "agent7_envoy.calendar_check", "notion_update_from_precheck"),
+        ("agent8.calendar_check", "agent8.envoy.calendar_check", "agent7_envoy.calendar_check", "format_busy_ranges"),
+        ("agent8.owner_result", "agent8.envoy.owner_result", "agent7_envoy.owner_result", "OwnerVerdict"),
+        ("agent8.owner_result", "agent8.envoy.owner_result", "agent7_envoy.owner_result", "build_client_message"),
+        ("agent8.owner_result", "agent8.envoy.owner_result", "agent7_envoy.owner_result", "parse_owner_reply"),
+    ],
+)
+def test_envoy_three_tier_import_same_object(legacy, compat, canonical, symbol):
+    legacy_mod = importlib.import_module(legacy)
+    compat_mod = importlib.import_module(compat)
+    canonical_mod = importlib.import_module(canonical)
+    obj = getattr(canonical_mod, symbol)
+    assert getattr(legacy_mod, symbol) is obj
+    assert getattr(compat_mod, symbol) is obj
+
+
+@pytest.mark.parametrize(
     "legacy, canonical, symbol",
     [
-        ("agent8.auto", "agent8.envoy.auto", "auto_outreach"),
-        ("agent8.auto", "agent8.envoy.auto", "busy_message_for_client"),
-        ("agent8.outreach", "agent8.envoy.outreach", "build_outreach_plan"),
-        ("agent8.outreach", "agent8.envoy.outreach", "OwnerBusyInfo"),
-        ("agent8.calendar_check", "agent8.envoy.calendar_check", "check_calendar_dates"),
-        ("agent8.calendar_check", "agent8.envoy.calendar_check", "notion_update_from_precheck"),
-        ("agent8.owner_result", "agent8.envoy.owner_result", "OwnerVerdict"),
-        ("agent8.owner_result", "agent8.envoy.owner_result", "build_client_message"),
         ("agent8.booking_doc", "agent8.notary.booking_doc", "generate_booking_doc"),
         ("agent8.booking_doc", "agent8.notary.booking_doc", "build_booking_data"),
         ("agent8.notary_service", "agent8.notary.service", "process_confirmed_booking"),
         ("agent8.notary_service", "agent8.notary.service", "NotaryBookingResult"),
     ],
 )
-def test_legacy_and_canonical_import_same_object(legacy, canonical, symbol):
+def test_notary_legacy_and_canonical_import_same_object(legacy, canonical, symbol):
     legacy_mod = importlib.import_module(legacy)
     canonical_mod = importlib.import_module(canonical)
     assert getattr(legacy_mod, symbol) is getattr(canonical_mod, symbol)
@@ -40,6 +58,10 @@ def test_imports_do_not_touch_network(monkeypatch):
     monkeypatch.setattr("requests.post", fail_request)
 
     for name in (
+        "agent7_envoy.auto",
+        "agent7_envoy.outreach",
+        "agent7_envoy.calendar_check",
+        "agent7_envoy.owner_result",
         "agent8.auto",
         "agent8.outreach",
         "agent8.calendar_check",

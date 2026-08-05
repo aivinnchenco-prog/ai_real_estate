@@ -172,7 +172,7 @@ async def handle_owner_message(client, event, sender, amo: AmoClient | None) -> 
         object_id=session.chosen.object_id if session.chosen else "",
     )
 
-    from agent8.envoy.owner_result import (
+    from agent7_envoy.owner_result import (
         apply_verdict_to_session,
         build_client_message,
         notion_availability_update,
@@ -421,7 +421,7 @@ async def main() -> None:
                         notify_error("amo.stage", str(e), "не удалось сменить стадию")
                 # Полный цикл Agent 8 (календарь -> Notion -> клиент/владелец)
                 # фоновой задачей: клиент уже получил «уточняю у владельца».
-                from agent8.envoy.auto import auto_outreach
+                from agent7_envoy.auto import auto_outreach
 
                 _outreach_inflight.add(chat_id)
 

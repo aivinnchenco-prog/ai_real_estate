@@ -1,1 +1,1 @@
-"""Agent 7 Envoy (legacy package agent8): owner outreach and availability."""
+"""Compatibility shim package (legacy path agent8.envoy). Canonical: ``agent7_envoy``."""
