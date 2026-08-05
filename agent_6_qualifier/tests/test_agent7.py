@@ -25,6 +25,13 @@ def test_extract_ids_variants():
     assert extract_object_ids(text) == ["20260708_001", "20260709_002", "20260710_003"]
 
 
+def test_extract_ids_preserves_source_prefixes():
+    """Канонические ID с префиксом источника F_/A_ сохраняются."""
+    assert extract_object_ids("F_20260708_001") == ["F_20260708_001"]
+    assert extract_object_ids("A_20260713_003") == ["A_20260713_003"]
+    assert extract_object_ids("#A_20260713_003") == ["A_20260713_003"]
+
+
 def test_extract_ids_dedup_and_empty():
     assert extract_object_ids("#obj_20260708_001 #obj_20260708_001") == ["20260708_001"]
     assert extract_object_ids("привет, ищу жильё") == []

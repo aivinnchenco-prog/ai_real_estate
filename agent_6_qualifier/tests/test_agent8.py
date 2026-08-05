@@ -1,4 +1,6 @@
+import json
 import sys
+import pytest
 from datetime import date
 from pathlib import Path
 
@@ -58,6 +60,21 @@ def test_no_contacts_at_all():
     l = make_listing(source_url="")
     plan = build_outreach_plan(l, LEAD)
     assert plan.channel is None and "нет ни одного контакта" in plan.skip_reason
+
+
+def test_empty_calendar_still_contacts_owner():
+    """Пустая колонка «Календарь» — pre-check пропускается, владельцу пишем."""
+    called = []
+
+    def checker(url, ci, co):
+        called.append(url)
+        return CalendarCheck(available=False, blocked_ranges=[])
+
+    l = make_listing(owner_whatsapp="+66123", calendar_url="")
+    plan = build_outreach_plan(l, LEAD, checker=checker)
+    assert called == []
+    assert plan.channel == OwnerChannel.WHATSAPP
+    assert plan.first_message
 
 
 def test_telegram_contact_beats_airbnb_source():
@@ -203,11 +220,45 @@ def test_free_nights_zero_when_checkin_blocked():
     assert check.free_nights_from(date(2026, 7, 14)) == 0
 
 
-def test_booking_doc_data_and_generation(tmp_path):
+def test_booking_doc_data_and_generation(tmp_path, monkeypatch):
     """Данные брони → JSON → node → docx. Годовой контракт без даты выезда."""
     from agent7.qualifier import Session
     from agent7.models import LeadProfile, Listing
     from agent8 import booking_doc
+
+    monkeypatch.setattr(booking_doc, "_OUT_DIR", tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        assert cmd[0] == "node"
+        assert Path(cmd[1]) == booking_doc._SCRIPT
+        json_path = Path(cmd[2])
+        out_path = Path(cmd[3])
+        assert json_path.exists()
+        assert out_path.suffix == ".docx"
+        assert out_path.parent == tmp_path
+        assert out_path.name.startswith("Бронь_A_20260713_003_")
+
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+        assert payload["object"]["objectId"] == "A_20260713_003"
+        assert payload["client"]["fullName"] == "Иванов Иван"
+        assert payload["client"]["citizenship"] == "Украина"
+        assert payload["request"]["guests"] == "3"
+        assert payload["request"]["checkinDate"] == "01.09.2026"
+        assert payload["request"]["longTerm"] is True
+        assert payload["request"]["checkoutDate"] == "01.09.2027"
+        assert "годовой контракт" in payload["request"]["longTermNoteRu"]
+        assert "Вилла у моря" not in payload["object"]["propertyName"]
+        assert payload["object"]["propertyName"] == "Villa, 3 bedrooms / Вилла, 3 спальни"
+        assert payload["agency"]["brand"] == "OpenHome"
+
+        out_path.write_bytes(b"PK" + b"\x00" * 5000)
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return R()
+
+    monkeypatch.setattr(booking_doc.subprocess, "run", fake_run)
 
     lead = LeadProfile(full_name="Иванов Иван", citizenship="Украина",
                        check_in=date(2026, 9, 1), budget=100000, guests=3)
@@ -216,25 +267,100 @@ def test_booking_doc_data_and_generation(tmp_path):
                       housing_type="Вилла", rooms=3)
     session = Session(chat_id="1", lead=lead, chosen=listing)
 
-    data = booking_doc.build_booking_data(session, "Telegram: @client")
-    assert data["object"]["objectId"] == "A_20260713_003"
-    # Парсерное название объявления в договор не пишем — только тип и спальни
-    assert "Вилла у моря" not in data["object"]["propertyName"]
-    assert data["object"]["propertyName"] == "Villa, 3 bedrooms / Вилла, 3 спальни"
-    assert data["client"]["fullName"] == "Иванов Иван"
-    assert data["request"]["checkinDate"] == "01.09.2026"
-    # Дата выезда не названа -> годовой контракт: checkout = заезд + 365 дней
-    assert data["request"]["longTerm"] is True
-    assert data["request"]["checkoutDate"] == "01.09.2027"
-    assert "годовой контракт" in data["request"]["longTermNoteRu"]
-    assert data["agency"]["brand"] == "OpenHome"
-
     path = booking_doc.generate_booking_doc(session, "Telegram: @client")
-    try:
-        assert path.exists() and path.stat().st_size > 5000
-        assert path.suffix == ".docx"
-    finally:
-        path.unlink(missing_ok=True)
+    assert path.exists() and path.stat().st_size > 5000
+    assert path.suffix == ".docx"
+    assert path.parent == tmp_path
+    assert path.name.startswith("Бронь_A_20260713_003_")
+
+
+def test_booking_doc_path_sanitizes_object_id(tmp_path, monkeypatch):
+    from agent7.qualifier import Session
+    from agent7.models import LeadProfile, Listing
+    from agent8 import booking_doc
+
+    monkeypatch.setattr(booking_doc, "_OUT_DIR", tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        Path(cmd[-1]).write_bytes(b"PK" + b"\x00" * 6000)
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return R()
+
+    monkeypatch.setattr(booking_doc.subprocess, "run", fake_run)
+
+    lead = LeadProfile(check_in=date(2026, 9, 1), check_out=date(2026, 10, 1), guests=2)
+    listing = Listing(object_id="weird/id", housing_type="вилла", rooms=2)
+    session = Session(chat_id="1", lead=lead, chosen=listing)
+    path = booking_doc.generate_booking_doc(session)
+    assert "/" not in path.name
+    assert "weird_id" in path.name
+
+
+def test_booking_doc_generation_failure_does_not_leave_docx(tmp_path, monkeypatch):
+    from agent7.qualifier import Session
+    from agent7.models import LeadProfile, Listing
+    from agent8 import booking_doc
+
+    monkeypatch.setattr(booking_doc, "_OUT_DIR", tmp_path)
+    stale = tmp_path / "old_booking.docx"
+    stale.write_bytes(b"stale")
+
+    created_paths: list[Path] = []
+
+    def fail_run(cmd, **kwargs):
+        created_paths.append(Path(cmd[3]))
+        class R:
+            returncode = 1
+            stdout = ""
+            stderr = "boom"
+        return R()
+
+    monkeypatch.setattr(booking_doc.subprocess, "run", fail_run)
+
+    session = Session(
+        chat_id="1",
+        lead=LeadProfile(check_in=date(2026, 9, 1), check_out=date(2026, 10, 1), guests=2),
+        chosen=Listing(object_id="X_20260901_001", housing_type="вилла", rooms=2),
+    )
+    with pytest.raises(RuntimeError, match="generate_booking_request.js"):
+        booking_doc.generate_booking_doc(session)
+    assert len(created_paths) == 1
+    assert not created_paths[0].exists()
+    assert stale.exists() and stale.read_bytes() == b"stale"
+
+
+def test_booking_doc_generation_success_without_file_raises(tmp_path, monkeypatch):
+    """returncode=0 без выходного файла — ошибка, а не ложный успех."""
+    from agent7.qualifier import Session
+    from agent7.models import LeadProfile, Listing
+    from agent8 import booking_doc
+
+    monkeypatch.setattr(booking_doc, "_OUT_DIR", tmp_path)
+
+    created_paths: list[Path] = []
+
+    def empty_success_run(cmd, **kwargs):
+        created_paths.append(Path(cmd[3]))
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return R()
+
+    monkeypatch.setattr(booking_doc.subprocess, "run", empty_success_run)
+
+    session = Session(
+        chat_id="1",
+        lead=LeadProfile(check_in=date(2026, 9, 1), check_out=date(2026, 10, 1), guests=2),
+        chosen=Listing(object_id="Y_20260901_002", housing_type="вилла", rooms=2),
+    )
+    with pytest.raises(RuntimeError, match="generate_booking_request.js"):
+        booking_doc.generate_booking_doc(session)
+    assert len(created_paths) == 1
+    assert not created_paths[0].exists()
 
 
 def test_client_object_partial_message():
@@ -300,3 +426,24 @@ def test_busy_message_fully_blocked():
     )
     msg = busy_message_for_client(check, make_listing(), lead)
     assert "занят до 13.08.2026" in msg and "свободен с 14.08.2026" in msg
+
+
+def test_owner_busy_followup_asks_future_bookings():
+    """Статус «занято» без сроков — уточняем дату освобождения и будущие брони."""
+    info = OwnerBusyInfo()
+    q = info.followup_question()
+    assert "будущ" in q.lower() or "брони" in q.lower()
+    assert "освобод" in q.lower() or "свобод" in q.lower()
+
+
+def test_owner_busy_info_to_notion_update():
+    info = OwnerBusyInfo(
+        busy_until=date(2026, 8, 15),
+        future_bookings="20–25 сентября",
+    )
+    upd = info.to_notion_update()
+    from agent7.models import Availability
+
+    assert upd["status"] == Availability.BUSY
+    assert upd["busy_until"] == date(2026, 8, 15)
+    assert upd["future_bookings"] == "20–25 сентября"

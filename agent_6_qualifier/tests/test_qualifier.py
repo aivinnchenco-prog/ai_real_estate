@@ -122,6 +122,20 @@ def test_full_qualification_triggers_owner_check():
         "check_in": "2026-08-01", "check_out": "2026-09-01", "budget": 55000})
     assert turn.need_owner_check
     assert s.awaiting_alt_consent  # предложили посмотреть ещё варианты
+    assert "Вилла рядом" not in turn.reply_draft   # альтернативы ещё не показаны
+
+
+def test_alternatives_not_listed_before_client_consent():
+    """Список альтернатив не уходит клиенту до явного согласия."""
+    q = make_qualifier([BUSY, ALT])
+    s = Session(chat_id="alt1")
+    q.handle_message(s, "#20260708_003", {})
+    q.handle_message(s, "…", {
+        "check_in": "2026-08-01", "check_out": "2026-09-01", "guests": 2})
+    turn = q.handle_message(s, "бюджет 55к, Раваи", {"budget": 55000, "districts": ["Раваи"]})
+    assert s.awaiting_alt_consent
+    assert "20260708_002" not in turn.reply_draft
+    assert "Вилла рядом" not in turn.reply_draft
 
 
 def test_busy_object_reports_free_window():
@@ -309,6 +323,18 @@ def test_object_id_with_source_prefix():
     turn = q.handle_message(s, "Здравствуйте! Интересует A_20260713_003", {})
     assert s.chosen is listing
     assert "Вилла Айрбнб" in turn.reply_draft
+    assert "Бюджет в месяц" in turn.reply_draft
+
+
+def test_facebook_prefix_object_resolves():
+    """Канонический F_ ID находится в базе и запускает анкету."""
+    listing = Listing(object_id="F_20260708_001", title="FB вилла", housing_type="вилла",
+                      district="Раваи", price_month=50000)
+    q = Qualifier(find_by_id={"F_20260708_001": listing}.get, fetch_all=lambda: [listing])
+    s = Session(chat_id="fb1")
+    turn = q.handle_message(s, "Интересует F_20260708_001", {})
+    assert s.chosen is listing
+    assert "Бюджет в месяц" in turn.reply_draft
 
 
 def test_utm_link_resolves_listing():

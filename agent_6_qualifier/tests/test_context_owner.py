@@ -66,3 +66,18 @@ def test_owner_conditions_message():
                      conditions_note="заезд с 16 июля"), s)
     assert "изменились" in msg.lower()
     assert "75" in msg
+
+
+def test_busy_verdict_updates_notion_availability():
+    from agent7.models import Availability
+    from agent8.owner_result import OwnerVerdict, notion_availability_update
+
+    v = OwnerVerdict(
+        status="busy",
+        busy_until=date(2026, 8, 15),
+        future_bookings="20–25 сентября",
+    )
+    upd = notion_availability_update(v)
+    assert upd["status"] == Availability.BUSY
+    assert upd["busy_until"] == date(2026, 8, 15)
+    assert upd["future_bookings"] == "20–25 сентября"
