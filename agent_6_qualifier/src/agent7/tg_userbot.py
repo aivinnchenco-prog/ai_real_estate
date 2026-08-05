@@ -248,151 +248,55 @@ async def main() -> None:
                              "не обработан")
                 return
 
-            session = get_session(chat_id)
-            text = event.raw_text or ""
-            print(f"[in] {chat_id}: {text[:80]}")
+            from .client_handler import ClientMessageTemplates, process_client_message
+            from agent8_notary.booking_doc import generate_booking_doc
+            from agent8_notary.service import process_confirmed_booking
+            from agent7_envoy.auto import auto_outreach
 
-            try:
-                update = brain.extract_lead_update(
-                    text, session.lead,
+            notary_caption = (
+                "Соглашение о бронировании (заявка). Оплаты по нему "
+                "нет — итоговые условия зафиксируем в основном "
+                "договоре после просмотра."
+            )
+
+            def _extract_lead_update(message: str, session: Session) -> dict:
+                return brain.extract_lead_update(
+                    message,
+                    session.lead,
                     context=build_knowledge(session),
                     history=format_history(session.history),
                 )
-            except Exception as e:
-                notify_error("gemini.extract", str(e),
-                             "поля из сообщения не извлечены, диалог продолжен по шаблонам")
-                update = {}
 
-            turn = qualifier.handle_message(session, text, update)
-            reply = (
-                turn.reply_draft if turn.skip_polish
-                else brain.polish_reply(turn.reply_draft, session.language, session.lead.name)
+            from .alerts import notify_manager
+
+            await process_client_message(
+                event=event,
+                sender=sender,
+                client=client,
+                amo=amo,
+                chat_id=chat_id,
+                store=_store,
+                outreach_inflight=_outreach_inflight,
+                get_session=get_session,
+                extract_lead_update=_extract_lead_update,
+                handle_message=qualifier.handle_message,
+                polish_reply=brain.polish_reply,
+                send_client_response=humanized_respond,
+                process_confirmed_booking=process_confirmed_booking,
+                generate_booking_doc=generate_booking_doc,
+                add_to_folder=add_to_folder,
+                ensure_amo_lead=ensure_amo_lead,
+                notify_manager=notify_manager,
+                notify_error=notify_error,
+                auto_outreach=auto_outreach,
+                create_task=asyncio.create_task,
+                templates=ClientMessageTemplates(
+                    notary_caption=notary_caption,
+                    clients_folder=CLIENTS_FOLDER,
+                    amo_stage_owner_request="Запрос владельцу",
+                    amo_stage_booking_confirmed="Бронь подтверждена",
+                ),
             )
-            await humanized_respond(event, reply)
-            print(f"[out] {chat_id}: {reply[:80]}")
-
-            # Бронь подтверждена — вместе с сообщением отправляем клиенту
-            # docx-соглашение о бронировании (Agent 8 Notary) и прикрепляем
-            # его же к сделке в amoCRM.
-            if turn.booking_confirmed:
-                from agent8_notary.booking_doc import generate_booking_doc
-                from agent8_notary.service import process_confirmed_booking
-
-                # Контакт в договоре — мессенджер, где идёт диалог (Telegram).
-                # WhatsApp запрашивается только для карточки amoCRM.
-                uname = getattr(sender, "username", "") or ""
-                contact = f"Telegram: @{uname}" if uname else f"Telegram id {chat_id}"
-                notary = await process_confirmed_booking(
-                    session,
-                    contact,
-                    generate_doc=generate_booking_doc,
-                    send_doc=lambda path: client.send_file(
-                        event.chat_id,
-                        str(path),
-                        caption="Соглашение о бронировании (заявка). Оплаты по нему "
-                                "нет — итоговые условия зафиксируем в основном "
-                                "договоре после просмотра.",
-                        reply_to=event.message.id,
-                    ),
-                    amo_lead_id=session.amo_lead_id,
-                    attach_file=amo.attach_file if amo is not None else None,
-                    on_generation_error=lambda e: notify_error(
-                        "booking_doc",
-                        str(e),
-                        "договор не сформирован — бронь зафиксирована, "
-                        "документ нужно отправить вручную",
-                    ),
-                    on_attach_error=lambda e: notify_error(
-                        "amo.attach_file",
-                        str(e),
-                        f"договор не прикреплён к сделке "
-                        f"#{session.amo_lead_id} — приложите вручную",
-                    ),
-                )
-                if notary.sent_to_client and notary.doc_path is not None:
-                    print(f"[notary] договор отправлен: {notary.doc_path.name}")
-                if notary.attached_to_amo:
-                    print(f"[notary] договор прикреплён к сделке #{session.amo_lead_id}")
-
-            session.history.append({"role": "user", "text": text})
-            session.history.append({"role": "assistant", "text": reply})
-            if len(session.history) > 12:
-                session.history = session.history[-12:]
-
-            await add_to_folder(client, sender, CLIENTS_FOLDER)
-            ensure_amo_lead(amo, session, sender)
-            # Карточка сделки: дозаполняем поля (даты, гости, бюджет, район),
-            # как только Gemini извлёк новые факты из сообщения.
-            if (amo is not None and session.amo_lead_id
-                    and any(v is not None for v in update.values())):
-                try:
-                    amo.update_lead_fields(session.amo_lead_id, session.lead,
-                                           amo.ensure_lead_fields())
-                except Exception as e:
-                    notify_error("amo.fields", str(e),
-                                 f"поля сделки #{session.amo_lead_id} не обновлены")
-            if amo is not None and session.amo_lead_id and turn.events:
-                obj = session.lead.preferred_object_id or "-"
-                for ev in turn.events:
-                    try:
-                        amo.note_client(session.amo_lead_id, obj, ev)
-                    except Exception as e:
-                        notify_error("amo.note", str(e), f"сделка #{session.amo_lead_id}")
-            if turn.booking_confirmed and amo is not None and session.amo_lead_id:
-                try:
-                    stages = amo.ensure_pipeline()
-                    amo.update_lead_status(session.amo_lead_id, stages["Бронь подтверждена"])
-                    lead = session.lead
-                    # Финальная синхронизация карточки: гости/WhatsApp могли быть
-                    # распарсены запасными регулярками мимо Gemini-обновлений.
-                    amo.update_lead_fields(session.amo_lead_id, lead,
-                                           amo.ensure_lead_fields())
-                    amo.note_client(
-                        session.amo_lead_id,
-                        lead.preferred_object_id or "-",
-                        f"ФИО: {lead.full_name}, гражданство: {lead.citizenship}, "
-                        f"WhatsApp: {lead.whatsapp}, гостей: {lead.guests}",
-                    )
-                except Exception as e:
-                    notify_error("amo.stage", str(e), "бронь подтверждена")
-            # Диалог передан человеку (бронь подтверждена) — каждый раз, когда
-            # клиент пишет снова, зовём менеджера (антиспам: раз в 5 минут на чат).
-            if session.handoff_to_human or turn.handoff_to_human:
-                from .alerts import notify_manager
-                uname = getattr(sender, "username", "") or ""
-                who = f"@{uname}" if uname else f"chat_id={chat_id}"
-                notify_manager(
-                    f"Клиент {who} ожидает ответа менеджера.\n"
-                    f"Объект: {session.lead.preferred_object_id or '-'}, "
-                    f"сделка #{session.amo_lead_id or '-'}\n"
-                    f"ФИО: {session.lead.full_name or '-'}, "
-                    f"гражданство: {session.lead.citizenship or '-'}\n"
-                    f"Сообщение: {text[:200]}",
-                    dedup_key=chat_id,
-                )
-            if (turn.need_owner_check and not session.owner_verdict
-                    and chat_id not in _outreach_inflight):
-                print(f"[agent8] авто-запрос владельцу: {session.lead.preferred_object_id}")
-                if amo is not None and session.amo_lead_id:
-                    try:
-                        stages = amo.ensure_pipeline()
-                        amo.update_lead_status(session.amo_lead_id, stages["Запрос владельцу"])
-                    except Exception as e:
-                        notify_error("amo.stage", str(e), "не удалось сменить стадию")
-                # Полный цикл Agent 8 (календарь -> Notion -> клиент/владелец)
-                # фоновой задачей: клиент уже получил «уточняю у владельца».
-                from agent7_envoy.auto import auto_outreach
-
-                _outreach_inflight.add(chat_id)
-
-                async def _run_outreach(sess=session, cid=chat_id):
-                    try:
-                        await auto_outreach(client, sess, _store, amo)
-                    finally:
-                        _outreach_inflight.discard(cid)
-
-                asyncio.create_task(_run_outreach())
-            _store.save(session)
         except Exception as e:
             notify_error("agent7.handler", repr(e),
                          f"chat_id={chat_id}, клиент мог остаться без ответа")
