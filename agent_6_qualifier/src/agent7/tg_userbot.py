@@ -315,38 +315,44 @@ async def main() -> None:
             # docx-соглашение о бронировании (Agent 8 Notary) и прикрепляем
             # его же к сделке в amoCRM.
             if turn.booking_confirmed:
-                doc_path = None
-                try:
-                    from agent8.booking_doc import generate_booking_doc
-                    # Контакт в договоре — мессенджер, где идёт диалог (Telegram).
-                    # WhatsApp запрашивается только для карточки amoCRM.
-                    uname = getattr(sender, "username", "") or ""
-                    contact = f"Telegram: @{uname}" if uname else f"Telegram id {chat_id}"
-                    doc_path = await asyncio.to_thread(
-                        generate_booking_doc, session, contact
-                    )
-                    await client.send_file(
-                        event.chat_id, str(doc_path),
+                from agent8.booking_doc import generate_booking_doc
+                from agent8.notary_service import process_confirmed_booking
+
+                # Контакт в договоре — мессенджер, где идёт диалог (Telegram).
+                # WhatsApp запрашивается только для карточки amoCRM.
+                uname = getattr(sender, "username", "") or ""
+                contact = f"Telegram: @{uname}" if uname else f"Telegram id {chat_id}"
+                notary = await process_confirmed_booking(
+                    session,
+                    contact,
+                    generate_doc=generate_booking_doc,
+                    send_doc=lambda path: client.send_file(
+                        event.chat_id,
+                        str(path),
                         caption="Соглашение о бронировании (заявка). Оплаты по нему "
                                 "нет — итоговые условия зафиксируем в основном "
                                 "договоре после просмотра.",
                         reply_to=event.message.id,
-                    )
-                    print(f"[notary] договор отправлен: {doc_path.name}")
-                except Exception as e:
-                    notify_error("booking_doc", str(e),
-                                 "договор не сформирован — бронь зафиксирована, "
-                                 "документ нужно отправить вручную")
-                if doc_path is not None and amo is not None and session.amo_lead_id:
-                    try:
-                        await asyncio.to_thread(
-                            amo.attach_file, session.amo_lead_id, doc_path
-                        )
-                        print(f"[notary] договор прикреплён к сделке #{session.amo_lead_id}")
-                    except Exception as e:
-                        notify_error("amo.attach_file", str(e),
-                                     f"договор не прикреплён к сделке "
-                                     f"#{session.amo_lead_id} — приложите вручную")
+                    ),
+                    amo_lead_id=session.amo_lead_id,
+                    attach_file=amo.attach_file if amo is not None else None,
+                    on_generation_error=lambda e: notify_error(
+                        "booking_doc",
+                        str(e),
+                        "договор не сформирован — бронь зафиксирована, "
+                        "документ нужно отправить вручную",
+                    ),
+                    on_attach_error=lambda e: notify_error(
+                        "amo.attach_file",
+                        str(e),
+                        f"договор не прикреплён к сделке "
+                        f"#{session.amo_lead_id} — приложите вручную",
+                    ),
+                )
+                if notary.sent_to_client and notary.doc_path is not None:
+                    print(f"[notary] договор отправлен: {notary.doc_path.name}")
+                if notary.attached_to_amo:
+                    print(f"[notary] договор прикреплён к сделке #{session.amo_lead_id}")
 
             session.history.append({"role": "user", "text": text})
             session.history.append({"role": "assistant", "text": reply})
