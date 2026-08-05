@@ -1,4 +1,6 @@
-"""Telegram-канал Agent 7: ЛИЧНЫЙ аккаунт через Telethon (MTProto), не бот.
+"""Telegram-канал Agent 6 Qualifier: ЛИЧНЫЙ аккаунт через Telethon (MTProto), не бот.
+
+Модуль остаётся в legacy-пакете ``agent7``.
 
 - Слушает входящие личные сообщения.
 - Прогоняет через Qualifier, отвечает (черновик полирует Gemini).
@@ -17,7 +19,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from telethon import TelegramClient, events, functions, types
+from telethon import TelegramClient, events
 
 from . import brain, notion_store
 from .alerts import notify_error
@@ -26,9 +28,7 @@ from .context import build_knowledge, format_history
 from .human import humanized_respond
 from .qualifier import Qualifier, Session
 from .sessions import SessionStore
-
-CLIENTS_FOLDER = "Клиенты"
-OWNERS_FOLDER = "Собственники"
+from .telegram_folders import CLIENTS_FOLDER, OWNERS_FOLDER, add_to_folder
 
 _sessions: dict[str, Session] = {}
 _store = SessionStore(Path(__file__).resolve().parents[2] / "data" / "sessions")
@@ -96,35 +96,6 @@ def make_script_client() -> TelegramClient:
                           int(os.environ["TG_API_ID"]),
                           os.environ["TG_API_HASH"],
                           receive_updates=False)
-
-
-async def add_to_folder(client: TelegramClient, entity, folder_title: str) -> None:
-    """Кладёт диалог в папку (dialog filter). Папка создаётся, если её нет."""
-    try:
-        result = await client(functions.messages.GetDialogFiltersRequest())
-        filters = [f for f in result.filters
-                   if isinstance(f, types.DialogFilter)]
-        target = next(
-            (f for f in filters if getattr(f.title, "text", f.title) == folder_title),
-            None,
-        )
-        peer = await client.get_input_entity(entity)
-        if target is None:
-            used_ids = [f.id for f in filters]
-            new_id = max(used_ids, default=1) + 1
-            target = types.DialogFilter(
-                id=new_id,
-                title=types.TextWithEntities(text=folder_title, entities=[]),
-                pinned_peers=[], include_peers=[peer], exclude_peers=[],
-            )
-        else:
-            if any(p == peer for p in target.include_peers):
-                return
-            target.include_peers.append(peer)
-        await client(functions.messages.UpdateDialogFilterRequest(
-            id=target.id, filter=target))
-    except Exception as e:
-        notify_error("tg.folders", str(e), f"папка «{folder_title}»")
 
 
 def get_session(chat_id: str) -> Session:

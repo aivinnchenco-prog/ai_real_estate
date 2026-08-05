@@ -18,6 +18,7 @@ from datetime import timedelta
 from agent7 import notion_store
 from . import owner_registry
 from agent7.alerts import notify_error
+from agent7.telegram_folders import OWNERS_FOLDER, add_to_folder
 from agent7.models import Availability, OwnerChannel
 from agent7.templates import client_object_busy, client_object_partial
 
@@ -121,7 +122,6 @@ async def auto_outreach(client, session, store, amo) -> None:
                 tg_chat_id=str(getattr(entity, "id", "") or ""),
                 object_id=listing.object_id,
             )
-            from agent7.tg_userbot import OWNERS_FOLDER, add_to_folder
             await add_to_folder(client, entity, OWNERS_FOLDER)
 
             session.awaiting_owner = True

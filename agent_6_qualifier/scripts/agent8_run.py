@@ -56,7 +56,7 @@ async def send_tg_owner(to: str, text: str) -> str:
 
     Возвращает chat_id владельца для реестра.
     """
-    from agent7.tg_userbot import OWNERS_FOLDER, add_to_folder
+    from agent7.telegram_folders import OWNERS_FOLDER, add_to_folder
 
     client = make_script_client()
     await client.connect()
