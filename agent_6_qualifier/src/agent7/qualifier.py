@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from .matching import find_alternatives
 from .models import Availability, LeadProfile, Listing
-from .object_id import extract_object_ids, extract_tg_post
+from .object_id import extract_object_ids, extract_tg_post, extract_utm_campaign
 from .templates import (
     CLIENT_ASK_ALTERNATIVES,
     CLIENT_ASK_DATES,
@@ -405,6 +405,9 @@ class Qualifier:
         ids = extract_object_ids(message)
         if ids:
             return self._find_by_id(ids[0])
+        utm_oid = extract_utm_campaign(message)
+        if utm_oid:
+            return self._find_by_id(utm_oid)
         tg = extract_tg_post(message)
         if tg and self._find_by_tg_post:
             return self._find_by_tg_post(*tg)

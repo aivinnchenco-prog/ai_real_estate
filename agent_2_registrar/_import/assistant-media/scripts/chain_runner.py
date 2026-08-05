@@ -208,7 +208,13 @@ def phone_publisher_project_root(pub_cfg: dict) -> Path:
     return inside
 
 
-def run_phone_publisher(page_id: str, pub_cfg: dict, *, live: bool = False) -> int:
+def run_phone_publisher(
+    page_id: str,
+    pub_cfg: dict,
+    *,
+    live: bool = False,
+    channels: list[str] | None = None,
+) -> int:
     """Publisher social — публикация с Android-телефона (ADB)."""
     pp = pub_cfg.get("phone_publisher", {})
     if not pp.get("enabled"):
@@ -221,6 +227,8 @@ def run_phone_publisher(page_id: str, pub_cfg: dict, *, live: bool = False) -> i
     venv_python = project / ".venv" / "bin" / "python"
     python_bin = str(venv_python) if venv_python.exists() else sys.executable
     cmd_name = pp.get("command", "publish-all")
+    if channels:
+        cmd_name = "publish"
     cmd = [
         python_bin,
         "-m",
@@ -228,7 +236,11 @@ def run_phone_publisher(page_id: str, pub_cfg: dict, *, live: bool = False) -> i
         cmd_name,
         "--page-id",
         page_id,
+        "--push-media",
     ]
+    if channels:
+        for channel in channels:
+            cmd.extend(["--channel", channel])
     if live:
         cmd.append("--live")
     else:
@@ -243,18 +255,38 @@ def run_phone_publisher(page_id: str, pub_cfg: dict, *, live: bool = False) -> i
     return proc.returncode
 
 
-def spawn_chatplace_for_reel(page_id: str) -> int:
-    """ChatPlace IG reel — после post_url_instagram_reel в Notion."""
-    script = ROOT.parents[2] / "agent_4_publisher" / "scripts" / "spawn_chatplace_for_reel.py"
+def spawn_ig_funnel_for_reel(page_id: str, pub_cfg: dict | None = None) -> int:
+    """IG comment→DM воронка после post_url_instagram_reel (PostMyPost или ChatPlace)."""
+    cfg = pub_cfg or {}
+    pmp = cfg.get("postmypost") or {}
+    auto = (pmp.get("automation") or {}).get("enabled", True)
+    if pmp.get("enabled") and auto is not False:
+        script_name = "spawn_postmypost_for_reel.py"
+        label = "PostMyPost reel automation"
+    else:
+        script_name = "spawn_chatplace_for_reel.py"
+        label = "ChatPlace reel funnel"
+    script = ROOT.parents[2] / "agent_4_publisher" / "scripts" / script_name
     if not script.exists():
-        print(f"[chain] SKIP chatplace reel: not found {script}", file=sys.stderr)
+        print(f"[chain] SKIP {label}: not found {script}", file=sys.stderr)
         return 0
-    print(f"\n[chain] ChatPlace reel funnel → {page_id}")
+    print(f"\n[chain] {label} → {page_id}")
     proc = subprocess.run(
         [sys.executable, str(script), "--page-id", page_id],
         cwd=script.parent,
     )
     return proc.returncode
+
+
+def spawn_chatplace_for_reel(page_id: str) -> int:
+    """Обратная совместимость — делегирует spawn_ig_funnel_for_reel."""
+    pub_cfg_path = ROOT.parents[2] / "agent_4_publisher" / "config" / "publisher.json"
+    pub_cfg: dict = {}
+    if pub_cfg_path.exists():
+        import json as _json
+
+        pub_cfg = _json.loads(pub_cfg_path.read_text(encoding="utf-8"))
+    return spawn_ig_funnel_for_reel(page_id, pub_cfg)
 
 
 def run_agent6(page_id: str, platform: str, publisher_script: Path,
@@ -479,14 +511,18 @@ def continue_chain(
     fb_branches: list[str] = []
     pub_cfg = load_agent4_publisher_config()
     phone_on = bool(pub_cfg.get("phone_publisher", {}).get("enabled"))
+    phone_mode_cfg = str((pub_cfg.get("phone_publisher") or {}).get("mode") or "").strip().lower()
+    phone_fb_only = phone_on and phone_mode_cfg in ("fb_only", "facebook_only")
     metricool_on = bool(pub_cfg.get("metricool", {}).get("enabled", True))
-    if chain.get("publish_fb_groups") and not (phone_on and not metricool_on):
+    postmypost_on = bool(pub_cfg.get("postmypost", {}).get("enabled"))
+    phone_mode = phone_on and not metricool_on and not postmypost_on
+    if chain.get("publish_fb_groups") and not phone_mode and not phone_fb_only:
         fb_branches.append("fb_groups_pipeline.py")
-    if chain.get("publish_fb_marketplace") and not (phone_on and not metricool_on):
+    if chain.get("publish_fb_marketplace") and not phone_mode and not phone_fb_only:
         fb_branches.append("fb_marketplace_pipeline.py")
 
     should_run_agent6 = chain_auto_publish(cfg) or from_agent >= 6 or bool(publish_platforms)
-    if should_run_agent6 and (platforms or fb_branches or phone_on):
+    if should_run_agent6 and (platforms or fb_branches or phone_on or postmypost_on):
         listings6: list = []
         if object_id:
             one = fetch_by_object_id(crm, object_id, nf)
@@ -495,19 +531,20 @@ def continue_chain(
         else:
             listings6 = fetch_by_status(crm, statuses["video_done"], nf)
 
-        # Телефон вместо Metricool: не блокируем и не спамим из‑за старого error_count
-        phone_mode = phone_on and not metricool_on
+        # Телефон вместо API: не блокируем и не спамим из‑за старого error_count
+        api_mode = postmypost_on or metricool_on
+        phone_mode = phone_on and not api_mode
         for listing in listings6:
             ready6, reason6 = agent6_ready(
                 listing,
                 statuses,
                 default_publish=default_publish,
                 default_montage=default_montage,
-                ignore_error_count=phone_mode,
+                ignore_error_count=phone_mode or api_mode or phone_fb_only,
             )
             if not ready6:
                 print(f"[chain] Agent 6 skip {listing.object_id}: {reason6}")
-                if "error_count" in reason6 and not phone_mode:
+                if "error_count" in reason6 and not (phone_mode or api_mode or phone_fb_only):
                     notify(
                         f"Публикация {listing.object_id} остановлена: {reason6}.\n"
                         "Часть сетей могла опубликоваться — проверьте last_error "
@@ -517,12 +554,25 @@ def continue_chain(
                 continue
             # Видео нет (монтаж выключен) — публикуем только карусель.
             mode6 = None if listing.has_videos else "carousel"
-            if phone_mode:
+            if api_mode and platforms:
+                plat_arg = "all" if len(platforms) > 1 else platforms[0]
+                log_event(listing.object_id, "chain", "agent6_start", platform=plat_arg)
+                code6 = run_agent6(listing.page_id, plat_arg, publisher, mode=mode6)
+                if code6 != 0:
+                    exit_code = code6
+                    log_event(listing.object_id, "chain", "agent6_failed", platform=plat_arg)
+                    notify(
+                        f"Агент 6 (публикация) упал на объекте {listing.object_id} "
+                        f"({plat_arg}). Детали в last_error объекта в Notion.",
+                        tag=f"agent6_failed:{listing.object_id}",
+                    )
+                else:
+                    spawn_chatplace_for_reel(listing.page_id)
+            elif phone_mode:
                 runner = str(
                     (pub_cfg.get("phone_publisher") or {}).get("runner") or "termux"
                 ).strip().lower()
                 if runner in ("termux", "phone", "external"):
-                    # Телефон сам забирает ready_to_post через Termux run_loop.
                     print(
                         f"[chain] Agent 6 defer {listing.object_id}: "
                         "phone publisher = Termux (VPS не постит)"
@@ -547,19 +597,37 @@ def continue_chain(
                     )
                 elif live:
                     spawn_chatplace_for_reel(listing.page_id)
-            elif platforms:
-                # Один процесс --platform all: все сети в одном запуске (как раньше через
-                # publisher.json), иначе после Instagram срабатывает agent6_locked.
-                plat_arg = "all" if len(platforms) > 1 else platforms[0]
-                log_event(listing.object_id, "chain", "agent6_start", platform=plat_arg)
-                code6 = run_agent6(listing.page_id, plat_arg, publisher, mode=mode6)
-                if code6 != 0:
-                    exit_code = code6
-                    log_event(listing.object_id, "chain", "agent6_failed", platform=plat_arg)
+            if phone_fb_only:
+                fb_channels = list(
+                    (pub_cfg.get("phone_publisher") or {}).get("channels")
+                    or ["fb_groups", "fb_marketplace"]
+                )
+                log_event(
+                    listing.object_id,
+                    "chain",
+                    "phone_fb_start",
+                    page_id=listing.page_id,
+                    channels=",".join(fb_channels),
+                )
+                live = bool(chain.get("phone_publisher_live", False))
+                code_fb_phone = run_phone_publisher(
+                    listing.page_id,
+                    pub_cfg,
+                    live=live,
+                    channels=fb_channels,
+                )
+                if code_fb_phone != 0:
+                    exit_code = code_fb_phone
+                    log_event(
+                        listing.object_id,
+                        "chain",
+                        "phone_fb_failed",
+                        code=code_fb_phone,
+                    )
                     notify(
-                        f"Агент 6 (публикация) упал на объекте {listing.object_id} "
-                        f"({plat_arg}). Детали в last_error объекта в Notion.",
-                        tag=f"agent6_failed:{listing.object_id}",
+                        f"Phone FB publisher упал на объекте {listing.object_id}. "
+                        "Проверьте ADB/телефон и last_error в Notion.",
+                        tag=f"phone_fb_failed:{listing.object_id}",
                     )
             for script_name in fb_branches:
                 branch = script_name.replace("_pipeline.py", "")

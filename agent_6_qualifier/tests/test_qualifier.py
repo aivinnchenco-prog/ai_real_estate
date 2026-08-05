@@ -311,6 +311,16 @@ def test_object_id_with_source_prefix():
     assert "Вилла Айрбнб" in turn.reply_draft
 
 
+def test_utm_link_resolves_listing():
+    listing = Listing(object_id="20260708_001", title="Вилла UTM", price_month=50000)
+    q = Qualifier(find_by_id={"20260708_001": listing}.get, fetch_all=lambda: [listing])
+    s = Session(chat_id="utm1")
+    link = "https://t.me/OpenHome_th/55?utm_source=instagram&utm_campaign=20260708_001"
+    turn = q.handle_message(s, f"Хочу арендовать {link}", {})
+    assert s.chosen is listing
+    assert "Вилла UTM" in turn.reply_draft
+
+
 def test_no_object_goes_straight_to_matching():
     q = make_qualifier()
     s = Session(chat_id="2")

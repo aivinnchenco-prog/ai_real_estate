@@ -5,6 +5,12 @@
       "args": ["mcp-metricool@latest"],
       "envFile": "${workspaceFolder}/agent_4_publisher/.env"
     },
+    "postmypost": {
+      "url": "https://mcp.postmypost.io/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:POSTMYPOST_API_TOKEN}"
+      }
+    },
     "chatplace": {
       "url": "https://mcp.chatplace.io/mcp",
       "headers": {

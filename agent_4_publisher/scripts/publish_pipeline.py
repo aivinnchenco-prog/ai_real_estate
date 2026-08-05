@@ -109,6 +109,24 @@ def phone_publisher_enabled(config: dict[str, Any] | None = None) -> bool:
     return bool(cfg.get("phone_publisher", {}).get("enabled", False))
 
 
+def postmypost_enabled(config: dict[str, Any] | None = None) -> bool:
+    cfg = load_config() if config is None else config
+    return bool(cfg.get("postmypost", {}).get("enabled", False))
+
+
+def social_publisher_enabled(config: dict[str, Any] | None = None) -> bool:
+    """Metricool или PostMyPost — любой API-паблишер для соцсетей."""
+    return postmypost_enabled(config) or metricool_enabled(config)
+
+
+def social_publisher_backend(config: dict[str, Any] | None = None) -> str | None:
+    if postmypost_enabled(config):
+        return "postmypost"
+    if metricool_enabled(config):
+        return "metricool"
+    return None
+
+
 def phone_publisher_root(config: dict[str, Any] | None = None) -> Path:
     """Корень Publisher social: в монорепе или legacy рядом в «Агенты»."""
     cfg = config or load_config()
@@ -587,11 +605,45 @@ def metricool_search_locations(query: str) -> list[dict[str, Any]]:
     return [item for _, item in scored[:10]] or result[:10]
 
 
-def build_caption(page: dict[str, Any], fields: dict[str, str], platform: str, config: dict[str, Any]) -> str:
-    bundle = build_metricool_caption_bundle(
+def publisher_timezone(config: dict[str, Any], backend: str | None = None) -> str:
+    backend = backend or social_publisher_backend(config) or "metricool"
+    if backend == "postmypost":
+        from postmypost_client import postmypost_timezone
+
+        return postmypost_timezone(config)
+    return metricool_timezone(config)
+
+
+def build_caption_bundle(
+    page: dict[str, Any],
+    fields: dict[str, str],
+    platform: str,
+    config: dict[str, Any],
+    *,
+    backend: str | None = None,
+) -> dict[str, Any]:
+    backend = backend or social_publisher_backend(config)
+    if backend == "postmypost":
+        from metricool_post_search import object_id_from_page
+        from postmypost_seo import build_postmypost_caption_bundle
+
+        object_id = object_id_from_page(page, fields) or ""
+        return build_postmypost_caption_bundle(
+            page,
+            fields,
+            platform,
+            config,
+            get_prop,
+            metricool_search_locations,
+            object_id=object_id,
+        )
+    return build_metricool_caption_bundle(
         page, fields, platform, config, get_prop, metricool_search_locations
     )
-    return bundle["text"]
+
+
+def build_caption(page: dict[str, Any], fields: dict[str, str], platform: str, config: dict[str, Any]) -> str:
+    return build_caption_bundle(page, fields, platform, config)["text"]
 
 
 def metricool_normalize_media(media_url: str) -> str:
@@ -987,6 +1039,111 @@ def spawn_deferred_post_url_sync(
     }
 
 
+def spawn_deferred_postmypost_funnel(
+    page_id: str,
+    platform: str,
+    scheduled_time: str,
+    config: dict[str, Any],
+    *,
+    post_id: str | None = None,
+    post_kind: str | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from setup_postmypost_funnel import should_run_postmypost_automation
+    except ImportError:
+        return None
+
+    upload_video = post_kind == "reel"
+    mode = "video" if post_kind == "reel" else "carousel" if post_kind == "carousel" else None
+    if not should_run_postmypost_automation(
+        platform, config, upload_video=upload_video, mode=mode
+    ):
+        return None
+
+    auto = (config.get("postmypost") or {}).get("automation") or {}
+    delay = int(auto.get("delay_minutes_after_publish", 15))
+    script = package_root() / "scripts" / "deferred_postmypost_funnel.py"
+    log_dir = package_root() / "data" / "postmypost_jobs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / (
+        f"{page_id}_{platform}_{post_kind}.log" if post_kind else f"{page_id}_{platform}.log"
+    )
+    cmd = [
+        sys.executable,
+        str(script),
+        "--page-id",
+        page_id,
+        "--platform",
+        platform,
+        "--delay-minutes",
+        str(delay),
+    ]
+    if scheduled_time:
+        cmd.extend(["--scheduled-time", scheduled_time])
+    if post_kind:
+        cmd.extend(["--post-kind", post_kind])
+    with log_file.open("a", encoding="utf-8") as log:
+        log.write(
+            f"\n--- postmypost funnel spawn {datetime.now(timezone.utc).isoformat()} "
+            f"page={page_id} platform={platform} post={post_id or '-'} delay_min={delay} ---\n"
+        )
+        log.flush()
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(package_root()),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            env=os.environ.copy(),
+        )
+    return {
+        "spawned": True,
+        "pid": proc.pid,
+        "log_file": str(log_file),
+        "delay_minutes": delay,
+        "platform": platform,
+        "post_kind": post_kind,
+    }
+
+
+def spawn_postmypost_if_reel_url_ready(
+    page_id: str,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Отложенная PostMyPost automation для IG Reel после post_url_instagram_reel."""
+    try:
+        from setup_postmypost_funnel import (
+            is_chatplace_kind_done,
+            is_live_social_url,
+            should_run_postmypost_automation,
+        )
+    except ImportError:
+        return None
+
+    cfg = config or load_config()
+    if not should_run_postmypost_automation("instagram", cfg, upload_video=True, mode="video"):
+        return None
+
+    page = notion_get_page(page_id)
+    if is_chatplace_kind_done(page, cfg, "instagram", "reel"):
+        return None
+
+    published = cfg["notion"]["published_url_fields"]
+    reel_field = published.get("instagram_reel", nfc.POST_URL_INSTAGRAM_REEL)
+    reel_url = get_prop(page, reel_field, "url")
+    if not is_live_social_url(reel_url, "instagram"):
+        return None
+
+    scheduled = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    return spawn_deferred_postmypost_funnel(
+        page_id,
+        "instagram",
+        scheduled,
+        cfg,
+        post_kind="reel",
+    )
+
+
 def spawn_deferred_chatplace_funnel(
     page_id: str,
     platform: str,
@@ -1104,14 +1261,15 @@ def publish_one(
     bypass_lock: bool = False,
     mode: str | None = None,
 ) -> dict[str, Any]:
-    if not metricool_enabled(config):
+    backend = social_publisher_backend(config)
+    if not backend:
         return {
             "page_id": page_id,
             "platform": platform,
             "mode": mode or "auto",
             "skipped": True,
-            "reason": "metricool_disabled",
-            "hint": "Публикация в соцсети — через Publisher social (телефон).",
+            "reason": "social_publisher_disabled",
+            "hint": "Включите postmypost.enabled или metricool.enabled в publisher.json.",
         }
 
     cfg_notion = config["notion"]
@@ -1119,6 +1277,8 @@ def publish_one(
     mapping = config["video_format_by_platform"]
 
     page = notion_get_page(page_id)
+
+    from metricool_post_search import object_id_from_page
 
     current_status = get_prop(page, fields["status"], "status")
     try:
@@ -1128,10 +1288,9 @@ def publish_one(
             raise
         # Для чисто карусельного поста видео не обязательно
         video_url, video_field = None, None
-    caption_bundle = build_metricool_caption_bundle(
-        page, fields, platform, config, get_prop, metricool_search_locations
-    )
+    caption_bundle = build_caption_bundle(page, fields, platform, config, backend=backend)
     caption = caption_bundle["text"]
+    object_id = object_id_from_page(page, fields) or ""
 
     photo_field = fields.get("photo", nfc.PHOTO)
     gallery_url = get_prop(page, photo_field, "url")
@@ -1229,7 +1388,8 @@ def publish_one(
         "first_comment_preview": (caption_bundle.get("firstCommentText") or "")[:120],
         "previous_status": current_status,
         "scheduled_time": scheduled_time,
-        "timezone": metricool_timezone(config),
+        "timezone": publisher_timezone(config, backend),
+        "object_id": object_id or None,
     }
     if quota_day_offset > 0:
         result["quota_shifted_days"] = quota_day_offset
@@ -1260,22 +1420,44 @@ def publish_one(
     notion_update_fields(page_id, taken_props)
 
     try:
-        scheduled = metricool_schedule_post(
-            platform,
-            caption,
-            scheduled_time,
-            video_url if upload_video else None,
-            carousel_urls,
-            upload_video,
-            config,
-            first_comment=caption_bundle.get("firstCommentText", ""),
-            location=caption_bundle.get("location"),
-        )
+        if backend == "postmypost":
+            from postmypost_client import postmypost_planner_url, postmypost_schedule_post
+
+            scheduled = postmypost_schedule_post(
+                platform,
+                caption,
+                scheduled_time,
+                video_url if upload_video else None,
+                carousel_urls,
+                upload_video,
+                config,
+                first_comment=caption_bundle.get("firstCommentText", ""),
+                title=caption_to_title(caption),
+                object_id=object_id,
+            )
+        else:
+            scheduled = metricool_schedule_post(
+                platform,
+                caption,
+                scheduled_time,
+                video_url if upload_video else None,
+                carousel_urls,
+                upload_video,
+                config,
+                first_comment=caption_bundle.get("firstCommentText", ""),
+                location=caption_bundle.get("location"),
+            )
         post_id = scheduled["id"]
         post_uuid = scheduled.get("uuid")
         network = network_for(platform)
-        planner_url = metricool_planner_post_url(post_uuid, config, post_id=post_id)
-        published_url = resolve_published_post_url(post_id, network, scheduled["response"])
+        if backend == "postmypost":
+            planner_url = postmypost_planner_url(post_id, config)
+            published_url = scheduled.get("published_url") or resolve_published_post_url(
+                post_id, network, scheduled["response"]
+            )
+        else:
+            planner_url = metricool_planner_post_url(post_uuid, config, post_id=post_id)
+            published_url = resolve_published_post_url(post_id, network, scheduled["response"])
         url_to_save = published_url or planner_url
 
         pg_field = post_id_field_name(fields)
@@ -1298,11 +1480,12 @@ def publish_one(
         if publish_at_field and scheduled_time:
             # Календарь CRM: дата/время выхода поста (перезаписываем на фактический слот)
             notion_props[publish_at_field] = notion_datetime_property(
-                scheduled_time, metricool_timezone(config)
+                scheduled_time, publisher_timezone(config, backend)
             )
 
         notion_update_fields(page_id, notion_props)
 
+        result["publisher_backend"] = backend
         result["metricool_post_id"] = post_id
         result["planner_url"] = planner_url
         result["published_url"] = published_url
@@ -1323,16 +1506,28 @@ def publish_one(
                 config,
                 post_kind=post_kind,
             )
-        cp_spawn = spawn_deferred_chatplace_funnel(
-            page_id,
-            platform,
-            scheduled_time,
-            config,
-            post_id=post_id,
-            post_kind=post_kind,
-        )
-        if cp_spawn:
-            result["deferred_chatplace_funnel"] = cp_spawn
+        if backend == "postmypost":
+            pmp_spawn = spawn_deferred_postmypost_funnel(
+                page_id,
+                platform,
+                scheduled_time,
+                config,
+                post_id=post_id,
+                post_kind=post_kind,
+            )
+            if pmp_spawn:
+                result["deferred_postmypost_funnel"] = pmp_spawn
+        else:
+            cp_spawn = spawn_deferred_chatplace_funnel(
+                page_id,
+                platform,
+                scheduled_time,
+                config,
+                post_id=post_id,
+                post_kind=post_kind,
+            )
+            if cp_spawn:
+                result["deferred_chatplace_funnel"] = cp_spawn
         return result
 
     except Exception as e:
@@ -1374,14 +1569,14 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if not metricool_enabled(config) and not args.dry_run:
+    if not social_publisher_enabled(config) and not args.dry_run:
         print(
             json.dumps(
                 {
                     "skipped": True,
-                    "reason": "metricool_disabled",
-                    "hint": "Включите metricool.enabled в config/publisher.json "
-                    "или публикуйте через Publisher social (телефон).",
+                    "reason": "social_publisher_disabled",
+                    "hint": "Включите postmypost.enabled или metricool.enabled в "
+                    "config/publisher.json.",
                 },
                 ensure_ascii=False,
                 indent=2,

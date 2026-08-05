@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from agent7.matching import budget_ok, find_alternatives, pets_ok
 from agent7.models import Availability, LeadProfile, Listing, OwnerChannel
 from agent7.notion_store import _to_listing
-from agent7.object_id import extract_object_ids, extract_tg_post
+from agent7.object_id import extract_object_ids, extract_tg_post, extract_utm_campaign
 from agent7.templates import owner_first_message
 
 
@@ -33,6 +33,12 @@ def test_extract_ids_dedup_and_empty():
 def test_extract_tg_post():
     assert extract_tg_post("https://t.me/OpenHome_th/123") == ("OpenHome_th", 123)
     assert extract_tg_post("без ссылки") is None
+
+
+def test_extract_utm_campaign():
+    link = "https://t.me/OpenHome_th/99?utm_source=instagram&utm_campaign=A_20260713_003"
+    assert extract_utm_campaign(link) == "A_20260713_003"
+    assert extract_utm_campaign("hello") is None
 
 
 # ---------- matching ----------

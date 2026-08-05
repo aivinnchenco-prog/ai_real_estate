@@ -5,7 +5,7 @@
   },
   "metricool": {
     "enabled": false,
-    "$comment_enabled": "false = Metricool-ветка выключена; публикация в соцсети через Publisher social (телефон). Код Metricool остаётся для будущей 2-й волны.",
+    "$comment_enabled": "false = Metricool выключен. Основная публикация — через PostMyPost (postmypost.enabled). Код Metricool остаётся для 2-й волны.",
     "timezone": "Asia/Bangkok",
     "planner_calendar_url": "https://app.metricool.com/planner/calendar",
     "post_search_days_back": 14,
@@ -177,9 +177,10 @@
     "default_mode": "auto",
     "workflow_order": [
       "telegram",
+      "postmypost",
       "phone_publisher",
       "metricool",
-      "chatplace"
+      "postmypost_automation"
     ],
     "chain_metricool_after_telegram": false,
     "per_network_daily_limit": {
@@ -475,16 +476,111 @@
   },
   "phone_publisher": {
     "enabled": true,
-    "runner": "termux",
+    "mode": "fb_only",
+    "channels": [
+      "fb_groups",
+      "fb_marketplace"
+    ],
+    "runner": "chain",
     "project_path": "agent_4_publisher_social",
-    "command": "publish-all",
+    "command": "publish",
     "scheduled_command": "publish-scheduled",
-    "$comment": "enabled=true держит Metricool/Playwright FB выключенными. runner=termux — VPS/chain НЕ вызывает publish-all; телефон сам (Termux run_loop) забирает Notion queue. Legacy: runner=chain.",
+    "$comment": "mode=fb_only: телефон только для FB Groups/Marketplace. Остальные сети — PostMyPost.",
     "$comment_path": "Путь относительно корня Real Estate Agent. Fallback: «Publisher social» в папке Агенты."
   },
-  "chatplace": {
+  "postmypost": {
     "enabled": true,
-    "$comment_enabled": "Воронка IG запускается после post_url_instagram_reel в Notion (телефон или Metricool).",
+    "base_url": "https://api.postmypost.io/v4.1",
+    "project_id": 355063,
+    "project_name": "Open Home",
+    "timezone": "Asia/Bangkok",
+    "publication_status": 5,
+    "planner_url_template": "https://app.postmypost.io/publications/{publication_id}",
+    "upload_poll_seconds": 2,
+    "upload_poll_attempts": 45,
+    "$comment_accounts": "platform_accounts — явный маппинг account_id по платформе. Если пусто — авто по channel code из API.",
+    "platform_accounts": {
+      "instagram": [2214120],
+      "tiktok": [2214123],
+      "x": [2214180],
+      "twitter": [2214180],
+      "linkedin": [2214176],
+      "facebook": [2214118],
+      "youtube": [2214116],
+      "threads": [2214188]
+    },
+    "platform_settings": {
+      "instagram": {
+        "instagram_share_to_feed": true
+      },
+      "tiktok": {
+        "tiktok_comment": true,
+        "tiktok_duet": true,
+        "tiktok_stitch": true
+      },
+      "youtube": {
+        "youtube_privacy_status": 1
+      }
+    },
+    "auto_hashtags": true,
+    "auto_geolocation": true,
+    "api_min_interval_seconds": 6.5,
+    "url_sync_delay_minutes": 5,
+    "url_sync_retries": 3,
+    "url_sync_retry_interval_minutes": 3,
+    "utm": {
+      "source_template": "{platform}",
+      "medium": "social"
+    },
+    "ai_adapt": {
+      "enabled": true,
+      "$comment": "Адаптация текста под каждую соцсеть (аналог PostMyPost AI) при публикации через API"
+    },
+    "rubric_by_prefix": {},
+    "default_rubric_id": null,
+    "comment_cta": {
+      "enabled": true,
+      "$comment": "CTA + код объекта в подпись и first comment при публикации",
+      "append_to_caption": true,
+      "append_to_first_comment": ["instagram"]
+    },
+    "reply_agent": {
+      "enabled": true,
+      "name": "Мой пост",
+      "brand_name": "Open Home",
+      "manager_telegram": "@OpenHome_th",
+      "manager_whatsapp": "+66625124002",
+      "$comment_whatsapp": "Укажите номер менеджера, например +66812345678 — подставится в CTA и AI-промпт",
+      "object_code_line_template": "🏷 Код объекта: {object_id}",
+      "caption_cta_template": "Отправьте код {object_id} менеджеру в Telegram {telegram_channel}{whatsapp_suffix} — поможем с подбором и оформлением.",
+      "comment_reply_template": "Спасибо за интерес! Код объекта: {object_id}. Отправьте его менеджеру в Telegram {telegram_channel}{whatsapp_suffix} — поможем с подбором и оформлением.",
+      "dm_reply_template": "Здравствуйте! Код объекта из поста: {object_id}. Отправьте этот код менеджеру в Telegram {telegram_channel}{whatsapp_suffix} — подберём варианты и поможем с оформлением.",
+      "by_platform": {
+        "instagram": "Код объекта: {object_id}. Напишите менеджеру в Telegram {telegram_channel}{whatsapp_suffix}.",
+        "tiktok": "Код: {object_id} → Telegram {telegram_channel}",
+        "youtube": "Код объекта {object_id}. Связь: Telegram {telegram_channel}",
+        "x": "Код {object_id} → TG {telegram_channel}",
+        "linkedin": "Object code: {object_id}. Contact manager: {telegram_channel}",
+        "facebook": "Код объекта: {object_id}. Менеджер: {telegram_channel}",
+        "threads": "Код {object_id} → {telegram_channel}"
+      }
+    },
+    "automation": {
+      "enabled": false,
+      "$comment": "DM-воронки отключены. Реактивные ответы на комментарии — опционально одна automation в UI PostMyPost (см. comment_reply_automation)",
+      "delay_minutes_after_publish": 15,
+      "platforms": ["instagram"],
+      "instagram_post_kinds": ["carousel", "reel"],
+      "dm_message_template": "Полная информация об объекте {object_id}: {telegram_url}"
+    },
+    "comment_reply_automation": {
+      "$comment_ui": "Один раз: python3 scripts/export_postmypost_reply_prompt.py — скопировать промпт в PostMyPost → Automation → AI assistant",
+      "agent": "Мой пост"
+    }
+  },
+  "chatplace": {
+    "enabled": false,
+    "$comment_enabled": "Заменён на postmypost.automation. Код ChatPlace сохранён для отката.",
     "execution": "mcp",
     "use_structured_mcp": true,
     "mcp_url": "https://mcp.chatplace.io/mcp",

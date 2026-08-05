@@ -11,6 +11,12 @@ _ID_RE = re.compile(r"(?:#obj[_ ]?|#)?\b([A-Za-z]{1,3}_)?(\d{8}_\d{3})\b", re.IG
 # Ссылка на пост TG-канала: https://t.me/OpenHome_th/123
 _TG_POST_RE = re.compile(r"https?://t\.me/([\w_]+)/(\d+)")
 
+# UTM из ссылки на Telegram-пост (агент 4 добавляет utm_campaign=object_id)
+_UTM_CAMPAIGN_RE = re.compile(
+    r"[?&]utm_campaign=([A-Za-z]{0,3}_?\d{8}_\d{3})",
+    re.IGNORECASE,
+)
+
 
 def extract_object_ids(text: str) -> list[str]:
     """Все Объект ID из текста, без дубликатов, в порядке появления.
@@ -38,3 +44,13 @@ def extract_tg_post(text: str) -> tuple[str, int] | None:
     if not m:
         return None
     return m.group(1), int(m.group(2))
+
+
+def extract_utm_campaign(text: str) -> str | None:
+    """Объект ID из utm_campaign в ссылке (PostMyPost / Agent 6 UTM-метки)."""
+    if not text:
+        return None
+    match = _UTM_CAMPAIGN_RE.search(text)
+    if not match:
+        return None
+    return match.group(1).strip()

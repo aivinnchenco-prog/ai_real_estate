@@ -32,6 +32,7 @@ from publish_pipeline import (  # noqa: E402
     notion_get_page,
     notion_update_fields,
     notion_url_property,
+    postmypost_enabled,
     published_url_field,
 )
 
@@ -57,6 +58,17 @@ def sync_post_url_to_notion(
     post_payload: dict[str, Any] | None = None,
     resolved_source: str | None = None,
 ) -> dict[str, Any]:
+    if postmypost_enabled(config) and post_id:
+        from sync_postmypost_urls import sync_postmypost_url_to_notion
+
+        return sync_postmypost_url_to_notion(
+            page_id,
+            platform,
+            config,
+            publication_id=post_id,
+            post_kind=post_kind,
+        )
+
     page = page or notion_get_page(page_id)
     network = network_for(platform)
 

@@ -203,10 +203,10 @@ def chain_metricool_carousel(
     dry_run: bool,
 ) -> list[dict[str, Any]]:
     """Schedule carousel posts to social platforms via Metricool."""
-    from publish_pipeline import default_schedule_time, metricool_enabled, publish_one
+    from publish_pipeline import default_schedule_time, social_publisher_enabled, publish_one
 
-    if not metricool_enabled(config):
-        return [{"skipped": True, "reason": "metricool_disabled"}]
+    if not social_publisher_enabled(config):
+        return [{"skipped": True, "reason": "social_publisher_disabled"}]
 
     platforms = config.get("carousel", {}).get("platforms", [])
     scheduled = default_schedule_time()
@@ -255,9 +255,9 @@ def publish_telegram_page(
         }
         should_chain = chain_metricool
         if should_chain is None:
-            from publish_pipeline import metricool_enabled
+            from publish_pipeline import social_publisher_enabled
 
-            should_chain = metricool_enabled(config) and bool(
+            should_chain = social_publisher_enabled(config) and bool(
                 tg_cfg.get("chain_metricool_after_telegram")
                 or config.get("agent6", {}).get("chain_metricool_after_telegram")
             )
@@ -302,9 +302,9 @@ def publish_telegram_page(
 
     should_chain = chain_metricool
     if should_chain is None:
-        from publish_pipeline import metricool_enabled
+        from publish_pipeline import social_publisher_enabled
 
-        should_chain = metricool_enabled(config) and bool(
+        should_chain = social_publisher_enabled(config) and bool(
             tg_cfg.get("chain_metricool_after_telegram")
             or config.get("agent6", {}).get("chain_metricool_after_telegram")
         )

@@ -10,11 +10,12 @@ from publish_pipeline import metricool_enabled, phone_publisher_enabled, publish
 def test_metricool_disabled_skips_publish_one():
     cfg = {
         "metricool": {"enabled": False},
+        "postmypost": {"enabled": False},
         "notion": {"fields": {}, "published_url_fields": {}},
     }
     out = publish_one("page-1", "instagram", "2026-07-24T08:00:00Z", True, cfg)
     assert out["skipped"] is True
-    assert out["reason"] == "metricool_disabled"
+    assert out["reason"] == "social_publisher_disabled"
 
 
 def test_metricool_enabled_by_default():

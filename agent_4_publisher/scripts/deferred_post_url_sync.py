@@ -29,6 +29,7 @@ from publish_pipeline import (  # noqa: E402
     metricool_get_post,
     metricool_timezone,
     parse_scheduled_time_utc,
+    postmypost_enabled,
 )
 from sync_post_urls import sync_post_url_to_notion  # noqa: E402
 
@@ -74,7 +75,7 @@ def main() -> int:
     parser.add_argument(
         "--delay-minutes",
         type=int,
-        default=int(config.get("metricool", {}).get("url_sync_delay_minutes", 5)),
+        default=None,
     )
     parser.add_argument(
         "--retries",
@@ -93,12 +94,39 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.delay_minutes is None:
+        if postmypost_enabled(config):
+            args.delay_minutes = int(
+                (config.get("postmypost") or {}).get("url_sync_delay_minutes", 5)
+            )
+        else:
+            args.delay_minutes = int(
+                config.get("metricool", {}).get("url_sync_delay_minutes", 5)
+            )
+
+    retries = int(
+        (config.get("postmypost") or {}).get("url_sync_retries", 3)
+        if postmypost_enabled(config)
+        else config.get("metricool", {}).get("url_sync_retries", 3)
+    )
+    retry_interval = int(
+        (config.get("postmypost") or {}).get("url_sync_retry_interval_minutes", 3)
+        if postmypost_enabled(config)
+        else config.get("metricool", {}).get("url_sync_retry_interval_minutes", 3)
+    )
+    if args.retries == int(config.get("metricool", {}).get("url_sync_retries", 3)) and postmypost_enabled(config):
+        args.retries = retries
+    if args.retry_interval_minutes == int(
+        config.get("metricool", {}).get("url_sync_retry_interval_minutes", 3)
+    ) and postmypost_enabled(config):
+        args.retry_interval_minutes = retry_interval
+
     scheduled_time = args.scheduled_time
     if not args.skip_wait:
-        if not scheduled_time and args.post_id:
+        if not scheduled_time and args.post_id and not postmypost_enabled(config):
             try:
                 scheduled_time = scheduled_time_from_metricool_post(args.post_id, config)
-            except RuntimeError:
+            except (RuntimeError, ValueError):
                 scheduled_time = None
         if scheduled_time:
             target = sync_target_utc(scheduled_time, args.delay_minutes)
@@ -123,7 +151,8 @@ def main() -> int:
             time.sleep(max(1, args.retry_interval_minutes) * 60)
 
     print(json.dumps(last_result or {}, indent=2, ensure_ascii=False))
-    print("Post URL not available yet in Metricool.", file=sys.stderr)
+    backend = "PostMyPost" if postmypost_enabled(config) else "Metricool"
+    print(f"Post URL not available yet in {backend}.", file=sys.stderr)
     return 2
 
 
