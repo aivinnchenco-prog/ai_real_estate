@@ -25,8 +25,8 @@
 | Целевая роль | Фактический Python-пакет / путь | Точки входа (runtime) |
 |--------------|----------------------------------|------------------------|
 | Agent 6 Qualifier | `agent_6_qualifier/src/agent7/` | `scripts/start_userbot.sh` → `python3 -m agent7.tg_userbot`; оркестратор `agent7.qualifier` |
-| Agent 7 Envoy | `agent_6_qualifier/src/agent8/` (кроме `booking_doc.py`) + часть `agent7/` (`airbnb_check`, `owner_registry`, owner-шаблоны в `templates.py`) | `agent8.auto`, `agent8_run.py`, `owner_reply.py`; вызов из `tg_userbot` при `need_owner_check` |
-| Agent 8 Notary | `agent_6_qualifier/src/agent8/booking_doc.py` + `scripts/generate_booking_request.js` | `generate_booking_doc()` из `tg_userbot` при `booking_confirmed` |
+| Agent 7 Envoy | canonical: `agent_6_qualifier/src/agent7_envoy/`; legacy shims: `agent8/` (кроме notary), `agent7/airbnb_check.py`, `agent7/owner_registry.py` | `agent7_envoy.auto`, `agent8_run.py`, `owner_reply.py`; вызов из `tg_userbot` при `need_owner_check` |
+| Agent 8 Notary | canonical: `agent_6_qualifier/src/agent8_notary/`; legacy shims: `agent8/booking_doc.py`, `agent8/notary/` + `scripts/generate_booking_request.js` | `agent8_notary.booking_doc.generate_booking_doc()` из `tg_userbot` при `booking_confirmed` |
 
 Заглушки-папки (только README, без runtime):
 

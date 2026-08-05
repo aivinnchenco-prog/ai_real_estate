@@ -15,8 +15,8 @@
 | Целевая роль | Код сейчас | Основные модули |
 |--------------|------------|-----------------|
 | Agent 6 Qualifier | пакет `agent7` | `qualifier.py`, `tg_userbot.py`, `matching.py`, `brain.py` |
-| Agent 7 Envoy | пакет `agent8` (кроме `booking_doc`) + часть `agent7` | `outreach.py`, `auto.py`, `calendar_check.py`, `owner_result.py`, `airbnb_check.py` |
-| Agent 8 Notary | `agent8/booking_doc.py` + `scripts/generate_booking_request.js` | docx брони, прикрепление к amoCRM |
+| Agent 7 Envoy | canonical `agent7_envoy` + legacy shims `agent8` (кроме notary), `agent7/airbnb_check`, `agent7/owner_registry` | `auto.py`, `outreach.py`, `calendar_check.py`, `owner_result.py`, owner-шаблоны в `templates.py` |
+| Agent 8 Notary | canonical `agent8_notary` + legacy `agent8/booking_doc.py` + `scripts/generate_booking_request.js` | docx брони, прикрепление к amoCRM |
 
 Общие модули (Notion, модели, amoCRM, шаблоны клиента) — в `agent7`; Envoy и Notary их переиспользуют.
 
@@ -30,11 +30,13 @@
 | Задача | Квалификация, подбор альтернатив, ответ клиенту | Проверка доступности, согласование дат/цены, вытянуть WA-контакт | Соглашение о бронировании (docx), загрузка в amoCRM |
 | Пишет в CRM | Лид + поля квалификации в amoCRM | Активность по сделке, контакт владельца и занятость в Notion | Файл к сделке amoCRM |
 
-Agent 6 **не пишет владельцу сам** — при `need_owner_check` запускает Agent 7 (код: `agent8.auto`).
-Ответ владельца возвращается клиенту через Qualifier (`agent8.owner_result`).
+Agent 6 **не пишет владельцу сам** — при `need_owner_check` запускает Agent 7 Envoy
+(`agent7_envoy.auto`; legacy import: `agent8.auto`).
+Ответ владельца возвращается клиенту через Qualifier (`agent7_envoy.owner_result`;
+legacy import: `agent8.owner_result`).
 
 При подтверждённой брони (`booking_confirmed`) Qualifier инициирует Agent 8 Notary
-(`agent8.booking_doc.generate_booking_doc`): docx клиенту + `amo.attach_file`.
+(`agent8_notary.booking_doc.generate_booking_doc`; legacy: `agent8.booking_doc`): docx клиенту + `amo.attach_file`.
 
 ---
 

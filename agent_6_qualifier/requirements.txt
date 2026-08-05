@@ -1,4 +1,4 @@
-# Agent 7 Qualifier
+# Agent 6 Qualifier
 python-dotenv>=1.0
 requests>=2.32
 telethon>=1.36          # личный TG-аккаунт (MTProto), не бот

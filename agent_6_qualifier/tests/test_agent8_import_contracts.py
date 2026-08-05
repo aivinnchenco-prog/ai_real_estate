@@ -186,3 +186,23 @@ def test_owner_registry_missing_and_corrupt_file(tmp_path, monkeypatch):
 
     owner_registry.mark_owner(tg_username="y", object_id="NEW")
     assert owner_registry.get_owner("y")["object_id"] == "NEW"
+
+
+def test_production_scripts_compile():
+    """Production scripts must be syntactically valid without executing them."""
+    import py_compile
+
+    scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
+    for name in ("owner_reply.py", "agent8_run.py", "tg_login.py"):
+        py_compile.compile(scripts_dir / name, doraise=True)
+    assert (scripts_dir / "start_userbot.sh").is_file()
+
+
+def test_role_map_documents_target_roles():
+    role_map = (Path(__file__).resolve().parents[2] / "ROLE_MAP.md").read_text(
+        encoding="utf-8",
+    )
+    assert "Agent 6 Qualifier" in role_map
+    assert "Agent 7 Envoy" in role_map
+    assert "Agent 8 Notary" in role_map
+    assert "Agent 7 Qualifier" in role_map  # legacy mapping section

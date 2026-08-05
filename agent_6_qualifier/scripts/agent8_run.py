@@ -1,4 +1,4 @@
-"""Agent 8: реальный прогон «проверить объект и связаться с владельцем».
+"""Agent 7 Envoy: реальный прогон «проверить объект и связаться с владельцем».
 
 Запуск:
   python3 scripts/agent8_run.py --chat 5041767749            # план + Notion, без отправки
@@ -11,6 +11,8 @@
 4. Даты закрыты -> сразу сообщает клиенту (занят до X, свободен с Y) + альтернативы.
 5. Даты открыты -> выбирает канал владельца (WA -> TG -> Airbnb DM -> FB DM)
    и готовит первое сообщение; --send отправляет владельцу в TG (канал telegram).
+
+Имя скрипта `agent8_run.py` — legacy (историческая нумерация пакета `agent8`).
 """
 from __future__ import annotations
 
@@ -29,15 +31,16 @@ for line in (ROOT / ".env").read_text().splitlines():
         k, v = line.split("=", 1)
         os.environ.setdefault(k, v.strip())
 
-from agent7 import notion_store, owner_registry  # noqa: E402
+from agent7 import notion_store  # noqa: E402
+from agent7_envoy import owner_registry  # noqa: E402
 from agent7.alerts import notify_error  # noqa: E402
 from agent7.amo import AmoClient  # noqa: E402
 from agent7.models import Availability, OwnerChannel  # noqa: E402
 from agent7.sessions import SessionStore  # noqa: E402
 from agent7.tg_userbot import make_script_client  # noqa: E402
-from agent8.auto import busy_message_for_client  # noqa: E402
-from agent8.calendar_check import format_busy_ranges, notion_update_from_precheck  # noqa: E402
-from agent8.outreach import build_outreach_plan  # noqa: E402
+from agent7_envoy.auto import busy_message_for_client  # noqa: E402
+from agent7_envoy.calendar_check import format_busy_ranges, notion_update_from_precheck  # noqa: E402
+from agent7_envoy.outreach import build_outreach_plan  # noqa: E402
 
 _store = SessionStore(ROOT / "data" / "sessions")
 
@@ -70,7 +73,7 @@ async def send_tg_owner(to: str, text: str) -> str:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Agent 8: проверка дат + контакт с владельцем")
+    p = argparse.ArgumentParser(description="Agent 7 Envoy: проверка дат + контакт с владельцем")
     p.add_argument("--chat", required=True, help="chat_id клиента")
     p.add_argument("--send", action="store_true", help="реально отправить сообщения в TG")
     args = p.parse_args()

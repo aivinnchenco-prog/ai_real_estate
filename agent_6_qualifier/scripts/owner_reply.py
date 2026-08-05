@@ -1,4 +1,4 @@
-"""Симуляция ответа владельца и уведомление клиента (тест / ручной шаг Agent 8).
+"""Симуляция ответа владельца и уведомление клиента (тест / ручной шаг Agent 7 Envoy).
 
 Запуск:
   python3 scripts/owner_reply.py --chat 5041767749 --reply "Да, свободно на эти даты"
@@ -32,7 +32,7 @@ from agent7.alerts import notify_error  # noqa: E402
 from agent7.amo import AmoClient  # noqa: E402
 from agent7.sessions import SessionStore  # noqa: E402
 from agent7.tg_userbot import make_script_client  # noqa: E402
-from agent8.owner_result import (  # noqa: E402
+from agent7_envoy.owner_result import (  # noqa: E402
     apply_verdict_to_session,
     build_client_message,
     notion_availability_update,

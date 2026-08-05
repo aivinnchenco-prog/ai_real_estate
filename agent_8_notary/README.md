@@ -9,7 +9,8 @@
 
 | Компонент | Путь |
 |-----------|------|
-| Python-обёртка | `agent_6_qualifier/src/agent8/booking_doc.py` |
+| Canonical Python | `agent_6_qualifier/src/agent8_notary/` (`booking_doc.py`, `service.py`) |
+| Legacy shims | `agent_6_qualifier/src/agent8/booking_doc.py`, `agent8/notary/` |
 | Генератор docx (Node) | `agent_6_qualifier/scripts/generate_booking_request.js` |
 | npm-зависимости | `agent_6_qualifier/scripts/package.json` |
 | Выходные файлы | `agent_6_qualifier/data/contracts/` (в `.gitignore`) |
@@ -17,9 +18,9 @@
 
 ## Точка входа (runtime)
 
-При `booking_confirmed` в Qualifier (`agent7/tg_userbot.py`):
+При `booking_confirmed` в Agent 6 Qualifier (`agent7/tg_userbot.py`):
 
-1. `agent8.booking_doc.generate_booking_doc()` — создаёт docx;
+1. `agent8_notary.booking_doc.generate_booking_doc()` — создаёт docx *(legacy import: `agent8.booking_doc`)*;
 2. файл отправляется клиенту в Telegram;
 3. `amo.attach_file(lead_id, doc_path)` — прикрепление к сделке.
 
