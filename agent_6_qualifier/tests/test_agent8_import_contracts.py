@@ -69,6 +69,7 @@ def test_imports_do_not_touch_network(monkeypatch):
         "agent7_envoy.calendar_check",
         "agent7_envoy.owner_result",
         "agent7_envoy.owner_registry",
+        "agent7_envoy.owner_handler",
         "agent7_envoy.airbnb_check",
         "agent8_notary.booking_doc",
         "agent8_notary.service",

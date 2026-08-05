@@ -147,31 +147,7 @@ async def handle_owner_message(client, event, sender, amo: AmoClient | None) -> 
        сейчас ждёт ответа (awaiting_owner).
     """
     from . import owner_registry
-
-    username = getattr(sender, "username", "") or ""
-    owner_chat_id = str(event.chat_id)
-    reg = owner_registry.get_owner(username, owner_chat_id)
-
-    session = _store.find_awaiting_owner(username)
-    if session is None and reg and reg.get("object_id"):
-        session = _store.find_awaiting_owner_by_object(reg["object_id"])
-
-    if session is None:
-        if reg is None:
-            return False
-        # Контакт помечен как владелец, но активного запроса нет:
-        # логируем, НЕ создаём клиентскую сессию и НЕ отвечаем скриптом клиента.
-        print(f"[owner:@{username or owner_chat_id}] сообщение вне активного "
-              f"запроса (объект {reg.get('object_id') or '?'}): "
-              f"{(event.raw_text or '')[:80]}")
-        return True
-
-    # Обогащаем реестр: теперь знаем и chat_id владельца.
-    owner_registry.mark_owner(
-        tg_username=username, tg_chat_id=owner_chat_id,
-        object_id=session.chosen.object_id if session.chosen else "",
-    )
-
+    from agent7_envoy.owner_handler import OwnerMessageTemplates, process_owner_message
     from agent7_envoy.owner_result import (
         apply_verdict_to_session,
         build_client_message,
@@ -180,51 +156,35 @@ async def handle_owner_message(client, event, sender, amo: AmoClient | None) -> 
     )
     from .templates import OWNER_ACK_CONDITIONS, OWNER_ACK_FREE, OWNER_BUSY_FOLLOWUP
 
-    text = event.raw_text or ""
-    print(f"[owner:@{username}] {text[:80]}")
-    verdict = parse_owner_reply(text, session)
+    async def _send_client_message(chat_id: int, reply: str) -> None:
+        await client.send_message(chat_id, reply)
 
-    # Владелец сказал «занято», но не назвал сроки — обязательный уточняющий вопрос.
-    if verdict.status == "busy" and not verdict.busy_until:
-        await humanized_respond(event, OWNER_BUSY_FOLLOWUP)
-        print(f"[owner:@{username}] занято без сроков -> уточняем")
-        return True
-
-    ack = OWNER_ACK_FREE if verdict.status == "free" else OWNER_ACK_CONDITIONS
-    await humanized_respond(event, ack)
-
-    client_msg = build_client_message(verdict, session)
-    reply = brain.polish_reply(client_msg, session.language, session.lead.name)
-    apply_verdict_to_session(session, verdict)
-
-    if session.chosen and session.chosen.page_id:
-        try:
-            upd = notion_availability_update(verdict)
-            notion_store.update_availability(
-                session.chosen.page_id, upd["status"],
-                busy_until=upd.get("busy_until"),
-                future_bookings=upd.get("future_bookings", ""),
-            )
-        except Exception as e:
-            notify_error("notion.availability", str(e), f"объект {session.chosen.object_id}")
-
-    await client.send_message(int(session.chat_id), reply)
-    session.history.append({"role": "assistant", "text": reply})
-    _store.save(session)
-    _sessions[session.chat_id] = session   # обновляем и горячий кэш userbot
-    print(f"[out] {session.chat_id}: {reply[:80]}")
-
-    await add_to_folder(client, sender, OWNERS_FOLDER)
-    if amo is not None and session.amo_lead_id:
-        try:
-            stages = amo.ensure_pipeline()
-            amo.update_lead_status(session.amo_lead_id, stages["Согласование условий"])
-            obj = session.lead.preferred_object_id or "-"
-            amo.note_owner(session.amo_lead_id, obj, text)
-            amo.note_client(session.amo_lead_id, obj, f"Сообщено клиенту: {reply[:200]}")
-        except Exception as e:
-            notify_error("amo.owner_flow", str(e), f"сделка #{session.amo_lead_id}")
-    return True
+    return await process_owner_message(
+        client=client,
+        event=event,
+        sender=sender,
+        amo=amo,
+        store=_store,
+        sessions_cache=_sessions,
+        get_owner=owner_registry.get_owner,
+        mark_owner=owner_registry.mark_owner,
+        parse_owner_reply=parse_owner_reply,
+        build_client_message=build_client_message,
+        apply_verdict_to_session=apply_verdict_to_session,
+        notion_availability_update=notion_availability_update,
+        update_notion_availability=notion_store.update_availability,
+        polish_reply=brain.polish_reply,
+        send_owner_response=humanized_respond,
+        send_client_message=_send_client_message,
+        add_to_folder=add_to_folder,
+        notify_error=notify_error,
+        owners_folder=OWNERS_FOLDER,
+        templates=OwnerMessageTemplates(
+            ack_free=OWNER_ACK_FREE,
+            ack_conditions=OWNER_ACK_CONDITIONS,
+            busy_followup=OWNER_BUSY_FOLLOWUP,
+        ),
+    )
 
 
 def ensure_amo_lead(amo: AmoClient | None, session: Session, sender) -> None:
