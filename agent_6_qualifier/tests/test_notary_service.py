@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent7.qualifier import Session
+from agent6_qualifier.qualifier import Session
 from agent8.notary.service import process_confirmed_booking
 
 

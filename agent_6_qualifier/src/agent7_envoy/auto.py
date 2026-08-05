@@ -15,12 +15,12 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 
-from agent7 import notion_store
+from agent6_qualifier import notion_store
 from . import owner_registry
-from agent7.alerts import notify_error
-from agent7.telegram_folders import OWNERS_FOLDER, add_to_folder
-from agent7.models import Availability, OwnerChannel
-from agent7.templates import client_object_busy, client_object_partial
+from agent6_qualifier.alerts import notify_error
+from agent6_qualifier.telegram_folders import OWNERS_FOLDER, add_to_folder
+from agent6_qualifier.models import Availability, OwnerChannel
+from agent6_qualifier.templates import client_object_busy, client_object_partial
 
 from .calendar_check import notion_update_from_precheck
 from .outreach import build_outreach_plan

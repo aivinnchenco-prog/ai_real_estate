@@ -31,7 +31,7 @@ NOTARY_CAPTION = (
 @pytest.fixture
 def runtime(monkeypatch):
     """Boot tg_userbot.main() far enough to capture the nested on_message handler."""
-    import agent7.tg_userbot as tg
+    import agent6_qualifier.tg_userbot as tg
 
     store = FakeStore()
     harness = RuntimeHarness(
@@ -121,7 +121,7 @@ def runtime(monkeypatch):
     def _notify_manager(text, *, dedup_key=""):
         harness.manager_calls.append((text, dedup_key))
 
-    monkeypatch.setattr("agent7.alerts.notify_manager", _notify_manager)
+    monkeypatch.setattr("agent6_qualifier.alerts.notify_manager", _notify_manager)
 
     async def _boot():
         main_task = asyncio.create_task(tg.main())
@@ -149,7 +149,7 @@ def runtime(monkeypatch):
 def _prepare_session(runtime: RuntimeHarness, turn, *, text: str = "Привет", sender=None):
     session = make_client_session()
     runtime.store._by_chat[session.chat_id] = session
-    import agent7.tg_userbot as tg
+    import agent6_qualifier.tg_userbot as tg
     tg._sessions[session.chat_id] = session
     runtime.qualifier.handle_message.return_value = turn
     event = make_event(text=text)
@@ -199,7 +199,7 @@ def test_need_owner_check_starts_auto_outreach_once(runtime):
 def test_need_owner_check_false_skips_auto_outreach(runtime):
     turn = make_turn(need_owner_check=False)
     session, event, sender = _prepare_session(runtime, turn)
-    import agent7.tg_userbot as tg
+    import agent6_qualifier.tg_userbot as tg
     before = set(tg._outreach_inflight)
 
     asyncio.run(runtime.run(event, sender))
@@ -213,7 +213,7 @@ def test_owner_verdict_blocks_outreach(runtime):
     turn = make_turn(need_owner_check=True)
     session = make_client_session(owner_verdict="free")
     runtime.store._by_chat[session.chat_id] = session
-    import agent7.tg_userbot as tg
+    import agent6_qualifier.tg_userbot as tg
     tg._sessions[session.chat_id] = session
     before = set(tg._outreach_inflight)
     runtime.qualifier.handle_message.return_value = turn
@@ -232,7 +232,7 @@ def test_owner_verdict_blocks_outreach(runtime):
 def test_outreach_inflight_blocks_duplicate_launch(runtime):
     turn = make_turn(need_owner_check=True)
     session, event, sender = _prepare_session(runtime, turn)
-    import agent7.tg_userbot as tg
+    import agent6_qualifier.tg_userbot as tg
     tg._outreach_inflight.add(session.chat_id)
 
     asyncio.run(runtime.run(event, sender))
@@ -254,7 +254,7 @@ def test_outreach_amo_stage_before_task_and_no_new_lead(runtime, monkeypatch):
             order.append("create_task")
         return real_create_task(coro, **kwargs)
 
-    import agent7.tg_userbot as tg
+    import agent6_qualifier.tg_userbot as tg
     monkeypatch.setattr(tg.asyncio, "create_task", _track_create_task)
     runtime.amo.update_lead_status.side_effect = _track_stage
 
@@ -422,7 +422,7 @@ def test_session_handoff_triggers_notify_manager(runtime):
     turn = make_turn(handoff_to_human=False)
     session = make_client_session(handoff_to_human=True)
     runtime.store._by_chat[session.chat_id] = session
-    import agent7.tg_userbot as tg
+    import agent6_qualifier.tg_userbot as tg
     tg._sessions[session.chat_id] = session
     runtime.qualifier.handle_message.return_value = turn
     event = make_event(text="Ещё вопрос")
@@ -441,7 +441,7 @@ def test_handoff_false_skips_notify_manager(runtime):
     turn = make_turn(handoff_to_human=False)
     session = make_client_session(handoff_to_human=False)
     runtime.store._by_chat[session.chat_id] = session
-    import agent7.tg_userbot as tg
+    import agent6_qualifier.tg_userbot as tg
     tg._sessions[session.chat_id] = session
     runtime.qualifier.handle_message.return_value = turn
     event = make_event()
@@ -476,13 +476,13 @@ def test_runtime_order_before_save(runtime, monkeypatch):
         order.append("save")
         runtime.store.saved.append(session)
 
-    monkeypatch.setattr("agent7.tg_userbot.humanized_respond", _track_humanized)
+    monkeypatch.setattr("agent6_qualifier.tg_userbot.humanized_respond", _track_humanized)
     monkeypatch.setattr(
         "agent8_notary.service.process_confirmed_booking",
         _track_notary,
     )
-    monkeypatch.setattr("agent7.alerts.notify_manager", _track_manager)
-    import agent7.tg_userbot as tg
+    monkeypatch.setattr("agent6_qualifier.alerts.notify_manager", _track_manager)
+    import agent6_qualifier.tg_userbot as tg
     monkeypatch.setattr(tg.asyncio, "create_task", _track_create_task)
     runtime.store.save = _track_save  # type: ignore[method-assign]
 
@@ -507,7 +507,7 @@ def test_notify_manager_error_is_swallowed_by_outer_handler(runtime, monkeypatch
     def _boom(text, *, dedup_key=""):
         raise RuntimeError("manager down")
 
-    monkeypatch.setattr("agent7.alerts.notify_manager", _boom)
+    monkeypatch.setattr("agent6_qualifier.alerts.notify_manager", _boom)
     turn = make_turn(handoff_to_human=True)
     session, event, sender = _prepare_session(runtime, turn)
 

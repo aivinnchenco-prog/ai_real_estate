@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import date
 from unittest.mock import MagicMock
 
-from agent7.models import Listing
-from agent7.qualifier import Session
+from agent6_qualifier.models import Listing
+from agent6_qualifier.qualifier import Session
 
 
 class FakeStore:

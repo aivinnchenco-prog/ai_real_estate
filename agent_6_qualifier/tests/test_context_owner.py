@@ -4,9 +4,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent7.context import build_knowledge, dialog_stage, format_history
-from agent7.models import Listing
-from agent7.qualifier import Session
+from agent6_qualifier.context import build_knowledge, dialog_stage, format_history
+from agent6_qualifier.models import Listing
+from agent6_qualifier.qualifier import Session
 from agent8.owner_result import OwnerVerdict, build_client_message
 
 
@@ -69,7 +69,7 @@ def test_owner_conditions_message():
 
 
 def test_busy_verdict_updates_notion_availability():
-    from agent7.models import Availability
+    from agent6_qualifier.models import Availability
     from agent8.owner_result import OwnerVerdict, notion_availability_update
 
     v = OwnerVerdict(

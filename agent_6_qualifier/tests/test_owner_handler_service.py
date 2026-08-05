@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent7.models import Availability
+from agent6_qualifier.models import Availability
 from agent7_envoy.owner_handler import OwnerMessageTemplates, process_owner_message
 from agent7_envoy.owner_result import (
     OwnerVerdict,
@@ -26,7 +26,7 @@ _UNSET = object()
 
 
 def _templates() -> OwnerMessageTemplates:
-    from agent7.templates import OWNER_ACK_CONDITIONS, OWNER_ACK_FREE, OWNER_BUSY_FOLLOWUP
+    from agent6_qualifier.templates import OWNER_ACK_CONDITIONS, OWNER_ACK_FREE, OWNER_BUSY_FOLLOWUP
     return OwnerMessageTemplates(
         ack_free=OWNER_ACK_FREE,
         ack_conditions=OWNER_ACK_CONDITIONS,
@@ -335,7 +335,7 @@ def _guarded_open(file, *args, **kwargs):
 
 builtins.open = _guarded_open
 
-BLOCKED_EXACT = {"agent7.tg_userbot"}
+BLOCKED_EXACT = {"agent6_qualifier.tg_userbot"}
 BLOCKED_PREFIXES = ("telethon",)
 
 class _ForbiddenLoader(Loader):
@@ -362,7 +362,7 @@ _real_import = builtins.__import__
 
 def _import_with_sessionstore_guard(name, globals=None, locals=None, fromlist=(), level=0):
     mod = _real_import(name, globals, locals, fromlist, level)
-    if name == "agent7.sessions" and hasattr(mod, "SessionStore"):
+    if name == "agent6_qualifier.sessions" and hasattr(mod, "SessionStore"):
         def _blocked_init(self, *args, **kwargs):
             raise AssertionError("SessionStore instantiated during import")
 

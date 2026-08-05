@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from agent7.tg_userbot import load_env, make_client  # noqa: E402
+from agent6_qualifier.tg_userbot import load_env, make_client  # noqa: E402
 
 
 async def main() -> None:

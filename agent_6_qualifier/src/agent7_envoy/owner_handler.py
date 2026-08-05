@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
-from agent7.qualifier import Session
+from agent6_qualifier.qualifier import Session
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,7 @@ from telethon import functions, types
 
 sys.path.insert(0, str(__file__).rsplit("/tests/", 1)[0] + "/src")
 
-from agent7.telegram_folders import (
+from agent6_qualifier.telegram_folders import (
     CLIENTS_FOLDER,
     OWNERS_FOLDER,
     add_to_folder,
@@ -75,12 +75,12 @@ def notify_errors(monkeypatch):
     def _notify(component, error, context=""):
         errors.append((component, error, context))
 
-    monkeypatch.setattr("agent7.telegram_folders.notify_error", _notify)
+    monkeypatch.setattr("agent6_qualifier.telegram_folders.notify_error", _notify)
     return errors
 
 
 def test_import_contract_symbols():
-    from agent7.telegram_folders import (
+    from agent6_qualifier.telegram_folders import (
         CLIENTS_FOLDER as clients,
         OWNERS_FOLDER as owners,
         add_to_folder as add_fn,
@@ -206,7 +206,7 @@ def _guarded_open(file, *args, **kwargs):
 
 builtins.open = _guarded_open
 
-BLOCKED_EXACT = {"agent7.tg_userbot", "agent7_envoy.auto"}
+BLOCKED_EXACT = {"agent6_qualifier.tg_userbot", "agent7_envoy.auto"}
 BLOCKED_PREFIXES = ("agent7_envoy",)
 
 class _ForbiddenLoader(Loader):
@@ -233,7 +233,7 @@ _real_import = builtins.__import__
 
 def _import_with_sessionstore_guard(name, globals=None, locals=None, fromlist=(), level=0):
     mod = _real_import(name, globals, locals, fromlist, level)
-    if name == "agent7.sessions" and hasattr(mod, "SessionStore"):
+    if name == "agent6_qualifier.sessions" and hasattr(mod, "SessionStore"):
         def _blocked_init(self, *args, **kwargs):
             raise AssertionError("SessionStore instantiated during import")
 
@@ -242,7 +242,7 @@ def _import_with_sessionstore_guard(name, globals=None, locals=None, fromlist=()
 
 builtins.__import__ = _import_with_sessionstore_guard
 
-from agent7.telegram_folders import CLIENTS_FOLDER, OWNERS_FOLDER, add_to_folder
+from agent6_qualifier.telegram_folders import CLIENTS_FOLDER, OWNERS_FOLDER, add_to_folder
 
 assert CLIENTS_FOLDER == "Клиенты"
 assert OWNERS_FOLDER == "Собственники"

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from agent7.qualifier import Session
+from agent6_qualifier.qualifier import Session
 
 GenerateDoc = Callable[[Session, str], Path]
 SendDoc = Callable[[Path], Awaitable[None]]

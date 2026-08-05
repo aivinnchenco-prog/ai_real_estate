@@ -4,8 +4,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent7.models import Availability, Listing
-from agent7.qualifier import Qualifier, Session
+from agent6_qualifier.models import Availability, Listing
+from agent6_qualifier.qualifier import Qualifier, Session
 
 CHOSEN = Listing(object_id="20260708_001", title="Вилла у моря", district="Раваи",
                  housing_type="вилла", rooms=2, price_month=50000,

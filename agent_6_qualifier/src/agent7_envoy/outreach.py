@@ -15,8 +15,8 @@ from datetime import date, timedelta
 from typing import Callable
 
 from .airbnb_check import CalendarCheck
-from agent7.models import Availability, LeadProfile, Listing, OwnerChannel
-from agent7.templates import OWNER_AIRBNB_STEP2, OWNER_BUSY_FOLLOWUP, owner_first_message
+from agent6_qualifier.models import Availability, LeadProfile, Listing, OwnerChannel
+from agent6_qualifier.templates import OWNER_AIRBNB_STEP2, OWNER_BUSY_FOLLOWUP, owner_first_message
 
 from .calendar_check import check_calendar_dates
 
@@ -141,8 +141,8 @@ def register_owner_whatsapp(listing: Listing, whatsapp: str, lead: LeadProfile) 
     2. Возвращает первое WA-сообщение: запрос по датам клиента + вопрос про
        календарь объекта (Airbnb/iCal/Google-таблица) для колонки «Календарь».
     """
-    from agent7 import notion_store
-    from agent7.templates import OWNER_WA_ASK_CALENDAR
+    from agent6_qualifier import notion_store
+    from agent6_qualifier.templates import OWNER_WA_ASK_CALENDAR
 
     whatsapp = whatsapp.strip()
     listing.owner_whatsapp = whatsapp
@@ -161,7 +161,7 @@ def register_owner_whatsapp(listing: Listing, whatsapp: str, lead: LeadProfile) 
 
 def register_owner_calendar(listing: Listing, url: str) -> None:
     """Владелец прислал ссылку на календарь — сохраняем в колонку «Календарь»."""
-    from agent7 import notion_store
+    from agent6_qualifier import notion_store
 
     listing.calendar_url = url.strip()
     if listing.page_id:

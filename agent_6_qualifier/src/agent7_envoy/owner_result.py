@@ -6,10 +6,10 @@ import os
 from dataclasses import dataclass
 from datetime import date
 
-from agent7.brain import _call, _text
-from agent7.models import Availability
-from agent7.qualifier import Session
-from agent7.templates import (
+from agent6_qualifier.brain import _call, _text
+from agent6_qualifier.models import Availability
+from agent6_qualifier.qualifier import Session
+from agent6_qualifier.templates import (
     client_object_busy,
     client_owner_conditions,
     client_owner_confirmed,

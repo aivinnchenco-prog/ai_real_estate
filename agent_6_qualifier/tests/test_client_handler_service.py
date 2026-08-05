@@ -12,8 +12,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent7.client_handler import ClientMessageTemplates, process_client_message
-from agent7.qualifier import Turn
+from agent6_qualifier.client_handler import ClientMessageTemplates, process_client_message
+from agent6_qualifier.qualifier import Turn
 from client_runtime_fixtures import FakeStore, make_client_session, make_event, make_sender, make_turn
 
 NOTARY_CAPTION = (
@@ -455,7 +455,7 @@ def _guarded_open(file, *args, **kwargs):
 
 builtins.open = _guarded_open
 
-BLOCKED_EXACT = {"agent7.tg_userbot"}
+BLOCKED_EXACT = {"agent6_qualifier.tg_userbot"}
 BLOCKED_PREFIXES = ("telethon",)
 
 class _ForbiddenLoader(Loader):
@@ -482,7 +482,7 @@ _real_import = builtins.__import__
 
 def _import_with_sessionstore_guard(name, globals=None, locals=None, fromlist=(), level=0):
     mod = _real_import(name, globals, locals, fromlist, level)
-    if name == "agent7.sessions" and hasattr(mod, "SessionStore"):
+    if name == "agent6_qualifier.sessions" and hasattr(mod, "SessionStore"):
         def _blocked_init(self, *args, **kwargs):
             raise AssertionError("SessionStore instantiated during import")
 
@@ -491,7 +491,7 @@ def _import_with_sessionstore_guard(name, globals=None, locals=None, fromlist=()
 
 builtins.__import__ = _import_with_sessionstore_guard
 
-from agent7.client_handler import ClientMessageTemplates, process_client_message
+from agent6_qualifier.client_handler import ClientMessageTemplates, process_client_message
 
 assert callable(process_client_message)
 assert ClientMessageTemplates is not None

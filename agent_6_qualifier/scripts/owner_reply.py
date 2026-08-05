@@ -27,11 +27,11 @@ for line in (ROOT / ".env").read_text().splitlines():
         k, v = line.split("=", 1)
         os.environ.setdefault(k, v.strip())
 
-from agent7 import brain, notion_store  # noqa: E402
-from agent7.alerts import notify_error  # noqa: E402
-from agent7.amo import AmoClient  # noqa: E402
-from agent7.sessions import SessionStore  # noqa: E402
-from agent7.tg_userbot import make_script_client  # noqa: E402
+from agent6_qualifier import brain, notion_store  # noqa: E402
+from agent6_qualifier.alerts import notify_error  # noqa: E402
+from agent6_qualifier.amo import AmoClient  # noqa: E402
+from agent6_qualifier.sessions import SessionStore  # noqa: E402
+from agent6_qualifier.tg_userbot import make_script_client  # noqa: E402
 from agent7_envoy.owner_result import (  # noqa: E402
     apply_verdict_to_session,
     build_client_message,

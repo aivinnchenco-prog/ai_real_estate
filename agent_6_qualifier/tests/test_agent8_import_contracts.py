@@ -55,6 +55,39 @@ def test_envoy_infra_legacy_and_canonical_import_same_object(legacy, canonical, 
     assert getattr(legacy_mod, symbol) is getattr(canonical_mod, symbol)
 
 
+@pytest.mark.parametrize(
+    "legacy, canonical, symbol",
+    [
+        ("agent7.qualifier", "agent6_qualifier.qualifier", "Session"),
+        ("agent7.qualifier", "agent6_qualifier.qualifier", "Turn"),
+        ("agent7.qualifier", "agent6_qualifier.qualifier", "Qualifier"),
+        ("agent7.models", "agent6_qualifier.models", "Listing"),
+        ("agent7.models", "agent6_qualifier.models", "Availability"),
+        ("agent7.client_handler", "agent6_qualifier.client_handler", "process_client_message"),
+        ("agent7.client_handler", "agent6_qualifier.client_handler", "ClientMessageTemplates"),
+        ("agent7.telegram_folders", "agent6_qualifier.telegram_folders", "add_to_folder"),
+        ("agent7.sessions", "agent6_qualifier.sessions", "SessionStore"),
+        ("agent7.tg_userbot", "agent6_qualifier.tg_userbot", "main"),
+        ("agent7.tg_userbot", "agent6_qualifier.tg_userbot", "handle_owner_message"),
+        ("agent7.tg_userbot", "agent6_qualifier.tg_userbot", "make_script_client"),
+    ],
+)
+def test_agent6_legacy_and_canonical_import_same_object(legacy, canonical, symbol):
+    legacy_mod = importlib.import_module(legacy)
+    canonical_mod = importlib.import_module(canonical)
+    assert getattr(legacy_mod, symbol) is getattr(canonical_mod, symbol)
+
+
+def test_agent6_tg_userbot_runtime_globals_same_objects():
+    legacy = importlib.import_module("agent7.tg_userbot")
+    canonical = importlib.import_module("agent6_qualifier.tg_userbot")
+    assert legacy._store is canonical._store
+    assert legacy._sessions is canonical._sessions
+    assert legacy._outreach_inflight is canonical._outreach_inflight
+    assert legacy.brain is canonical.brain
+    assert legacy.notion_store is canonical.notion_store
+
+
 def test_imports_do_not_touch_network(monkeypatch):
     """Импорт compatibility-путей не должен выполнять HTTP-запросы."""
     def fail_request(*args, **kwargs):
@@ -64,6 +97,10 @@ def test_imports_do_not_touch_network(monkeypatch):
     monkeypatch.setattr("requests.post", fail_request)
 
     for name in (
+        "agent6_qualifier.qualifier",
+        "agent6_qualifier.client_handler",
+        "agent6_qualifier.telegram_folders",
+        "agent6_qualifier.tg_userbot",
         "agent7_envoy.auto",
         "agent7_envoy.outreach",
         "agent7_envoy.calendar_check",
@@ -193,7 +230,7 @@ def test_production_scripts_compile():
     import py_compile
 
     scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
-    for name in ("owner_reply.py", "agent8_run.py", "tg_login.py"):
+    for name in ("owner_reply.py", "agent8_run.py", "tg_login.py", "setup_amo.py", "verify_notion.py"):
         py_compile.compile(scripts_dir / name, doraise=True)
     assert (scripts_dir / "start_userbot.sh").is_file()
 

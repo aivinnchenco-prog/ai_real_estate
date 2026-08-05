@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pytest
 
-from agent7.amo import AmoClient
+from agent6_qualifier.amo import AmoClient
 
 
 @pytest.fixture
@@ -52,8 +52,8 @@ def test_ensure_amo_lead_reuses_open_lead(monkeypatch):
     """Открытая сделка контакта переиспользуется — новая не создаётся."""
     from unittest.mock import MagicMock
 
-    from agent7.qualifier import Session
-    from agent7.tg_userbot import ensure_amo_lead
+    from agent6_qualifier.qualifier import Session
+    from agent6_qualifier.tg_userbot import ensure_amo_lead
 
     class Sender:
         username = "client"
@@ -76,8 +76,8 @@ def test_ensure_amo_lead_noop_when_lead_id_already_set():
     в том числе после изменения preferred_object_id, не ищет и не создаёт сделку."""
     from unittest.mock import MagicMock
 
-    from agent7.qualifier import Session
-    from agent7.tg_userbot import ensure_amo_lead
+    from agent6_qualifier.qualifier import Session
+    from agent6_qualifier.tg_userbot import ensure_amo_lead
 
     class Sender:
         username = "client"

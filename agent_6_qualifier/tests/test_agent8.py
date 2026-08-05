@@ -7,8 +7,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from agent7.airbnb_check import CalendarCheck
-from agent7.models import LeadProfile, Listing, OwnerChannel
-from agent7.templates import client_object_busy
+from agent6_qualifier.models import LeadProfile, Listing, OwnerChannel
+from agent6_qualifier.templates import client_object_busy
 from agent8.outreach import OwnerBusyInfo, build_outreach_plan, precheck_alternatives
 
 LEAD = LeadProfile(check_in=date(2026, 8, 1), check_out=date(2026, 9, 1),
@@ -146,7 +146,7 @@ def test_client_busy_message_offers_choice():
 # ---------- результат проверки календаря -> Notion ----------
 
 def test_notion_update_from_precheck_busy():
-    from agent7.models import Availability
+    from agent6_qualifier.models import Availability
     from agent8.calendar_check import notion_update_from_precheck
 
     check = CalendarCheck(
@@ -174,7 +174,7 @@ def test_register_owner_whatsapp_saves_and_asks_calendar(monkeypatch):
     from agent8 import outreach
 
     saved = {}
-    monkeypatch.setattr("agent7.notion_store.save_owner_whatsapp",
+    monkeypatch.setattr("agent6_qualifier.notion_store.save_owner_whatsapp",
                         lambda pid, wa: saved.update(page=pid, wa=wa))
     l = make_listing(page_id="page-1",
                      source_url="https://facebook.com/marketplace/item/2")
@@ -190,7 +190,7 @@ def test_register_owner_calendar_saves_url(monkeypatch):
     from agent8 import outreach
 
     saved = {}
-    monkeypatch.setattr("agent7.notion_store.save_calendar_url",
+    monkeypatch.setattr("agent6_qualifier.notion_store.save_calendar_url",
                         lambda pid, url: saved.update(page=pid, url=url))
     l = make_listing(page_id="page-2")
     outreach.register_owner_calendar(l, " https://cal.example/x.ics ")
@@ -222,8 +222,8 @@ def test_free_nights_zero_when_checkin_blocked():
 
 def test_booking_doc_data_and_generation(tmp_path, monkeypatch):
     """Данные брони → JSON → node → docx. Годовой контракт без даты выезда."""
-    from agent7.qualifier import Session
-    from agent7.models import LeadProfile, Listing
+    from agent6_qualifier.qualifier import Session
+    from agent6_qualifier.models import LeadProfile, Listing
     from agent8 import booking_doc
 
     monkeypatch.setattr("agent8_notary.booking_doc._OUT_DIR", tmp_path)
@@ -275,8 +275,8 @@ def test_booking_doc_data_and_generation(tmp_path, monkeypatch):
 
 
 def test_booking_doc_path_sanitizes_object_id(tmp_path, monkeypatch):
-    from agent7.qualifier import Session
-    from agent7.models import LeadProfile, Listing
+    from agent6_qualifier.qualifier import Session
+    from agent6_qualifier.models import LeadProfile, Listing
     from agent8 import booking_doc
 
     monkeypatch.setattr("agent8_notary.booking_doc._OUT_DIR", tmp_path)
@@ -300,8 +300,8 @@ def test_booking_doc_path_sanitizes_object_id(tmp_path, monkeypatch):
 
 
 def test_booking_doc_generation_failure_does_not_leave_docx(tmp_path, monkeypatch):
-    from agent7.qualifier import Session
-    from agent7.models import LeadProfile, Listing
+    from agent6_qualifier.qualifier import Session
+    from agent6_qualifier.models import LeadProfile, Listing
     from agent8 import booking_doc
 
     monkeypatch.setattr("agent8_notary.booking_doc._OUT_DIR", tmp_path)
@@ -334,8 +334,8 @@ def test_booking_doc_generation_failure_does_not_leave_docx(tmp_path, monkeypatc
 
 def test_booking_doc_generation_success_without_file_raises(tmp_path, monkeypatch):
     """returncode=0 без выходного файла — ошибка, а не ложный успех."""
-    from agent7.qualifier import Session
-    from agent7.models import LeadProfile, Listing
+    from agent6_qualifier.qualifier import Session
+    from agent6_qualifier.models import LeadProfile, Listing
     from agent8 import booking_doc
 
     monkeypatch.setattr("agent8_notary.booking_doc._OUT_DIR", tmp_path)
@@ -364,7 +364,7 @@ def test_booking_doc_generation_success_without_file_raises(tmp_path, monkeypatc
 
 
 def test_client_object_partial_message():
-    from agent7.templates import client_object_partial
+    from agent6_qualifier.templates import client_object_partial
     msg = client_object_partial("A_20260713_003", "14.07.2026", 4, "18.07.2026",
                                 "13.08.2026", "14.08.2026")
     assert "вашему варианту A_20260713_003" in msg
@@ -391,8 +391,8 @@ def test_owner_registry_mark_and_get(tmp_path, monkeypatch):
 
 
 def test_find_awaiting_owner_by_object(tmp_path):
-    from agent7.qualifier import Session
-    from agent7.sessions import SessionStore
+    from agent6_qualifier.qualifier import Session
+    from agent6_qualifier.sessions import SessionStore
     store = SessionStore(tmp_path)
     s = Session(chat_id="123")
     s.chosen = make_listing(object_id="20260702_001", owner_telegram="@x")
@@ -443,7 +443,7 @@ def test_owner_busy_info_to_notion_update():
         future_bookings="20–25 сентября",
     )
     upd = info.to_notion_update()
-    from agent7.models import Availability
+    from agent6_qualifier.models import Availability
 
     assert upd["status"] == Availability.BUSY
     assert upd["busy_until"] == date(2026, 8, 15)

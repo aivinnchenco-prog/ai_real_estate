@@ -18,7 +18,7 @@ for line in (ROOT / ".env").read_text().splitlines():
         k, v = line.split("=", 1)
         os.environ.setdefault(k, v.strip())
 
-from agent7.amo import AmoClient  # noqa: E402
+from agent6_qualifier.amo import AmoClient  # noqa: E402
 
 
 def main() -> int:

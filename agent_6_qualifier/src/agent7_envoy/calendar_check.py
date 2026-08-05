@@ -255,7 +255,7 @@ def notion_update_from_precheck(check: CalendarCheck, check_in: date) -> dict | 
 
     None — проверка не дала вердикта (не пишем в Notion, чтобы не затирать).
     """
-    from agent7.models import Availability
+    from agent6_qualifier.models import Availability
 
     if check.available is True:
         return {

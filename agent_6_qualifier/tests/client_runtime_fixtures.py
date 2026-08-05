@@ -5,7 +5,7 @@ import asyncio
 from dataclasses import dataclass, field
 from unittest.mock import AsyncMock, MagicMock
 
-from agent7.qualifier import Session, Turn
+from agent6_qualifier.qualifier import Session, Turn
 
 
 class FakeStore:
@@ -106,7 +106,7 @@ class RuntimeHarness:
                     raise
 
     def assert_outreach_inflight_clear(self, chat_id: str) -> None:
-        import agent7.tg_userbot as tg
+        import agent6_qualifier.tg_userbot as tg
         assert chat_id not in tg._outreach_inflight
 
     async def shutdown(self) -> None:

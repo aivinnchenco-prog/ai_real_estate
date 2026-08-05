@@ -4,11 +4,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent7.matching import budget_ok, find_alternatives, pets_ok
-from agent7.models import Availability, LeadProfile, Listing, OwnerChannel
-from agent7.notion_store import _to_listing
-from agent7.object_id import extract_object_ids, extract_tg_post, extract_utm_campaign
-from agent7.templates import owner_first_message
+from agent6_qualifier.matching import budget_ok, find_alternatives, pets_ok
+from agent6_qualifier.models import Availability, LeadProfile, Listing, OwnerChannel
+from agent6_qualifier.notion_store import _to_listing
+from agent6_qualifier.object_id import extract_object_ids, extract_tg_post, extract_utm_campaign
+from agent6_qualifier.templates import owner_first_message
 
 
 def make_listing(**kw) -> Listing:
@@ -146,7 +146,7 @@ def test_alerts_without_token_prints_only(capsys, monkeypatch):
 
 def test_alerts_dedup_window(monkeypatch):
     sent = []
-    import agent7.alerts as alerts
+    import agent6_qualifier.alerts as alerts
     monkeypatch.setenv("ERROR_BOT_TOKEN", "t")
     monkeypatch.setenv("ERROR_CHAT_ID", "1")
     monkeypatch.setattr(alerts.requests, "post", lambda *a, **kw: sent.append(1))

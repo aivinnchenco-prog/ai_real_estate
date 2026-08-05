@@ -1,4 +1,4 @@
-"""Regression tests for agent7.tg_userbot.handle_owner_message runtime contract."""
+"""Regression tests for agent6_qualifier.tg_userbot.handle_owner_message runtime contract."""
 from __future__ import annotations
 
 import asyncio
@@ -11,9 +11,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent7.models import Availability
-from agent7.qualifier import Session
-from agent7.tg_userbot import OWNERS_FOLDER, handle_owner_message
+from agent6_qualifier.models import Availability
+from agent6_qualifier.qualifier import Session
+from agent6_qualifier.tg_userbot import OWNERS_FOLDER, handle_owner_message
 from agent7_envoy.owner_result import OwnerVerdict
 from owner_handler_fixtures import FakeStore, make_event, make_owner_session, make_sender
 
@@ -22,18 +22,18 @@ from owner_handler_fixtures import FakeStore, make_event, make_owner_session, ma
 def handler_env(monkeypatch):
     """Isolate tg_userbot globals and external side effects."""
     store = FakeStore()
-    monkeypatch.setattr("agent7.tg_userbot._store", store)
-    monkeypatch.setattr("agent7.tg_userbot._sessions", {})
+    monkeypatch.setattr("agent6_qualifier.tg_userbot._store", store)
+    monkeypatch.setattr("agent6_qualifier.tg_userbot._sessions", {})
     monkeypatch.setattr(
-        "agent7.tg_userbot.brain.polish_reply",
+        "agent6_qualifier.tg_userbot.brain.polish_reply",
         lambda draft, language, name: draft,
     )
     monkeypatch.setattr(
-        "agent7.tg_userbot.humanized_respond",
+        "agent6_qualifier.tg_userbot.humanized_respond",
         AsyncMock(),
     )
     monkeypatch.setattr(
-        "agent7.tg_userbot.add_to_folder",
+        "agent6_qualifier.tg_userbot.add_to_folder",
         AsyncMock(),
     )
     notion_updates: list[dict] = []
@@ -48,18 +48,18 @@ def handler_env(monkeypatch):
         })
 
     monkeypatch.setattr(
-        "agent7.tg_userbot.notion_store.update_availability",
+        "agent6_qualifier.tg_userbot.notion_store.update_availability",
         _update_availability,
     )
     monkeypatch.setattr(
-        "agent7.tg_userbot.notify_error",
+        "agent6_qualifier.tg_userbot.notify_error",
         lambda component, error, context="": notify_errors.append((component, error, context)),
     )
 
     mark_owner = MagicMock()
-    monkeypatch.setattr("agent7.owner_registry.mark_owner", mark_owner)
+    monkeypatch.setattr("agent7_envoy.owner_registry.mark_owner", mark_owner)
     get_owner = MagicMock(return_value={"object_id": "A_20260713_003"})
-    monkeypatch.setattr("agent7.owner_registry.get_owner", get_owner)
+    monkeypatch.setattr("agent7_envoy.owner_registry.get_owner", get_owner)
 
     client = MagicMock()
     client.send_message = AsyncMock()
@@ -78,8 +78,8 @@ def handler_env(monkeypatch):
         "notify_errors": notify_errors,
         "mark_owner": mark_owner,
         "get_owner": get_owner,
-        "humanized_respond": sys.modules["agent7.tg_userbot"].humanized_respond,
-        "add_to_folder": sys.modules["agent7.tg_userbot"].add_to_folder,
+        "humanized_respond": sys.modules["agent6_qualifier.tg_userbot"].humanized_respond,
+        "add_to_folder": sys.modules["agent6_qualifier.tg_userbot"].add_to_folder,
     }
 
 
@@ -107,7 +107,7 @@ def test_owner_free_confirms_availability(handler_env, monkeypatch):
     handler_env["mark_owner"].assert_called_once()
     handler_env["humanized_respond"].assert_awaited_once()
     ack_text = handler_env["humanized_respond"].await_args.args[1]
-    from agent7.templates import OWNER_ACK_FREE
+    from agent6_qualifier.templates import OWNER_ACK_FREE
     assert ack_text == OWNER_ACK_FREE
 
     handler_env["client"].send_message.assert_awaited_once()
@@ -126,7 +126,7 @@ def test_owner_free_confirms_availability(handler_env, monkeypatch):
 
     assert len(handler_env["store"].saved) == 1
     assert handler_env["store"].saved[0] is session
-    from agent7 import tg_userbot
+    from agent6_qualifier import tg_userbot
     assert tg_userbot._sessions[session.chat_id] is session
 
     handler_env["add_to_folder"].assert_awaited_once_with(
@@ -154,7 +154,7 @@ def test_owner_busy_notifies_client(handler_env, monkeypatch):
     )
 
     assert result is True
-    from agent7.templates import OWNER_ACK_CONDITIONS
+    from agent6_qualifier.templates import OWNER_ACK_CONDITIONS
     assert handler_env["humanized_respond"].await_args.args[1] == OWNER_ACK_CONDITIONS
 
     reply = handler_env["client"].send_message.await_args.args[1]
@@ -182,7 +182,7 @@ def test_owner_busy_without_dates_asks_followup_only(handler_env, monkeypatch):
     )
 
     assert result is True
-    from agent7.templates import OWNER_BUSY_FOLLOWUP
+    from agent6_qualifier.templates import OWNER_BUSY_FOLLOWUP
     handler_env["humanized_respond"].assert_awaited_once_with(
         handler_env["humanized_respond"].await_args.args[0],
         OWNER_BUSY_FOLLOWUP,
@@ -241,7 +241,7 @@ def test_notion_error_does_not_block_client_message(handler_env, monkeypatch):
     def _boom(*args, **kwargs):
         raise RuntimeError("notion down")
 
-    monkeypatch.setattr("agent7.tg_userbot.notion_store.update_availability", _boom)
+    monkeypatch.setattr("agent6_qualifier.tg_userbot.notion_store.update_availability", _boom)
 
     result = run_handler(
         handler_env["client"], make_event(), make_sender(),
