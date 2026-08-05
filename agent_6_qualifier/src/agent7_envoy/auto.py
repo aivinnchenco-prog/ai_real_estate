@@ -15,7 +15,8 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 
-from agent7 import notion_store, owner_registry
+from agent7 import notion_store
+from . import owner_registry
 from agent7.alerts import notify_error
 from agent7.models import Availability, OwnerChannel
 from agent7.templates import client_object_busy, client_object_partial

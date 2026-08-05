@@ -375,8 +375,9 @@ def test_client_object_partial_message():
 # ---------- реестр владельцев ----------
 
 def test_owner_registry_mark_and_get(tmp_path, monkeypatch):
-    from agent7 import owner_registry
-    monkeypatch.setattr(owner_registry, "_PATH", tmp_path / "owners.json")
+    from agent7_envoy import owner_registry
+
+    monkeypatch.setattr("agent7_envoy.owner_registry._PATH", tmp_path / "owners.json")
 
     assert owner_registry.get_owner("someone") is None
     owner_registry.mark_owner(tg_username="@Alexand_SMM", object_id="20260702_001")

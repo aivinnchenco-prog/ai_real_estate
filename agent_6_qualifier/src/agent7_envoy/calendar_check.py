@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from agent7.airbnb_check import CalendarCheck, check_airbnb_dates
+from .airbnb_check import CalendarCheck, check_airbnb_dates
 
 _MONTHS = {
     "january": 1, "february": 2, "fabruary": 2,  # опечатка в живой таблице УК

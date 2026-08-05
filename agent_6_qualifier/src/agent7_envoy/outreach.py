@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Callable
 
-from agent7.airbnb_check import CalendarCheck
+from .airbnb_check import CalendarCheck
 from agent7.models import Availability, LeadProfile, Listing, OwnerChannel
 from agent7.templates import OWNER_AIRBNB_STEP2, OWNER_BUSY_FOLLOWUP, owner_first_message
 
