@@ -1,5 +1,7 @@
 # Agent 6 — Publisher (часть Real Estate Multi-Agent)
 
+> **Legacy documentation.** Handoff-архив Publisher: нумерация Agent 6/7 ниже не совпадает с целевой архитектурой (Publisher = Agent 4, Qualifier = Agent 6). Поля `agent6_*` в Notion — legacy Publisher. См. [`ROLE_MAP.md`](../ROLE_MAP.md).
+
 Этот архив — **один агент** из мультиагентной системы недвижимости.  
 Родительская папка: `Desktop/Агенты/Real Estate Agent/agent_6_piblich_social`
 
