@@ -23,30 +23,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
         ("agent8.owner_result", "agent8.envoy.owner_result", "agent7_envoy.owner_result", "OwnerVerdict"),
         ("agent8.owner_result", "agent8.envoy.owner_result", "agent7_envoy.owner_result", "build_client_message"),
         ("agent8.owner_result", "agent8.envoy.owner_result", "agent7_envoy.owner_result", "parse_owner_reply"),
+        ("agent8.booking_doc", "agent8.notary.booking_doc", "agent8_notary.booking_doc", "generate_booking_doc"),
+        ("agent8.booking_doc", "agent8.notary.booking_doc", "agent8_notary.booking_doc", "build_booking_data"),
+        ("agent8.booking_doc", "agent8.notary.booking_doc", "agent8_notary.booking_doc", "RESERVATION_VALID_DAYS"),
+        ("agent8.notary_service", "agent8.notary.service", "agent8_notary.service", "process_confirmed_booking"),
+        ("agent8.notary_service", "agent8.notary.service", "agent8_notary.service", "NotaryBookingResult"),
     ],
 )
-def test_envoy_three_tier_import_same_object(legacy, compat, canonical, symbol):
+def test_three_tier_import_same_object(legacy, compat, canonical, symbol):
     legacy_mod = importlib.import_module(legacy)
     compat_mod = importlib.import_module(compat)
     canonical_mod = importlib.import_module(canonical)
     obj = getattr(canonical_mod, symbol)
     assert getattr(legacy_mod, symbol) is obj
     assert getattr(compat_mod, symbol) is obj
-
-
-@pytest.mark.parametrize(
-    "legacy, canonical, symbol",
-    [
-        ("agent8.booking_doc", "agent8.notary.booking_doc", "generate_booking_doc"),
-        ("agent8.booking_doc", "agent8.notary.booking_doc", "build_booking_data"),
-        ("agent8.notary_service", "agent8.notary.service", "process_confirmed_booking"),
-        ("agent8.notary_service", "agent8.notary.service", "NotaryBookingResult"),
-    ],
-)
-def test_notary_legacy_and_canonical_import_same_object(legacy, canonical, symbol):
-    legacy_mod = importlib.import_module(legacy)
-    canonical_mod = importlib.import_module(canonical)
-    assert getattr(legacy_mod, symbol) is getattr(canonical_mod, symbol)
 
 
 def test_imports_do_not_touch_network(monkeypatch):
@@ -62,6 +52,8 @@ def test_imports_do_not_touch_network(monkeypatch):
         "agent7_envoy.outreach",
         "agent7_envoy.calendar_check",
         "agent7_envoy.owner_result",
+        "agent8_notary.booking_doc",
+        "agent8_notary.service",
         "agent8.auto",
         "agent8.outreach",
         "agent8.calendar_check",
@@ -79,7 +71,7 @@ def test_imports_do_not_touch_network(monkeypatch):
 
 
 def test_notary_booking_doc_paths():
-    from agent8.notary import booking_doc
+    from agent8_notary import booking_doc
 
     qualifier_root = Path(__file__).resolve().parents[1]
     assert booking_doc._QUALIFIER_ROOT == qualifier_root

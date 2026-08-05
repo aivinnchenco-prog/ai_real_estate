@@ -226,7 +226,7 @@ def test_booking_doc_data_and_generation(tmp_path, monkeypatch):
     from agent7.models import LeadProfile, Listing
     from agent8 import booking_doc
 
-    monkeypatch.setattr("agent8.notary.booking_doc._OUT_DIR", tmp_path)
+    monkeypatch.setattr("agent8_notary.booking_doc._OUT_DIR", tmp_path)
 
     def fake_run(cmd, **kwargs):
         assert cmd[0] == "node"
@@ -258,7 +258,7 @@ def test_booking_doc_data_and_generation(tmp_path, monkeypatch):
             stderr = ""
         return R()
 
-    monkeypatch.setattr(booking_doc.subprocess, "run", fake_run)
+    monkeypatch.setattr("agent8_notary.booking_doc.subprocess.run", fake_run)
 
     lead = LeadProfile(full_name="Иванов Иван", citizenship="Украина",
                        check_in=date(2026, 9, 1), budget=100000, guests=3)
@@ -279,7 +279,7 @@ def test_booking_doc_path_sanitizes_object_id(tmp_path, monkeypatch):
     from agent7.models import LeadProfile, Listing
     from agent8 import booking_doc
 
-    monkeypatch.setattr("agent8.notary.booking_doc._OUT_DIR", tmp_path)
+    monkeypatch.setattr("agent8_notary.booking_doc._OUT_DIR", tmp_path)
 
     def fake_run(cmd, **kwargs):
         Path(cmd[-1]).write_bytes(b"PK" + b"\x00" * 6000)
@@ -289,7 +289,7 @@ def test_booking_doc_path_sanitizes_object_id(tmp_path, monkeypatch):
             stderr = ""
         return R()
 
-    monkeypatch.setattr(booking_doc.subprocess, "run", fake_run)
+    monkeypatch.setattr("agent8_notary.booking_doc.subprocess.run", fake_run)
 
     lead = LeadProfile(check_in=date(2026, 9, 1), check_out=date(2026, 10, 1), guests=2)
     listing = Listing(object_id="weird/id", housing_type="вилла", rooms=2)
@@ -304,7 +304,7 @@ def test_booking_doc_generation_failure_does_not_leave_docx(tmp_path, monkeypatc
     from agent7.models import LeadProfile, Listing
     from agent8 import booking_doc
 
-    monkeypatch.setattr("agent8.notary.booking_doc._OUT_DIR", tmp_path)
+    monkeypatch.setattr("agent8_notary.booking_doc._OUT_DIR", tmp_path)
     stale = tmp_path / "old_booking.docx"
     stale.write_bytes(b"stale")
 
@@ -318,7 +318,7 @@ def test_booking_doc_generation_failure_does_not_leave_docx(tmp_path, monkeypatc
             stderr = "boom"
         return R()
 
-    monkeypatch.setattr(booking_doc.subprocess, "run", fail_run)
+    monkeypatch.setattr("agent8_notary.booking_doc.subprocess.run", fail_run)
 
     session = Session(
         chat_id="1",
@@ -338,7 +338,7 @@ def test_booking_doc_generation_success_without_file_raises(tmp_path, monkeypatc
     from agent7.models import LeadProfile, Listing
     from agent8 import booking_doc
 
-    monkeypatch.setattr("agent8.notary.booking_doc._OUT_DIR", tmp_path)
+    monkeypatch.setattr("agent8_notary.booking_doc._OUT_DIR", tmp_path)
 
     created_paths: list[Path] = []
 
@@ -350,7 +350,7 @@ def test_booking_doc_generation_success_without_file_raises(tmp_path, monkeypatc
             stderr = ""
         return R()
 
-    monkeypatch.setattr(booking_doc.subprocess, "run", empty_success_run)
+    monkeypatch.setattr("agent8_notary.booking_doc.subprocess.run", empty_success_run)
 
     session = Session(
         chat_id="1",

@@ -315,8 +315,8 @@ async def main() -> None:
             # docx-соглашение о бронировании (Agent 8 Notary) и прикрепляем
             # его же к сделке в amoCRM.
             if turn.booking_confirmed:
-                from agent8.notary.booking_doc import generate_booking_doc
-                from agent8.notary.service import process_confirmed_booking
+                from agent8_notary.booking_doc import generate_booking_doc
+                from agent8_notary.service import process_confirmed_booking
 
                 # Контакт в договоре — мессенджер, где идёт диалог (Telegram).
                 # WhatsApp запрашивается только для карточки amoCRM.
