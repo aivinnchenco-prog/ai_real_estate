@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 
 from ..android.ui import connect_device, dismiss_permissions, human_pause
 from ..maps_location import marketplace_location_query
+from ..marketplace.session import MarketplaceSafeStop, MarketplaceSession
 from ..models import PublishJob
 from .base import ChannelResult, count_selected_gallery_photos, gallery_selection_state, marketplace_folder_name
 PKG_DEFAULT = "com.facebook.katana"
@@ -396,9 +397,35 @@ def _click_and_set_text(d, x: int, y: int, value: str) -> None:
         d.send_keys(value)
 
 
-def _set_composer_title(d, title: str) -> None:
+def _apply_field_text(d, validation, value: str) -> None:
+    from ..marketplace.validator import FieldValidation
+
+    if not isinstance(validation, FieldValidation) or validation.match is None:
+        raise RuntimeError("semantic validation missing for field")
+    node = validation.match.node
+    if node.resource_id and d(resourceId=node.resource_id).exists(timeout=0.8):
+        field = d(resourceId=node.resource_id)
+        field.click()
+        time.sleep(0.2)
+        field.set_text(value)
+        return
+    if not node.bounds:
+        raise RuntimeError("field bounds missing")
+    x1, y1, x2, y2 = node.bounds
+    _click_and_set_text(d, (x1 + x2) // 2, (y1 + y2) // 2, value)
+
+
+def _set_composer_title(d, title: str, session: MarketplaceSession | None = None) -> None:
     title = (title or "").strip()[:100]
     if not title:
+        return
+    if session is not None:
+        session.guarded_fill_field(
+            "title",
+            title,
+            set_text=lambda validation, value: _apply_field_text(d, validation, value),
+            read_back=lambda: _read_composer_title(d),
+        )
         return
     if d(descriptionContains="Название").exists(timeout=1):
         d(descriptionContains="Название").click()
@@ -415,9 +442,34 @@ def _set_composer_title(d, title: str) -> None:
     _hide_keyboard(d)
 
 
-def _set_composer_price(d, price: str) -> None:
+def _read_composer_title(d) -> str:
+    nodes = _composer_edittext_nodes(d)
+    title_node = next(
+        (n for n in nodes if n["resource_id"] != "marketplace_composer_price_input"),
+        None,
+    )
+    if not title_node:
+        return ""
+    if d(resourceId=title_node["resource_id"]).exists(timeout=0.3):
+        try:
+            return str(d(resourceId=title_node["resource_id"]).get_text() or "").strip()
+        except Exception:
+            pass
+    return ""
+
+
+def _set_composer_price(d, price: str, session: MarketplaceSession | None = None) -> None:
     price = (price or "").strip()
     if not price:
+        return
+    if session is not None:
+        session.guarded_fill_field(
+            "price",
+            price,
+            value_type="numeric",
+            set_text=lambda validation, value: _apply_field_text(d, validation, value),
+            read_back=lambda: _composer_price_value(d),
+        )
         return
     if d(descriptionContains="Цена").exists(timeout=0.8):
         d(descriptionContains="Цена").click()
@@ -531,9 +583,25 @@ def _open_composer_description_field(d) -> dict[str, Any]:
     raise RuntimeError("Поле «Описание» не найдено в composer")
 
 
-def _set_composer_description(d, caption: str, android_cfg: dict[str, Any]) -> None:
+def _set_composer_description(
+    d,
+    caption: str,
+    android_cfg: dict[str, Any],
+    session: MarketplaceSession | None = None,
+) -> None:
     caption = (caption or "").strip()[:8000]
     if not caption:
+        return
+
+    if session is not None:
+        _clear_composer_tags_if_polluted(d)
+        session.guarded_fill_field(
+            "description",
+            caption,
+            set_text=lambda validation, value: _apply_field_text(d, validation, value),
+            read_back=lambda: _read_composer_description(d),
+        )
+        human_pause(android_cfg, scale=0.5)
         return
 
     _clear_composer_tags_if_polluted(d)
@@ -562,6 +630,24 @@ def _set_composer_description(d, caption: str, android_cfg: dict[str, Any]) -> N
         break
 
     human_pause(android_cfg, scale=0.5)
+
+
+def _read_composer_description(d) -> str:
+    node = _find_composer_description_edittext(d)
+    if not node:
+        return ""
+    rid = node.get("resource_id") or ""
+    if rid and d(resourceId=rid).exists(timeout=0.3):
+        try:
+            return str(d(resourceId=rid).get_text() or "").strip()
+        except Exception:
+            pass
+    if d(focused=True).exists(timeout=0.2):
+        try:
+            return str(d(focused=True).get_text() or "").strip()
+        except Exception:
+            pass
+    return ""
 
 
 def _set_composer_field(d, *, description_substr: str, value: str) -> None:
@@ -701,6 +787,7 @@ def _fill_composer_form(
     album: str | None = None,
     max_images: int | None = None,
     expected_photos: int | None = None,
+    session: MarketplaceSession | None = None,
 ) -> dict[str, Any]:
     cfg = _mp_cfg(publisher_cfg, android_cfg)
     album = album or marketplace_folder_name(job.object_id)
@@ -714,6 +801,16 @@ def _fill_composer_form(
         max_images = min(max_images, int(expected_photos))
     listing = job.listing
     meta: dict[str, Any] = {"form": "composer", "album": album}
+
+    if session is not None:
+        session.refresh_snapshot()
+        from ..marketplace.states import MarketplaceState
+
+        if session.current_state == MarketplaceState.BLOCKED_CHECKPOINT:
+            session.safe_stop(
+                "blocked_checkpoint",
+                publication_status="blocked_checkpoint",
+            )
 
     _scroll_to_top_if_needed(d)
     _assert_form_not_limited(d)
@@ -741,15 +838,15 @@ def _fill_composer_form(
 
     title = (job.title or "").strip()
     if title:
-        _set_composer_title(d, title)
+        _set_composer_title(d, title, session=session)
         meta["title"] = title[:100]
 
     price = _format_price(listing.price_monthly)
     if price:
-        _set_composer_price(d, price)
+        _set_composer_price(d, price, session=session)
         meta["price"] = price
         if _composer_price_value(d) != price:
-            _set_composer_price(d, price)
+            _set_composer_price(d, price, session=session)
 
     addr = _set_composer_location(d, android_cfg, publisher_cfg, job)
     if not addr:
@@ -759,9 +856,19 @@ def _fill_composer_form(
     caption = (job.caption_fb or "").strip()
     if caption:
         if _composer_price_value(d) != price and price:
-            _set_composer_price(d, price)
-        _set_composer_description(d, caption, android_cfg)
+            _set_composer_price(d, price, session=session)
+        _set_composer_description(d, caption, android_cfg, session=session)
         meta["caption_len"] = len(caption)
+
+    if session is not None:
+        session.final_content_validation(
+            title_value=_read_composer_title(d) or title,
+            price_value=_composer_price_value(d) or price,
+            description_value=_read_composer_description(d) or caption,
+            media_count=int(meta.get("photos") or 0),
+            expected_media_count=int(meta.get("photos_expected") or 0),
+            location_value=str(meta.get("address") or ""),
+        )
 
     return meta
 
@@ -1375,6 +1482,7 @@ def _fill_form(
     album: str | None = None,
     max_images: int | None = None,
     expected_photos: int | None = None,
+    session: MarketplaceSession | None = None,
 ) -> dict[str, Any]:
     cfg = _mp_cfg(publisher_cfg, android_cfg)
     album = album or cfg.get("album") or ALBUM_DEFAULT
@@ -1398,6 +1506,7 @@ def _fill_form(
             album=album,
             max_images=max_images,
             expected_photos=expected_photos,
+            session=session,
         )
 
     _set_rent(d, android_cfg)
@@ -1573,6 +1682,7 @@ def _publish_or_stop(
     confirm_post: bool,
     android_cfg: dict[str, Any],
     channel: str = "fb_marketplace",
+    session: MarketplaceSession | None = None,
 ) -> ChannelResult:
     if not confirm_post:
         # безопасный стоп: назад → сохранить черновик, если диалог есть
@@ -1596,6 +1706,10 @@ def _publish_or_stop(
             note="Дошли до экрана публикации, «Опубликовать» не нажат (--live)",
         )
 
+    if session is not None:
+        session.refresh_snapshot()
+        session.confirm_publish_allowed()
+
     if d(description="Опубликовать").exists(timeout=2):
         d(description="Опубликовать").click()
     elif d(text="Опубликовать").exists(timeout=1):
@@ -1605,12 +1719,27 @@ def _publish_or_stop(
             channel=channel,
             ok=False,
             reason="publish_button_not_found",
+            publication_status="failed",
         )
     human_pause(android_cfg, scale=1.5)
+    publication_status = "accepted"
+    note = "Нажато «Опубликовать» — дождитесь загрузки"
+    if session is not None:
+        verified, verify_reason = session.verify_after_publish()
+        if not verified:
+            return ChannelResult(
+                channel=channel,
+                ok=False,
+                reason=f"publish_not_verified:{verify_reason}",
+                note=note,
+                publication_status="needs_review",
+            )
+        publication_status = "submitted_unverified"
     return ChannelResult(
         channel=channel,
         ok=True,
-        note="Нажато «Опубликовать» — дождитесь загрузки",
+        note=note,
+        publication_status=publication_status,
     )
 
 
@@ -1750,8 +1879,10 @@ class FbMarketplaceChannel:
             ensure_unlocked(d)
             dismiss_permissions(d)
 
+            session = MarketplaceSession.create(d, job, publisher_cfg)
             _ensure_personal_profile(d, android_cfg)
             _open_listing_form(d, android_cfg)
+            session.refresh_snapshot()
             meta = _fill_form(
                 d,
                 job,
@@ -1764,16 +1895,34 @@ class FbMarketplaceChannel:
                     int(mp_cfg.get("max_images") or _VISIBLE_MARKETPLACE_PHOTOS),
                 ),
                 expected_photos=min(len(images), _VISIBLE_MARKETPLACE_PHOTOS),
+                session=session,
             )
             note = f"{note}; filled={meta}"
             _go_to_publish_screen(d, android_cfg)
+            session.refresh_snapshot()
             result = _publish_or_stop(
-                d, confirm_post=confirm_post, android_cfg=android_cfg
+                d,
+                confirm_post=confirm_post,
+                android_cfg=android_cfg,
+                session=session,
             )
             # ссылку на объявление Marketplace не копируем — не нужна
             result.note = f"{(result.note or '')}; {note}".strip("; ")
             return result
+        except MarketplaceSafeStop as stop:
+            return ChannelResult(
+                channel=self.name,
+                ok=False,
+                reason=stop.reason,
+                note=note,
+                publication_status=stop.publication_status,
+            )
         except Exception as e:
+            if "session" in locals():
+                try:
+                    session.save_diagnostics(reason=str(e), exc=e)
+                except Exception:
+                    pass
             return ChannelResult(
                 channel=self.name,
                 ok=False,

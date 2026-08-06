@@ -1,0 +1,96 @@
+{
+  "$comment": "Selector aliases for FB Marketplace only. Add new labels here without changing Python.",
+  "next_button": {
+    "resource_ids": [],
+    "texts": ["Далее", "Продолжить", "Next", "Continue"],
+    "content_descriptions": ["Далее", "Next"]
+  },
+  "publish_button": {
+    "resource_ids": [],
+    "texts": ["Опубликовать", "Publish", "Разместить", "Publish listing"],
+    "content_descriptions": ["Опубликовать", "Publish"]
+  },
+  "create_listing": {
+    "texts": ["Создать новое объявление", "Создать объявление", "Create listing"],
+    "content_descriptions": ["Создать новое объявление", "Создать объявление"]
+  },
+  "sell_button": {
+    "texts": ["Продать", "Выставить на продажу", "Sell"],
+    "content_descriptions": ["Продать", "Sell"]
+  },
+  "housing_category": {
+    "resource_ids": ["composer_bottom_row_housing"],
+    "texts": [
+      "Продажа и аренда недвижимости",
+      "Продажи и аренда жилья",
+      "Продажа или аренда жилья",
+      "Housing for sale or rent"
+    ]
+  },
+  "rent_kind": {
+    "texts": ["Аренда", "Аренда жилья", "Сдается в аренду", "Rent", "For rent"]
+  },
+  "add_photos": {
+    "texts": ["Добавить фото", "Add photos"],
+    "content_descriptions": ["Добавить фото", "Add photos"]
+  },
+  "apply_location": {
+    "texts": ["Применить", "Apply"],
+    "content_descriptions": ["Применить", "Apply"]
+  },
+  "title_field": {
+    "labels": ["Название", "Title", "Заголовок"],
+    "content_descriptions": ["Название", "Title"],
+    "forbidden_resource_ids": ["marketplace_composer_price_input"]
+  },
+  "price_field": {
+    "labels": ["Цена", "Price", "Стоимость"],
+    "resource_ids": ["marketplace_composer_price_input"],
+    "input_types": ["number", "numberDecimal"]
+  },
+  "description_field": {
+    "labels": ["Описание", "Description"],
+    "content_descriptions": [
+      "Описание  Необязательно",
+      "Описание",
+      "Description",
+      "Описание объекта недвижимости"
+    ],
+    "forbidden_labels": ["Теги", "Tags"]
+  },
+  "tags_field": {
+    "labels": ["Теги", "Tags"],
+    "content_descriptions": ["Теги  Необязательно", "Tags"]
+  },
+  "location_field": {
+    "labels": ["Местоположение", "Location", "Адрес", "Address"],
+    "content_descriptions": ["Местоположение", "Location"]
+  },
+  "location_search": {
+    "texts": ["Поиск", "Search"],
+    "content_descriptions": ["Поиск", "Search"]
+  },
+  "draft_save": {
+    "texts": ["СОХРАНИТЬ ЧЕРНОВИК", "Save draft"]
+  },
+  "known_popups": {
+    "media_permission": {
+      "texts": [
+        "При использовании приложения",
+        "Только в этот раз",
+        "Разрешить",
+        "Allow",
+        "While using the app"
+      ],
+      "action": "allow"
+    },
+    "draft_recovery": {
+      "texts": ["СОХРАНИТЬ ЧЕРНОВИК", "Save draft", "Продолжить редактирование"],
+      "action": "dismiss_or_save"
+    },
+    "exit_confirm": {
+      "texts": ["Выйти", "Exit", "Отмена", "Cancel"],
+      "action": "cancel"
+    }
+  }
+}

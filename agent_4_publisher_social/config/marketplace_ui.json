@@ -1,0 +1,37 @@
+{
+  "$comment": "FB Marketplace phone automation only. Vision/coordinate fallbacks disabled by default.",
+  "mode": "deterministic",
+  "confidence": {
+    "execute": 0.9,
+    "recheck": 0.7,
+    "vision_execute": 0.92,
+    "coordinate_execute": 0.97
+  },
+  "timeouts": {
+    "ui_change_seconds": 10,
+    "element_wait_seconds": 8,
+    "media_upload_seconds": 60
+  },
+  "retries": {
+    "find_element": 3,
+    "input_verification": 2,
+    "state_transition": 2
+  },
+  "vision": {
+    "enabled": false,
+    "coordinate_fallback_enabled": false,
+    "provider": "disabled"
+  },
+  "diagnostics": {
+    "enabled": true,
+    "save_screenshot": true,
+    "save_ui_dump": true,
+    "retention_days": 14,
+    "root_dir": "diagnostics"
+  },
+  "field_bands": {
+    "description_y_min": 620,
+    "description_y_max": 950,
+    "tags_y_min": 960
+  }
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node class="android.widget.TextView" text="Новое объявление" bounds="[30,80][500,140]" />
+  <node class="android.widget.EditText" resource-id="marketplace_composer_price_input" bounds="[30,265][636,350]" clickable="true" editable="true" input-type="number" text="199200" />
+  <node class="android.widget.Button" text="Опубликовать" bounds="[30,1400][690,1500]" clickable="true" />
+</hierarchy>

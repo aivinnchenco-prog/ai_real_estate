@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node class="android.widget.TextView" text="Новое объявление" bounds="[30,80][500,140]" />
+  <node class="android.view.View" content-desc="Название  Обязательно" bounds="[30,180][690,260]" clickable="true" />
+  <node class="android.widget.EditText" bounds="[30,200][636,300]" clickable="true" editable="true" focusable="true" />
+  <node class="android.view.View" content-desc="Цена  Обязательно" bounds="[30,240][690,320]" clickable="true" />
+  <node class="android.widget.EditText" resource-id="marketplace_composer_price_input" bounds="[30,265][636,350]" clickable="true" editable="true" focusable="true" input-type="number" />
+  <node class="android.view.View" content-desc="Описание  Необязательно" bounds="[30,670][690,928]" clickable="true" />
+  <node class="android.widget.EditText" bounds="[30,672][636,927]" clickable="true" editable="true" focusable="true" />
+  <node class="android.view.View" content-desc="Теги  Необязательно" bounds="[30,996][690,1105]" clickable="true" />
+  <node class="android.widget.EditText" bounds="[30,1001][636,1100]" clickable="true" editable="true" focusable="true" />
+</hierarchy>
