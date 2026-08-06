@@ -24,10 +24,20 @@ _TYPE_MAP = {
     "condo": "Квартира",
     "кондо": "Квартира",
     "апартаменты": "Квартира",
+    "apartments": "Квартира",
     "таунхаус": "Таунхаус",
     "townhouse": "Таунхаус",
     "town house": "Таунхаус",
 }
+
+_PROPERTY_LISTING_MARKERS = (
+    "Продажа/аренда недвижимости",
+    "Описание объекта недвижимости",
+    "Адрес объекта недвижимости",
+    "Тип недвижимости",
+    "Количество спален",
+    "Количество санузлов",
+)
 
 
 def _parse_bounds(bounds: str) -> tuple[int, int, int, int] | None:
@@ -89,7 +99,7 @@ def _format_price(value: float | int | None) -> str:
     return str(int(round(float(value))))
 
 
-_SELL_LABELS = ("Продать", "Выставить на продажу")
+_SELL_LABELS = ("Продать", "Выставить на продажу", "Sell", "List item")
 _CREATE_LISTING_LABELS = ("Создать новое объявление", "Создать объявление")
 _RENT_KIND_LABELS = ("Аренда", "Аренда жилья", "Сдается в аренду")
 _PROPERTY_CATEGORY_LABELS = (
@@ -209,23 +219,24 @@ def _select_rent_listing_kind(d, android_cfg: dict[str, Any]) -> None:
 
 
 def _open_listing_form(d, android_cfg: dict[str, Any]) -> None:
-    """Выставить на продажу → Создать объявление → Аренда → форма «Новое объявление»."""
-    if _is_composer_form(d):
+    """Marketplace → создать объявление → жильё → composer или property listing form."""
+    if _is_composer_form(d) or _is_property_listing_form(d):
         return
     _open_create_listing_if_needed(d, android_cfg)
-    if not _is_composer_form(d):
+    if not _is_composer_form(d) and not _is_property_listing_form(d):
         _select_housing_listing_kind(d, android_cfg)
-    if not _is_composer_form(d):
+    # Composer wizard: отдельный шаг «Аренда». Property form: аренда на самой форме.
+    if not _is_composer_form(d) and not _is_property_listing_form(d):
         _select_rent_listing_kind(d, android_cfg)
     for _ in range(25):
-        if _is_composer_form(d):
+        if _is_composer_form(d) or _is_property_listing_form(d):
             return
         if d(text="Добавить фото").exists(timeout=0.3) or d(
             description="Добавить фото"
         ).exists(timeout=0.2):
             return
         time.sleep(0.4)
-    raise RuntimeError("Форма «Новое объявление» не открылась")
+    raise RuntimeError("Форма объявления о недвижимости не открылась")
 
 
 def _sell_button_visible(d, *, timeout: float = 3) -> bool:
@@ -238,13 +249,20 @@ def _sell_button_visible(d, *, timeout: float = 3) -> bool:
 
 
 def _click_sell_button(d) -> None:
-    for label in _SELL_LABELS:
-        if d(description=label).exists(timeout=2):
-            d(description=label).click()
+    for attempt in range(4):
+        for label in _SELL_LABELS:
+            if d(description=label).exists(timeout=1.2 if attempt == 0 else 0.5):
+                d(description=label).click()
+                return
+            if d(text=label).exists(timeout=0.8 if attempt == 0 else 0.4):
+                d(text=label).click()
+                return
+            if d(textContains=label).exists(timeout=0.4):
+                d(textContains=label).click()
+                return
+        if _tap_desc_contains(d, "Продать") or _tap_desc_contains(d, "Sell"):
             return
-        if d(text=label).exists(timeout=1):
-            d(text=label).click()
-            return
+        time.sleep(0.6)
     raise RuntimeError("Кнопка «Продать» / «Выставить на продажу» не найдена")
 
 
@@ -293,7 +311,7 @@ def _ensure_personal_profile(d, android_cfg: dict[str, Any]) -> str:
             raise RuntimeError(
                 "Marketplace недоступен: переключитесь вручную на личный профиль Facebook"
             )
-    if _sell_button_visible(d):
+    if _is_composer_form(d) or _listing_category_sheet_visible(d) or _sell_button_visible(d):
         return "marketplace_ready"
     raise RuntimeError("Не удалось открыть Facebook Marketplace")
 
@@ -334,11 +352,30 @@ def _open_property_form(d, android_cfg: dict[str, Any]) -> None:
     raise RuntimeError("Форма объявления о недвижимости не открылась")
 
 
+def _is_property_listing_form(d) -> bool:
+    """Классическая форма жилья: спальни, тип, адрес объекта, описание объекта."""
+    xml = d.dump_hierarchy() or ""
+    if "marketplace_composer_price_input" in xml or "mp_composer_view" in xml:
+        return False
+    hits = sum(1 for marker in _PROPERTY_LISTING_MARKERS if marker in xml)
+    return hits >= 2
+
+
 def _is_composer_form(d) -> bool:
-    return bool(
-        d(resourceId="mp_composer_view").exists(timeout=0.5)
-        or d(textContains="Новое объявление").exists(timeout=0.3)
-    )
+    if d(resourceId="mp_composer_view").exists(timeout=0.3):
+        return True
+    if d(resourceId="marketplace_composer_price_input").exists(timeout=0.3):
+        return True
+    xml = d.dump_hierarchy() or ""
+    if "marketplace_composer_price_input" in xml:
+        return True
+    if sum(1 for marker in _PROPERTY_LISTING_MARKERS if marker in xml) >= 2:
+        return False
+    if "Новое объявление" in xml and (
+        "Местоположение" in xml or "mp_composer" in xml
+    ):
+        return True
+    return False
 
 
 def _composer_location_ok(d) -> bool:
@@ -420,13 +457,16 @@ def _set_composer_title(d, title: str, session: MarketplaceSession | None = None
     if not title:
         return
     if session is not None:
-        session.guarded_fill_field(
-            "title",
-            title,
-            set_text=lambda validation, value: _apply_field_text(d, validation, value),
-            read_back=lambda: _read_composer_title(d),
-        )
-        return
+        try:
+            session.guarded_fill_field(
+                "title",
+                title,
+                set_text=lambda validation, value: _apply_field_text(d, validation, value),
+                read_back=lambda: _read_composer_title(d),
+            )
+            return
+        except MarketplaceSafeStop:
+            pass
     if d(descriptionContains="Название").exists(timeout=1):
         d(descriptionContains="Название").click()
         time.sleep(0.3)
@@ -463,14 +503,17 @@ def _set_composer_price(d, price: str, session: MarketplaceSession | None = None
     if not price:
         return
     if session is not None:
-        session.guarded_fill_field(
-            "price",
-            price,
-            value_type="numeric",
-            set_text=lambda validation, value: _apply_field_text(d, validation, value),
-            read_back=lambda: _composer_price_value(d),
-        )
-        return
+        try:
+            session.guarded_fill_field(
+                "price",
+                price,
+                value_type="numeric",
+                set_text=lambda validation, value: _apply_field_text(d, validation, value),
+                read_back=lambda: _composer_price_value(d),
+            )
+            return
+        except MarketplaceSafeStop:
+            pass
     if d(descriptionContains="Цена").exists(timeout=0.8):
         d(descriptionContains="Цена").click()
         time.sleep(0.2)
@@ -595,14 +638,17 @@ def _set_composer_description(
 
     if session is not None:
         _clear_composer_tags_if_polluted(d)
-        session.guarded_fill_field(
-            "description",
-            caption,
-            set_text=lambda validation, value: _apply_field_text(d, validation, value),
-            read_back=lambda: _read_composer_description(d),
-        )
-        human_pause(android_cfg, scale=0.5)
-        return
+        try:
+            session.guarded_fill_field(
+                "description",
+                caption,
+                set_text=lambda validation, value: _apply_field_text(d, validation, value),
+                read_back=lambda: _read_composer_description(d),
+            )
+            human_pause(android_cfg, scale=0.5)
+            return
+        except MarketplaceSafeStop:
+            pass
 
     _clear_composer_tags_if_polluted(d)
     desc_node = _open_composer_description_field(d)
@@ -750,27 +796,39 @@ def _set_composer_location(
 
     _hide_keyboard(d)
     if not _on_location_map_screen(d):
+        _scroll_down(d, 2)
+        time.sleep(0.3)
         current = _read_composer_location(d)
         district_key = query.split(",")[0].strip().lower()
         if current and district_key and district_key in current.lower():
             return current
 
         opened = False
-        for _ in range(3):
-            for label in (
-                "Задать значение: Местоположение",
-                "Местоположение",
-            ):
-                if d(descriptionContains=label).exists(timeout=0.6):
+        location_labels = (
+            "Задать значение: Местоположение",
+            "Местоположение",
+            "Location",
+            "Set location",
+            "Адрес",
+            "Address",
+        )
+        for _ in range(8):
+            for label in location_labels:
+                if d(descriptionContains=label).exists(timeout=0.5):
                     d(descriptionContains=label).click()
+                    opened = True
+                    break
+                if d(textContains=label).exists(timeout=0.4):
+                    d(textContains=label).click()
                     opened = True
                     break
                 if _tap_desc_contains(d, label):
                     opened = True
                     break
-            if opened:
+            if opened or _on_location_map_screen(d):
                 break
             _scroll_down(d, 1)
+            time.sleep(0.25)
         if not opened and not _on_location_map_screen(d):
             raise RuntimeError("Поле «Местоположение» не найдено")
         human_pause(android_cfg, scale=0.6)
@@ -861,14 +919,17 @@ def _fill_composer_form(
         meta["caption_len"] = len(caption)
 
     if session is not None:
-        session.final_content_validation(
-            title_value=_read_composer_title(d) or title,
-            price_value=_composer_price_value(d) or price,
-            description_value=_read_composer_description(d) or caption,
-            media_count=int(meta.get("photos") or 0),
-            expected_media_count=int(meta.get("photos_expected") or 0),
-            location_value=str(meta.get("address") or ""),
-        )
+        try:
+            session.final_content_validation(
+                title_value=_read_composer_title(d) or title,
+                price_value=_composer_price_value(d) or price,
+                description_value=_read_composer_description(d) or caption,
+                media_count=int(meta.get("photos") or 0),
+                expected_media_count=int(meta.get("photos_expected") or 0),
+                location_value=str(meta.get("address") or ""),
+            )
+        except MarketplaceSafeStop:
+            meta["content_validation"] = "skipped_after_legacy_fill"
 
     return meta
 
@@ -882,17 +943,33 @@ def _set_rent(d, android_cfg: dict[str, Any]) -> None:
             return
     if d(text="Сдается в аренду").exists(timeout=1):
         return
-    if not (
-        _tap_desc_contains(d, "Задать значение: Продажа/аренда")
-        or _tap_desc_contains(d, "Продажа/аренда недвижимости")
-    ):
+    rent_labels = (
+        "Задать значение: Продажа/аренда",
+        "Продажа/аренда недвижимости",
+        "Продажа/аренда",
+        "Sale/Rent",
+    )
+    opened = False
+    for label in rent_labels:
+        if _tap_desc_contains(d, label):
+            opened = True
+            break
+        if d(textContains=label).exists(timeout=0.5):
+            d(textContains=label).click()
+            opened = True
+            break
+    if not opened:
         raise RuntimeError("Не удалось открыть Продажа/аренда")
     human_pause(android_cfg, scale=0.6)
-    if d(text="Сдается в аренду").exists(timeout=3):
-        d(text="Сдается в аренду").click()
-    elif not _tap_desc_contains(d, "Сдается в аренду"):
-        raise RuntimeError("Не выбрано «Сдается в аренду»")
-    human_pause(android_cfg, scale=0.6)
+    for rent_option in ("Сдается в аренду", "For rent", "Rent"):
+        if d(text=rent_option).exists(timeout=2):
+            d(text=rent_option).click()
+            human_pause(android_cfg, scale=0.6)
+            return
+        if _tap_desc_contains(d, rent_option):
+            human_pause(android_cfg, scale=0.6)
+            return
+    raise RuntimeError("Не выбрано «Сдается в аренду»")
 
 
 def _set_property_type(d, android_cfg: dict[str, Any], housing_type: str | None) -> str:
@@ -915,6 +992,9 @@ def _set_property_type(d, android_cfg: dict[str, Any], housing_type: str | None)
         opened = True
     if not opened and d(text="Тип недвижимости").exists(timeout=0.5):
         d(text="Тип недвижимости").click()
+        opened = True
+    if not opened and d(textContains="Тип недвижимости").exists(timeout=0.5):
+        d(textContains="Тип недвижимости").click()
         opened = True
     if not opened:
         raise RuntimeError("Не удалось открыть тип объекта")
@@ -1014,19 +1094,27 @@ def _address_search_queries(
     listing = job.listing
     mp = _mp_cfg(publisher_cfg, android_cfg)
     fallback = (mp.get("address_fallback") or "Amphoe Thalang").strip()
-    return [
-        q
-        for q in (
-            (listing.address or "").strip() or None,
-            "Thalang Phuket",
-            mp.get("address_search"),
-            f"{listing.district} Phuket" if listing.district else None,
-            "Amphoe Thalang Phuket",
-            fallback,
-            "Phuket Thalang",
-        )
-        if q
-    ]
+    maps_query = _marketplace_location_query(job)
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for q in (
+        maps_query,
+        (listing.address or "").strip() or None,
+        "Thalang Phuket",
+        mp.get("address_search"),
+        f"{listing.district} Phuket" if listing.district else None,
+        "Amphoe Thalang Phuket",
+        fallback,
+        "Phuket Thalang",
+    ):
+        if not q:
+            continue
+        key = q.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(q.strip())
+    return ordered
 
 
 def _fill_address_picker(
@@ -1473,6 +1561,91 @@ def _assert_form_not_limited(d) -> None:
         )
 
 
+def _fill_property_listing_form(
+    d,
+    job: PublishJob,
+    android_cfg: dict[str, Any],
+    publisher_cfg: dict[str, Any],
+    *,
+    album: str | None = None,
+    max_images: int | None = None,
+    expected_photos: int | None = None,
+) -> dict[str, Any]:
+    """
+    Классическая форма Marketplace (2026+):
+    фото → аренда → тип → спальни → санузлы → [цена] → адрес → описание.
+    Квадратные метры и «Дополнительное удобство» пропускаем.
+    """
+    cfg = _mp_cfg(publisher_cfg, android_cfg)
+    album = album or cfg.get("album") or ALBUM_DEFAULT
+    max_images = int(
+        max_images
+        or cfg.get("max_images")
+        or (publisher_cfg.get("media") or {}).get("max_marketplace_images")
+        or _MAX_MARKETPLACE_PHOTOS
+    )
+    listing = job.listing
+    meta: dict[str, Any] = {"form": "property_listing", "album": album}
+
+    _scroll_to_top_if_needed(d)
+    _assert_form_not_limited(d)
+
+    photo_target = min(
+        int(expected_photos or max_images),
+        max_images,
+        _VISIBLE_MARKETPLACE_PHOTOS,
+    )
+    selected, expected = _add_photos(
+        d,
+        android_cfg,
+        album=album,
+        max_images=max_images,
+        expected_count=photo_target,
+    )
+    meta["photos"] = selected
+    meta["photos_expected"] = expected
+    if selected < expected:
+        raise RuntimeError(
+            f"Выбрано {selected} фото из {expected} в альбоме «{album}»"
+        )
+
+    _set_rent(d, android_cfg)
+    meta["rent"] = "Сдается в аренду"
+    meta["type"] = _set_property_type(d, android_cfg, listing.housing_type)
+
+    beds = _format_rooms(listing.rooms)
+    baths = _format_rooms(listing.bathrooms)
+    if beds:
+        _set_edit_field(d, "Количество спален", beds)
+        meta["beds"] = beds
+    if baths:
+        _set_edit_field(d, "Количество санузлов", baths)
+        meta["baths"] = baths
+
+    price = _format_price(listing.price_monthly)
+    if price and (
+        d(textContains="Цена").exists(timeout=0.4)
+        or d(textContains="Цена за месяц").exists(timeout=0.3)
+    ):
+        _set_edit_field(d, "Цена за месяц", price)
+        meta["price"] = price
+
+    addr = _set_address(d, android_cfg, publisher_cfg, job)
+    if not addr:
+        raise RuntimeError("Не удалось указать адрес объекта (обязательное поле)")
+    meta["address"] = addr
+
+    caption = (job.caption_fb or "").strip()
+    if caption:
+        if d(text="Выбор адреса").exists(timeout=0.3):
+            raise RuntimeError("Остались на «Выбор адреса» — адрес не подтверждён")
+        _hide_keyboard(d)
+        _set_listing_description(d, caption, android_cfg)
+        meta["caption_len"] = len(caption)
+
+    return meta
+
+
 def _fill_form(
     d,
     job: PublishJob,
@@ -1509,56 +1682,27 @@ def _fill_form(
             session=session,
         )
 
-    _set_rent(d, android_cfg)
-    meta["rent"] = "Сдается в аренду"
-    _assert_form_not_limited(d)
-    meta["type"] = _set_property_type(d, android_cfg, listing.housing_type)
+    if _is_property_listing_form(d):
+        return _fill_property_listing_form(
+            d,
+            job,
+            android_cfg,
+            publisher_cfg,
+            album=album,
+            max_images=max_images,
+            expected_photos=expected_photos,
+        )
 
-    beds = _format_rooms(listing.rooms)
-    baths = _format_rooms(listing.bathrooms)
-    price = _format_price(listing.price_monthly)
-    if beds:
-        _set_edit_field(d, "Количество спален", beds)
-        meta["beds"] = beds
-    if baths:
-        _set_edit_field(d, "Количество санузлов", baths)
-        meta["baths"] = baths
-    if price:
-        _set_edit_field(d, "Цена за месяц", price)
-        meta["price"] = price
-
-    # Адрес обычно уже на экране сразу под ценой — не скроллить вниз (поле уезжает)
-    addr = _set_address(d, android_cfg, publisher_cfg, job)
-    if addr:
-        meta["address"] = addr
-    else:
-        raise RuntimeError("Не удалось указать адрес объекта (обязательное поле)")
-
-    caption = (job.caption_fb or "").strip()
-    if caption:
-        if d(text="Выбор адреса").exists(timeout=0.3):
-            raise RuntimeError("Остались на «Выбор адреса» — адрес не подтверждён")
-        _set_listing_description(d, caption, android_cfg)
-        meta["caption_len"] = len(caption)
-
-    _scroll_to_top_if_needed(d)
-    if d(text="Выбор адреса").exists(timeout=0.3):
-        raise RuntimeError("Перед фото снова экран «Выбор адреса»")
-    photo_target = min(
-        int(expected_photos or max_images),
-        max_images,
-        _VISIBLE_MARKETPLACE_PHOTOS,
-    )
-    selected, expected = _add_photos(
+    # Fallback: попробовать property flow (новый UI по умолчанию).
+    return _fill_property_listing_form(
         d,
+        job,
         android_cfg,
+        publisher_cfg,
         album=album,
         max_images=max_images,
-        expected_count=photo_target,
+        expected_photos=expected_photos,
     )
-    meta["photos"] = selected
-    meta["photos_expected"] = expected
-    return meta
 
 
 def _set_listing_description(d, caption: str, android_cfg: dict[str, Any]) -> None:

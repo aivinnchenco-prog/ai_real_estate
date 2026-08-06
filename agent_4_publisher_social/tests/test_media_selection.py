@@ -307,6 +307,36 @@ class MediaSelectionTests(unittest.TestCase):
         self.assertEqual(len(suggestions), 1)
         self.assertIn("Choeng Thale", suggestions[0]["label"])
 
+    def test_property_listing_form_detected(self) -> None:
+        from pathlib import Path
+
+        from publisher_social.channels.fb_marketplace import (
+            _is_composer_form,
+            _is_property_listing_form,
+        )
+        from publisher_social.marketplace.snapshot import snapshot_from_xml
+
+        xml = (
+            Path(__file__).parent
+            / "fixtures"
+            / "marketplace"
+            / "property_listing_ru.xml"
+        ).read_text(encoding="utf-8")
+
+        class FakeD:
+            def dump_hierarchy(self) -> str:
+                return xml
+
+            def __call__(self, **_kwargs):
+                return self
+
+            def exists(self, timeout: float = 0) -> bool:
+                return False
+
+        d = FakeD()
+        self.assertTrue(_is_property_listing_form(d))
+        self.assertFalse(_is_composer_form(d))
+
     def test_tiktok_next_counter_label_is_supported(self) -> None:
         device = Mock()
         missing = Mock()

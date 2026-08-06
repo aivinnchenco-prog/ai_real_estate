@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node text="Новое объявление" bounds="[30,80][500,140]" />
+  <node text="Добавить фото" clickable="true" bounds="[30,200][200,400]" />
+  <node text="Продажа/аренда недвижимости" bounds="[30,420][690,500]" />
+  <node text="Сдается в аренду" bounds="[30,500][690,560]" />
+  <node text="Тип недвижимости" bounds="[30,580][690,660]" />
+  <node text="Количество спален" bounds="[30,680][690,760]" />
+  <node text="Количество санузлов" bounds="[30,780][690,860]" />
+  <node text="Адрес объекта недвижимости" bounds="[30,880][690,960]" />
+  <node class="android.widget.EditText" content-desc="Описание объекта недвижимости" bounds="[30,1100][690,1300]" editable="true" />
+</hierarchy>

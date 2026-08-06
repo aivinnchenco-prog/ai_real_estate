@@ -202,6 +202,17 @@ class MarketplaceSession:
                 ui_cfg=self.ui_cfg,
                 state=self.current_state,
             )
+            if not validation.ok or validation.match is None:
+                if self._try_vision_select(target):
+                    validation = validate_field_for_target(
+                        self.snapshot,
+                        target,
+                        ui_cfg=self.ui_cfg,
+                        state=self.current_state,
+                    )
+                if not validation.ok or validation.match is None:
+                    self.safe_stop("semantic_validation_failed", plan=None)
+
             plan = build_fill_plan(
                 state=self.current_state,
                 target=target,
@@ -230,17 +241,6 @@ class MarketplaceSession:
                 guard = self.evaluate_guard(plan)
                 if guard.decision != ActionGuardDecision.EXECUTE:
                     self.safe_stop("recheck_failed", plan=plan)
-
-            if not validation.ok or validation.match is None:
-                if self._try_vision_select(target, plan):
-                    validation = validate_field_for_target(
-                        self.snapshot,
-                        target,
-                        ui_cfg=self.ui_cfg,
-                        state=self.current_state,
-                    )
-                if not validation.ok or validation.match is None:
-                    self.safe_stop("semantic_validation_failed", plan=plan)
 
             self._click_node(validation.match, plan=plan)
             set_text(validation, value)

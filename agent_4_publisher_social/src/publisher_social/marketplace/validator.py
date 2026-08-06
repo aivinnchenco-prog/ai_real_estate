@@ -62,19 +62,67 @@ def validate_price_field(
     )
 
 
+def _composer_title_match(snapshot: UISnapshot, y_max: int) -> SelectorMatch | None:
+    for node in snapshot.find_edittexts():
+        if "marketplace_composer_price_input" in node.resource_id:
+            continue
+        if node.y1 <= y_max:
+            return SelectorMatch(
+                element_key="title",
+                node=node,
+                method="composer_edittext",
+                confidence=0.92,
+                evidence=("composer_title_edittext", f"y1={node.y1}"),
+            )
+    return None
+
+
+def _composer_description_match(
+    snapshot: UISnapshot,
+    *,
+    y_min: int,
+    y_max: int,
+    tags_y_min: int,
+) -> SelectorMatch | None:
+    for node in snapshot.find_edittexts():
+        if "marketplace_composer_price_input" in node.resource_id:
+            continue
+        if _is_tags_node(node.label, node.y1, tags_y_min):
+            continue
+        if "описание" in node.label.lower() or "description" in node.label.lower():
+            return SelectorMatch(
+                element_key="description",
+                node=node,
+                method="composer_edittext",
+                confidence=0.94,
+                evidence=("composer_description_label",),
+            )
+        if y_min <= node.y1 <= y_max:
+            return SelectorMatch(
+                element_key="description",
+                node=node,
+                method="composer_y_band",
+                confidence=0.91,
+                evidence=(f"y_band={y_min}-{y_max}", f"y1={node.y1}"),
+            )
+    return None
+
+
 def validate_title_field(
     snapshot: UISnapshot,
     *,
     ui_cfg: dict[str, Any],
     state: MarketplaceState | None = None,
 ) -> FieldValidation:
-    selectors = load_marketplace_selectors()
+    y_max = int(ui_cfg.get("field_bands", {}).get("description_y_min", 620))
     match = find_labeled_input(
         snapshot,
         label_aliases=["Название", "Title", "Заголовок"],
         forbidden_labels=["Описание", "Description", "Теги", "Tags", "Цена", "Price"],
-        y_max=ui_cfg.get("field_bands", {}).get("description_y_min", 620),
+        y_max=y_max,
     )
+    if match is None:
+        match = _composer_title_match(snapshot, y_max)
     evidence: list[str] = []
     confidence = 0.0
     if match:
@@ -108,6 +156,13 @@ def validate_description_field(
     )
     evidence: list[str] = []
     confidence = 0.0
+    if match is None:
+        match = _composer_description_match(
+            snapshot,
+            y_min=y_min,
+            y_max=y_max,
+            tags_y_min=tags_y_min,
+        )
     if match and _is_tags_node(match.node.label, match.node.y1, tags_y_min):
         return FieldValidation("description", False, 0.0, ("matched_tags_field",), None)
     if match:
