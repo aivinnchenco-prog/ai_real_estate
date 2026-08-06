@@ -106,6 +106,36 @@ class MediaSelectionTests(unittest.TestCase):
             ["slide_01.jpg", "slide_02.jpg"],
         )
 
+    def test_marketplace_images_are_pushed_to_object_specific_album(self) -> None:
+        device = Mock()
+        device.media_dir = "/sdcard/Download/publisher_social"
+        device.push.side_effect = (
+            lambda _path, name, media_dir=None: f"{media_dir}/{name}"
+        )
+        device.run.return_value = Mock(returncode=0, stdout="ok", stderr="")
+
+        with TemporaryDirectory() as temp_dir:
+            first = Path(temp_dir) / "brand_01.jpg"
+            second = Path(temp_dir) / "brand_02.jpg"
+            first.write_bytes(b"brand one")
+            second.write_bytes(b"brand two")
+            _, _, remote_mp = push_files(
+                device,
+                local_video=None,
+                local_images=[],
+                object_id="A_20260806_001",
+                local_marketplace_images=[str(first), str(second)],
+                marketplace_media_dir="/sdcard/Download/brand_open_home",
+            )
+
+        albums = {path.rsplit("/", 1)[0] for path in remote_mp}
+        self.assertEqual(len(albums), 1)
+        album = albums.pop()
+        self.assertRegex(
+            album,
+            r"^/sdcard/Download/brand_open_home/Open Home A_20260806_001$",
+        )
+
     def test_tiktok_uses_separate_video_and_carousel_albums(self) -> None:
         config = {
             "tiktok": {
@@ -202,6 +232,80 @@ class MediaSelectionTests(unittest.TestCase):
 
         self.assertFalse(enabled)
         device.click.assert_not_called()
+
+    def test_marketplace_photo_tiles_include_top_row(self) -> None:
+        from publisher_social.channels.fb_marketplace import _photo_tiles_from_xml
+
+        xml = """
+        <hierarchy>
+          <node clickable="true" content-desc="Сделать фото" bounds="[0,300][200,500]" />
+          <node clickable="true" content-desc="Фото, объект 1. Не выбрано" bounds="[0,155][240,393]" />
+          <node clickable="true" content-desc="Фото, объект 2. Выбрано" bounds="[242,155][480,393]" />
+          <node clickable="true" content-desc="Фото, объект 3. Не выбрано" bounds="[482,155][720,393]" />
+        </hierarchy>
+        """
+        tiles = _photo_tiles_from_xml(xml)
+        self.assertEqual(len(tiles), 3)
+        self.assertEqual(tiles[0]["y1"], 155)
+        self.assertFalse(tiles[0]["selected"])
+        self.assertTrue(tiles[1]["selected"])
+
+    def test_marketplace_photo_tiles_dedupe_overlapping_nodes(self) -> None:
+        from publisher_social.channels.fb_marketplace import _photo_tiles_from_xml
+
+        xml = """
+        <hierarchy>
+          <node clickable="true" content-desc="Фото 1" bounds="[0,394][240,634]" />
+          <node clickable="true" content-desc="Фото 1 dup" bounds="[0,395][240,633]" />
+          <node clickable="true" content-desc="Фото 2" bounds="[242,394][480,634]" />
+        </hierarchy>
+        """
+        tiles = _photo_tiles_from_xml(xml)
+        self.assertEqual(len(tiles), 2)
+
+    def test_marketplace_tile_keys_are_unique_per_bounds(self) -> None:
+        from publisher_social.channels.fb_marketplace import _tile_key
+
+        self.assertNotEqual(
+            _tile_key(0, 400, 200, 600),
+            _tile_key(220, 400, 420, 600),
+        )
+
+    def test_find_description_edittext_skips_tags_row(self) -> None:
+        from publisher_social.channels.fb_marketplace import (
+            _find_composer_description_edittext,
+            _is_tags_field_node,
+        )
+
+        self.assertTrue(_is_tags_field_node("Теги  Необязательно", 996))
+        self.assertFalse(_is_tags_field_node("Описание  Необязательно", 670))
+
+        class FakeD:
+            def dump_hierarchy(self) -> str:
+                return """
+                <hierarchy>
+                  <node class="android.widget.EditText" bounds="[30,672][636,927]" />
+                  <node class="android.widget.EditText" bounds="[30,1001][636,1100]" />
+                </hierarchy>
+                """
+
+        node = _find_composer_description_edittext(FakeD())
+        self.assertIsNotNone(node)
+        assert node is not None
+        self.assertEqual(node["y1"], 672)
+
+    def test_marketplace_location_suggestions_skip_search_field(self) -> None:
+        from publisher_social.channels.fb_marketplace import _location_suggestions_from_xml
+
+        xml = """
+        <hierarchy>
+          <node text="Поиск" bounds="[0,100][720,180]" />
+          <node text="Ban Thalat Choeng Thale, Amphoe Thalang" bounds="[121,298][697,368]" />
+        </hierarchy>
+        """
+        suggestions = _location_suggestions_from_xml(xml)
+        self.assertEqual(len(suggestions), 1)
+        self.assertIn("Choeng Thale", suggestions[0]["label"])
 
     def test_tiktok_next_counter_label_is_supported(self) -> None:
         device = Mock()

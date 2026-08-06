@@ -6,8 +6,9 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from ..android.ui import connect_device, dismiss_permissions, human_pause
+from ..maps_location import marketplace_location_query
 from ..models import PublishJob
-from .base import ChannelResult
+from .base import ChannelResult, count_selected_gallery_photos, gallery_selection_state, marketplace_folder_name
 PKG_DEFAULT = "com.facebook.katana"
 ALBUM_DEFAULT = "brand_open_home"
 
@@ -87,6 +88,165 @@ def _format_price(value: float | int | None) -> str:
     return str(int(round(float(value))))
 
 
+_SELL_LABELS = ("Продать", "Выставить на продажу")
+_CREATE_LISTING_LABELS = ("Создать новое объявление", "Создать объявление")
+_RENT_KIND_LABELS = ("Аренда", "Аренда жилья", "Сдается в аренду")
+_PROPERTY_CATEGORY_LABELS = (
+    "Продажа и аренда недвижимости",
+    "Продажи и аренда жилья",
+    "Продажа или аренда жилья",
+)
+_MAX_MARKETPLACE_PHOTOS = 49
+# Без скролла в галерее — только видимая сетка (обычно 3×5 + частичный ряд).
+_VISIBLE_MARKETPLACE_PHOTOS = 16
+_PHOTO_TILE_MIN_Y = 130  # статус-бар; верхний ряд фото начинается ~155px
+
+
+def _label_visible(d, labels: tuple[str, ...], *, timeout: float = 0.8) -> str | None:
+    for index, label in enumerate(labels):
+        wait = timeout if index == 0 else 0.4
+        if d(text=label).exists(timeout=wait) or d(description=label).exists(timeout=0.4):
+            return label
+    return None
+
+
+def _click_label(d, label: str) -> None:
+    if d(description=label).exists(timeout=2):
+        d(description=label).click()
+        return
+    if d(text=label).exists(timeout=1):
+        d(text=label).click()
+        return
+    raise RuntimeError(f"Кнопка «{label}» не найдена")
+
+
+def _open_create_listing_if_needed(d, android_cfg: dict[str, Any]) -> None:
+    if _is_composer_form(d) or _listing_category_sheet_visible(d):
+        return
+    create = _label_visible(d, _CREATE_LISTING_LABELS, timeout=2)
+    if create:
+        _click_label(d, create)
+        human_pause(android_cfg, scale=0.9)
+        return
+    if _sell_button_visible(d, timeout=1):
+        _click_sell_button(d)
+        human_pause(android_cfg, scale=0.9)
+    create = _label_visible(d, _CREATE_LISTING_LABELS, timeout=3)
+    if create:
+        _click_label(d, create)
+        human_pause(android_cfg, scale=0.9)
+
+
+_HOUSING_KIND_LABELS = (
+    "Продажа или аренда жилья",
+    "Продажи и аренда жилья",
+    *_PROPERTY_CATEGORY_LABELS,
+)
+
+
+def _listing_category_sheet_visible(d) -> bool:
+    return bool(
+        d(resourceId="composer_bottom_row_housing").exists(timeout=0.5)
+        or _label_visible(d, _HOUSING_KIND_LABELS, timeout=0.5)
+    )
+
+
+def _select_housing_listing_kind(d, android_cfg: dict[str, Any]) -> None:
+    """Нижний пункт листа «Создать объявление» — жильё."""
+    if _is_composer_form(d):
+        return
+    if d(resourceId="composer_bottom_row_housing").exists(timeout=2):
+        d(resourceId="composer_bottom_row_housing").click()
+        human_pause(android_cfg, scale=1.0)
+        return
+    label = _label_visible(d, _HOUSING_KIND_LABELS, timeout=3)
+    if label:
+        _click_label(d, label)
+        human_pause(android_cfg, scale=1.0)
+        return
+    raise RuntimeError("Не найден пункт «Продажа или аренда жилья»")
+
+
+def _select_rent_listing_kind(d, android_cfg: dict[str, Any]) -> None:
+    """После «Создать объявление» — выбрать «Аренда» (нижний пункт «Продажи / Аренда»)."""
+    if _is_composer_form(d):
+        return
+    candidates: list[tuple[int, int, int]] = []
+    xml = d.dump_hierarchy()
+    for node in ET.fromstring(xml).iter("node"):
+        attrs = node.attrib
+        if attrs.get("clickable") != "true":
+            continue
+        label = (attrs.get("text") or attrs.get("content-desc") or "").strip()
+        if not label:
+            continue
+        if not any(kind in label for kind in _RENT_KIND_LABELS):
+            continue
+        if "Продаж" in label and "Аренд" not in label:
+            continue
+        parsed = _parse_bounds(attrs.get("bounds", ""))
+        if not parsed:
+            continue
+        x1, y1, x2, y2 = parsed
+        candidates.append((y1, (x1 + x2) // 2, (y1 + y2) // 2))
+    if candidates:
+        candidates.sort(reverse=True)
+        _, cx, cy = candidates[0]
+        d.click(cx, cy)
+        human_pause(android_cfg, scale=1.0)
+        return
+    for label in _RENT_KIND_LABELS:
+        if d(description=label).exists(timeout=1):
+            d(description=label).click()
+            human_pause(android_cfg, scale=1.0)
+            return
+        if d(text=label).exists(timeout=0.8):
+            d(text=label).click()
+            human_pause(android_cfg, scale=1.0)
+            return
+    raise RuntimeError("Не найден пункт «Аренда» после «Создать объявление»")
+
+
+def _open_listing_form(d, android_cfg: dict[str, Any]) -> None:
+    """Выставить на продажу → Создать объявление → Аренда → форма «Новое объявление»."""
+    if _is_composer_form(d):
+        return
+    _open_create_listing_if_needed(d, android_cfg)
+    if not _is_composer_form(d):
+        _select_housing_listing_kind(d, android_cfg)
+    if not _is_composer_form(d):
+        _select_rent_listing_kind(d, android_cfg)
+    for _ in range(25):
+        if _is_composer_form(d):
+            return
+        if d(text="Добавить фото").exists(timeout=0.3) or d(
+            description="Добавить фото"
+        ).exists(timeout=0.2):
+            return
+        time.sleep(0.4)
+    raise RuntimeError("Форма «Новое объявление» не открылась")
+
+
+def _sell_button_visible(d, *, timeout: float = 3) -> bool:
+    for label in _SELL_LABELS:
+        if d(text=label).exists(timeout=timeout if label == _SELL_LABELS[0] else 0.5):
+            return True
+        if d(description=label).exists(timeout=0.5):
+            return True
+    return False
+
+
+def _click_sell_button(d) -> None:
+    for label in _SELL_LABELS:
+        if d(description=label).exists(timeout=2):
+            d(description=label).click()
+            return
+        if d(text=label).exists(timeout=1):
+            d(text=label).click()
+            return
+    raise RuntimeError("Кнопка «Продать» / «Выставить на продажу» не найдена")
+
+
 def _ensure_personal_profile(d, android_cfg: dict[str, Any]) -> str:
     """Marketplace недоступен со страницы Page — нужен личный профиль."""
     d.shell('am start -a android.intent.action.VIEW -d "fb://marketplace"')
@@ -132,36 +292,30 @@ def _ensure_personal_profile(d, android_cfg: dict[str, Any]) -> str:
             raise RuntimeError(
                 "Marketplace недоступен: переключитесь вручную на личный профиль Facebook"
             )
-    if d(text="Продать").exists(timeout=3) or d(description="Продать").exists(timeout=0.5):
+    if _sell_button_visible(d):
         return "marketplace_ready"
     raise RuntimeError("Не удалось открыть Facebook Marketplace")
 
 
 def _open_property_form(d, android_cfg: dict[str, Any]) -> None:
-    label = "Продажа и аренда недвижимости"
+    """Legacy property picker; основной путь — _open_listing_form (composer)."""
+    _open_listing_form(d, android_cfg)
+    if _is_composer_form(d):
+        return
     for attempt in range(3):
-        if not (
-            d(text=label).exists(timeout=0.8)
-            or d(description=label).exists(timeout=0.4)
-        ):
-            if d(description="Продать").exists(timeout=2):
-                d(description="Продать").click()
-            elif d(text="Продать").exists(timeout=1):
-                d(text="Продать").click()
-            else:
-                raise RuntimeError("Кнопка «Продать» не найдена")
-            human_pause(android_cfg, scale=0.9)
-        if d(text=label).exists(timeout=5):
-            d(text=label).click()
+        category = _label_visible(d, _PROPERTY_CATEGORY_LABELS)
+        if not category:
+            _open_create_listing_if_needed(d, android_cfg)
+            category = _label_visible(d, _PROPERTY_CATEGORY_LABELS, timeout=5)
+        if category:
+            _click_label(d, category)
             break
-        if d(description=label).exists(timeout=1):
-            d(description=label).click()
-            break
-        # sheet не открылся — назад и ещё раз
         d.press("back")
         time.sleep(0.8)
         if attempt == 2:
-            raise RuntimeError(f"Пункт «{label}» не найден")
+            raise RuntimeError(
+                "Пункт «Продажа и аренда недвижимости» / «Продажи и аренда жилья» не найден"
+            )
     human_pause(android_cfg, scale=1.2)
     for _ in range(25):
         if (
@@ -179,7 +333,446 @@ def _open_property_form(d, android_cfg: dict[str, Any]) -> None:
     raise RuntimeError("Форма объявления о недвижимости не открылась")
 
 
+def _is_composer_form(d) -> bool:
+    return bool(
+        d(resourceId="mp_composer_view").exists(timeout=0.5)
+        or d(textContains="Новое объявление").exists(timeout=0.3)
+    )
+
+
+def _composer_location_ok(d) -> bool:
+    xml = d.dump_hierarchy()
+    if "Phuket" not in xml and "Пхукет" not in xml and "Thalang" not in xml:
+        return False
+    for node in ET.fromstring(xml).iter("node"):
+        text = (node.attrib.get("text") or "").strip()
+        if text and _is_phuket_location(text):
+            return True
+    return False
+
+
+def _hide_keyboard(d) -> None:
+    try:
+        d.hide_keyboard()
+    except Exception:
+        pass
+    time.sleep(0.2)
+
+
+def _tile_key(x1: int, y1: int, x2: int, y2: int) -> str:
+    cx = (x1 + x2) // 2
+    cy = (y1 + y2) // 2
+    return f"{cx // 40}:{cy // 40}"
+
+
+def _composer_edittext_nodes(d) -> list[dict[str, Any]]:
+    xml = d.dump_hierarchy()
+    nodes: list[dict[str, Any]] = []
+    for node in ET.fromstring(xml).iter("node"):
+        if node.attrib.get("class") != "android.widget.EditText":
+            continue
+        parsed = _parse_bounds(node.attrib.get("bounds", ""))
+        if not parsed:
+            continue
+        x1, y1, x2, y2 = parsed
+        nodes.append(
+            {
+                "resource_id": node.attrib.get("resource-id") or "",
+                "desc": node.attrib.get("content-desc") or "",
+                "y1": y1,
+                "bounds": parsed,
+            }
+        )
+    nodes.sort(key=lambda item: item["y1"])
+    return nodes
+
+
+def _click_and_set_text(d, x: int, y: int, value: str) -> None:
+    d.click(x, y)
+    time.sleep(0.3)
+    if d(focused=True).exists(timeout=1):
+        d(focused=True).set_text(value)
+    else:
+        d.send_keys(value)
+
+
+def _set_composer_title(d, title: str) -> None:
+    title = (title or "").strip()[:100]
+    if not title:
+        return
+    if d(descriptionContains="Название").exists(timeout=1):
+        d(descriptionContains="Название").click()
+        time.sleep(0.3)
+    nodes = _composer_edittext_nodes(d)
+    title_node = next(
+        (n for n in nodes if n["resource_id"] != "marketplace_composer_price_input"),
+        None,
+    )
+    if not title_node:
+        raise RuntimeError("Поле «Название» не найдено")
+    x1, y1, x2, y2 = title_node["bounds"]
+    _click_and_set_text(d, (x1 + x2) // 2, (y1 + y2) // 2, title)
+    _hide_keyboard(d)
+
+
+def _set_composer_price(d, price: str) -> None:
+    price = (price or "").strip()
+    if not price:
+        return
+    if d(descriptionContains="Цена").exists(timeout=0.8):
+        d(descriptionContains="Цена").click()
+        time.sleep(0.2)
+    if d(resourceId="marketplace_composer_price_input").exists(timeout=1):
+        field = d(resourceId="marketplace_composer_price_input")
+        field.click()
+        time.sleep(0.25)
+        field.set_text(price)
+    else:
+        nodes = _composer_edittext_nodes(d)
+        price_node = next(
+            (n for n in nodes if n["resource_id"] == "marketplace_composer_price_input"),
+            nodes[-1] if nodes else None,
+        )
+        if not price_node:
+            raise RuntimeError("Поле «Цена» не найдено")
+        x1, y1, x2, y2 = price_node["bounds"]
+        _click_and_set_text(d, (x1 + x2) // 2, (y1 + y2) // 2, price)
+    _hide_keyboard(d)
+
+
+def _composer_price_value(d) -> str:
+    if not d(resourceId="marketplace_composer_price_input").exists(timeout=0.5):
+        return ""
+    try:
+        return str(d(resourceId="marketplace_composer_price_input").get_text() or "").strip()
+    except Exception:
+        return ""
+
+
+def _is_tags_field_node(desc: str, y1: int) -> bool:
+    low = (desc or "").lower()
+    if "тег" in low or "tag" in low:
+        return True
+    return y1 >= 960
+
+
+def _clear_composer_tags_if_polluted(d, *, min_len: int = 30) -> None:
+    for node in _composer_edittext_nodes(d):
+        if not _is_tags_field_node(node["desc"], node["y1"]):
+            continue
+        x1, y1, x2, y2 = node["bounds"]
+        d.click((x1 + x2) // 2, (y1 + y2) // 2)
+        time.sleep(0.25)
+        if d(focused=True).exists(timeout=0.5):
+            try:
+                current = str(d(focused=True).get_text() or "")
+            except Exception:
+                current = ""
+            if len(current) >= min_len:
+                d(focused=True).set_text("")
+        break
+
+
+def _find_composer_description_edittext(d) -> dict[str, Any] | None:
+    for node in _composer_edittext_nodes(d):
+        if node["resource_id"] == "marketplace_composer_price_input":
+            continue
+        if _is_tags_field_node(node["desc"], node["y1"]):
+            continue
+        if "Описание" in node["desc"] or 620 <= node["y1"] <= 950:
+            return node
+    return None
+
+
+def _open_composer_description_field(d) -> dict[str, Any]:
+    _hide_keyboard(d)
+    _scroll_down(d, 1)
+    time.sleep(0.3)
+
+    for label in ("Описание  Необязательно", "Описание"):
+        if d(description=label).exists(timeout=0.8):
+            d(description=label).click()
+            time.sleep(0.35)
+            node = _find_composer_description_edittext(d)
+            if node:
+                return node
+
+    xml = d.dump_hierarchy() or ""
+    for node in ET.fromstring(xml).iter("node"):
+        desc = (node.attrib.get("content-desc") or "").strip()
+        if not desc.startswith("Описание"):
+            continue
+        if _is_tags_field_node(desc, 0):
+            continue
+        if "Категория" in desc or "Название" in desc or "Теги" in desc:
+            continue
+        parsed = _parse_bounds(node.attrib.get("bounds", ""))
+        if not parsed:
+            continue
+        x1, y1, x2, y2 = parsed
+        if y1 >= 960:
+            continue
+        d.click((x1 + x2) // 2, (y1 + y2) // 2)
+        time.sleep(0.35)
+        found = _find_composer_description_edittext(d)
+        if found:
+            return found
+
+    for _ in range(3):
+        _scroll_down(d, 1)
+        time.sleep(0.3)
+        found = _find_composer_description_edittext(d)
+        if found:
+            x1, y1, x2, y2 = found["bounds"]
+            d.click((x1 + x2) // 2, (y1 + y2) // 2)
+            time.sleep(0.35)
+            return found
+
+    raise RuntimeError("Поле «Описание» не найдено в composer")
+
+
+def _set_composer_description(d, caption: str, android_cfg: dict[str, Any]) -> None:
+    caption = (caption or "").strip()[:8000]
+    if not caption:
+        return
+
+    _clear_composer_tags_if_polluted(d)
+    desc_node = _open_composer_description_field(d)
+    x1, y1, x2, y2 = desc_node["bounds"]
+    _click_and_set_text(d, (x1 + x2) // 2, (y1 + y2) // 2, caption)
+    _hide_keyboard(d)
+
+    # Проверка: длинный текст не должен остаться в «Теги».
+    for node in _composer_edittext_nodes(d):
+        if not _is_tags_field_node(node["desc"], node["y1"]):
+            continue
+        x1, y1, x2, y2 = node["bounds"]
+        d.click((x1 + x2) // 2, (y1 + y2) // 2)
+        time.sleep(0.2)
+        if d(focused=True).exists(timeout=0.4):
+            try:
+                tags_text = str(d(focused=True).get_text() or "")
+            except Exception:
+                tags_text = ""
+            if len(tags_text) > 40 and tags_text[:40] in caption:
+                d(focused=True).set_text("")
+                raise RuntimeError(
+                    "Описание попало в «Теги» — поле очищено, повторите"
+                )
+        break
+
+    human_pause(android_cfg, scale=0.5)
+
+
+def _set_composer_field(d, *, description_substr: str, value: str) -> None:
+    """Deprecated helper — use _set_composer_title / _set_composer_price."""
+    if description_substr == "Название":
+        _set_composer_title(d, value)
+    elif description_substr == "Цена":
+        _set_composer_price(d, value)
+    else:
+        raise RuntimeError(f"Неизвестное поле composer: {description_substr}")
+
+
+def _on_location_map_screen(d) -> bool:
+    xml = d.dump_hierarchy() or ""
+    return (
+        "Добавить местоположение" in xml
+        or "Mapbox" in xml
+        or "Обновить свое местоположение" in xml
+    )
+
+
+def _marketplace_location_query(job: PublishJob) -> str:
+    return marketplace_location_query(
+        google_maps_url=job.listing.google_maps,
+        district_fallback=job.listing.district,
+    )
+
+
+def _fill_location_map_search(d, query: str, android_cfg: dict[str, Any]) -> str:
+    if d(description="Поиск").exists(timeout=2):
+        d(description="Поиск").click()
+    elif d(text="Поиск").exists(timeout=1):
+        d(text="Поиск").click()
+    elif d(className="android.widget.EditText").exists(timeout=1):
+        d(className="android.widget.EditText").click()
+    else:
+        raise RuntimeError("Поле «Поиск» на карте местоположения не найдено")
+
+    time.sleep(0.35)
+    if d(className="android.widget.EditText").exists(timeout=1):
+        field = d(className="android.widget.EditText")
+        field.click()
+        time.sleep(0.25)
+        try:
+            field.clear_text()
+        except Exception:
+            field.set_text("")
+        time.sleep(0.2)
+        field.set_text(query)
+    elif d(focused=True).exists(timeout=1):
+        d(focused=True).set_text(query)
+    else:
+        d.send_keys(query)
+
+    time.sleep(2.5)
+    chosen = _pick_first_location_suggestion(d)
+    if not chosen:
+        prefix = query.split(",")[0].strip()
+        if prefix and d(textContains=prefix[:24]).exists(timeout=0.8):
+            d(textContains=prefix[:24]).click()
+            chosen = query
+        else:
+            d.press("enter")
+            time.sleep(1.0)
+            chosen = query
+    if not chosen:
+        raise RuntimeError(f"Нет подсказок для района из Notion: {query[:120]}")
+
+    time.sleep(0.5)
+    if d(descriptionContains="Применить").exists(timeout=1):
+        d(descriptionContains="Применить").click()
+    elif d(text="Применить").exists(timeout=1):
+        d(text="Применить").click()
+    else:
+        d.click(360, 1442)
+    human_pause(android_cfg, scale=0.8)
+
+    if _on_location_map_screen(d):
+        d.click(360, 1442)
+        time.sleep(1.2)
+    if _on_location_map_screen(d):
+        raise RuntimeError("Карта не закрылась после «Применить»")
+    return chosen
+
+
+def _set_composer_location(
+    d,
+    android_cfg: dict[str, Any],
+    publisher_cfg: dict[str, Any],
+    job: PublishJob,
+) -> str:
+    """
+    Composer: Местоположение → карта → Поиск → район из Google Maps (или «Район») → Применить.
+    """
+    query = _marketplace_location_query(job)
+    if not query:
+        raise RuntimeError(
+            "Нет района: заполните «Google Maps» или колонку «Район» в Notion"
+        )
+
+    _hide_keyboard(d)
+    if not _on_location_map_screen(d):
+        current = _read_composer_location(d)
+        district_key = query.split(",")[0].strip().lower()
+        if current and district_key and district_key in current.lower():
+            return current
+
+        opened = False
+        for _ in range(3):
+            for label in (
+                "Задать значение: Местоположение",
+                "Местоположение",
+            ):
+                if d(descriptionContains=label).exists(timeout=0.6):
+                    d(descriptionContains=label).click()
+                    opened = True
+                    break
+                if _tap_desc_contains(d, label):
+                    opened = True
+                    break
+            if opened:
+                break
+            _scroll_down(d, 1)
+        if not opened and not _on_location_map_screen(d):
+            raise RuntimeError("Поле «Местоположение» не найдено")
+        human_pause(android_cfg, scale=0.6)
+
+    return _fill_location_map_search(d, query, android_cfg)
+
+
+def _fill_composer_form(
+    d,
+    job: PublishJob,
+    android_cfg: dict[str, Any],
+    publisher_cfg: dict[str, Any],
+    *,
+    album: str | None = None,
+    max_images: int | None = None,
+    expected_photos: int | None = None,
+) -> dict[str, Any]:
+    cfg = _mp_cfg(publisher_cfg, android_cfg)
+    album = album or marketplace_folder_name(job.object_id)
+    max_images = int(
+        max_images
+        or cfg.get("max_images")
+        or (publisher_cfg.get("media") or {}).get("max_marketplace_images")
+        or _MAX_MARKETPLACE_PHOTOS
+    )
+    if expected_photos is not None:
+        max_images = min(max_images, int(expected_photos))
+    listing = job.listing
+    meta: dict[str, Any] = {"form": "composer", "album": album}
+
+    _scroll_to_top_if_needed(d)
+    _assert_form_not_limited(d)
+
+    # Сначала фото, потом поля формы.
+    meta["rent"] = "Аренда"
+    photo_target = min(
+        int(expected_photos or max_images),
+        max_images,
+        _VISIBLE_MARKETPLACE_PHOTOS,
+    )
+    selected, expected = _add_photos(
+        d,
+        android_cfg,
+        album=album,
+        max_images=max_images,
+        expected_count=photo_target,
+    )
+    meta["photos"] = selected
+    meta["photos_expected"] = expected
+    if selected < expected:
+        raise RuntimeError(
+            f"Выбрано {selected} фото из {expected} в альбоме «{album}»"
+        )
+
+    title = (job.title or "").strip()
+    if title:
+        _set_composer_title(d, title)
+        meta["title"] = title[:100]
+
+    price = _format_price(listing.price_monthly)
+    if price:
+        _set_composer_price(d, price)
+        meta["price"] = price
+        if _composer_price_value(d) != price:
+            _set_composer_price(d, price)
+
+    addr = _set_composer_location(d, android_cfg, publisher_cfg, job)
+    if not addr:
+        raise RuntimeError("Не удалось указать местоположение")
+    meta["address"] = addr
+
+    caption = (job.caption_fb or "").strip()
+    if caption:
+        if _composer_price_value(d) != price and price:
+            _set_composer_price(d, price)
+        _set_composer_description(d, caption, android_cfg)
+        meta["caption_len"] = len(caption)
+
+    return meta
+
+
 def _set_rent(d, android_cfg: dict[str, Any]) -> None:
+    if _is_composer_form(d):
+        xml = d.dump_hierarchy()
+        if "Аренда" in xml and (
+            "Категория" in xml or "marketplace_composer_category" in xml
+        ):
+            return
     if d(text="Сдается в аренду").exists(timeout=1):
         return
     if not (
@@ -197,6 +790,8 @@ def _set_rent(d, android_cfg: dict[str, Any]) -> None:
 
 def _set_property_type(d, android_cfg: dict[str, Any], housing_type: str | None) -> str:
     wanted = _map_property_type(housing_type)
+    if _is_composer_form(d):
+        return wanted
     current = ""
     xml = d.dump_hierarchy()
     m = re.search(r'content-desc="Тип объекта, ([^,]*)', xml)
@@ -304,20 +899,18 @@ def _is_phuket_location(text: str) -> bool:
     )
 
 
-def _set_address(
-    d,
-    android_cfg: dict[str, Any],
-    publisher_cfg: dict[str, Any],
+def _address_search_queries(
     job: PublishJob,
-) -> str:
-    """Адрес обязателен: пикер «Выбор адреса» → клик по Button-подсказке (не EditText)."""
+    publisher_cfg: dict[str, Any],
+    android_cfg: dict[str, Any],
+) -> list[str]:
     listing = job.listing
     mp = _mp_cfg(publisher_cfg, android_cfg)
     fallback = (mp.get("address_fallback") or "Amphoe Thalang").strip()
-    # Запросы, которые реально дают список Button-подсказок в RU Facebook
-    search_queries = [
+    return [
         q
         for q in (
+            (listing.address or "").strip() or None,
             "Thalang Phuket",
             mp.get("address_search"),
             f"{listing.district} Phuket" if listing.district else None,
@@ -328,39 +921,12 @@ def _set_address(
         if q
     ]
 
-    opened = False
-    for _ in range(8):
-        if d(descriptionContains="Задать значение: Адрес").exists(timeout=0.6):
-            d(descriptionContains="Задать значение: Адрес").click()
-            opened = True
-            break
-        opened = (
-            _tap_desc_contains(d, "Задать значение: Адрес")
-            or _tap_desc_contains(d, "Адрес сдаваемого жилья")
-            or _tap_desc_contains(d, "Адрес объекта недвижимости")
-        )
-        if not opened:
-            for label in (
-                "Адрес сдаваемого жилья",
-                "Адрес объекта недвижимости",
-                "Адрес объекта",
-            ):
-                if d(text=label).exists(timeout=0.4):
-                    d(text=label).click()
-                    opened = True
-                    break
-        if opened:
-            break
-        d.swipe(0.5, 0.60, 0.5, 0.48, 0.25)
-        time.sleep(0.35)
-    if not opened:
-        return ""
 
-    human_pause(android_cfg, scale=0.6)
-    if not d(text="Выбор адреса").exists(timeout=2):
-        # уже выбран ранее
-        return "already_set"
-
+def _fill_address_picker(
+    d,
+    android_cfg: dict[str, Any],
+    search_queries: list[str],
+) -> str:
     def _type_query(q: str) -> None:
         if not d(className="android.widget.EditText").exists(timeout=2):
             return
@@ -376,7 +942,6 @@ def _set_address(
                 pass
 
     def _suggestion_buttons() -> list[tuple[int, int, int, int, str]]:
-        """Кликабельные Button под строкой поиска (тайские/EN адреса)."""
         xml = d.dump_hierarchy()
         out: list[tuple[int, int, int, int, str]] = []
         for node in ET.fromstring(xml).iter("node"):
@@ -423,7 +988,6 @@ def _set_address(
         if _confirm_left_picker():
             chosen = label
             break
-        # повторный тап по той же подсказке
         d.click((x1 + x2) // 2, (y1 + y2) // 2)
         time.sleep(1.0)
         if _confirm_left_picker():
@@ -432,10 +996,245 @@ def _set_address(
 
     if not chosen or not _confirm_left_picker():
         raise RuntimeError(
-            f"Не удалось выбрать адрес на Пхукете (подсказка Button, не поле ввода). "
+            "Не удалось выбрать адрес на Пхукете (подсказка Button, не поле ввода). "
             f"Пробовали: {', '.join(search_queries[:4])}."
         )
     return chosen
+
+
+def _read_composer_location(d) -> str:
+    for node in ET.fromstring(d.dump_hierarchy() or "").iter("node"):
+        desc = (node.attrib.get("content-desc") or "")
+        if "Местоположение" in desc and "Задать значение" in desc:
+            continue
+        text = (node.attrib.get("text") or "").strip()
+        if text and not text.startswith("Задать значение"):
+            return text
+    return ""
+
+
+def _location_suggestions_from_xml(xml: str) -> list[dict[str, Any]]:
+    skip = {
+        "Закрыть",
+        "Назад",
+        "Домой",
+        "Поиск",
+        "Search",
+        "Выбор адреса",
+        "Последние",
+        "Применить",
+        "Очистить текст",
+        "Информация с карты",
+        "Обновить свое местоположение",
+    }
+    skip_parts = ("mapbox", "очистить", "применить", "обновить свое", "добавить местоположение")
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for node in ET.fromstring(xml).iter("node"):
+        attrs = node.attrib
+        cls = attrs.get("class") or ""
+        if "EditText" in cls:
+            continue
+        label = (attrs.get("content-desc") or attrs.get("text") or "").strip()
+        low = label.lower()
+        if not label or len(label) < 8 or label in skip:
+            continue
+        if any(part in low for part in skip_parts):
+            continue
+        parsed = _parse_bounds(attrs.get("bounds", ""))
+        if not parsed:
+            continue
+        x1, y1, x2, y2 = parsed
+        if y1 < 250 or y1 > 1320 or (x2 - x1) < 120:
+            continue
+        key = _tile_key(x1, y1, x2, y2)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(
+            {
+                "y1": y1,
+                "cx": (x1 + x2) // 2,
+                "cy": (y1 + y2) // 2,
+                "label": label,
+            }
+        )
+    out.sort(key=lambda item: item["y1"])
+    return out
+
+
+def _pick_first_location_suggestion(d) -> str:
+    suggestions = _location_suggestions_from_xml(d.dump_hierarchy() or "")
+    if not suggestions:
+        return ""
+    first = suggestions[0]
+    d.click(first["cx"], first["cy"])
+    return str(first["label"])
+
+
+def _set_address(
+    d,
+    android_cfg: dict[str, Any],
+    publisher_cfg: dict[str, Any],
+    job: PublishJob,
+) -> str:
+    """Адрес обязателен: пикер «Выбор адреса» → клик по Button-подсказке (не EditText)."""
+    search_queries = _address_search_queries(job, publisher_cfg, android_cfg)
+
+    opened = False
+    for _ in range(4):
+        if d(descriptionContains="Задать значение: Адрес").exists(timeout=0.6):
+            d(descriptionContains="Задать значение: Адрес").click()
+            opened = True
+            break
+        opened = (
+            _tap_desc_contains(d, "Задать значение: Адрес")
+            or _tap_desc_contains(d, "Адрес сдаваемого жилья")
+            or _tap_desc_contains(d, "Адрес объекта недвижимости")
+            or _tap_desc_contains(d, "Местоположение")
+        )
+        if not opened:
+            for label in (
+                "Адрес сдаваемого жилья",
+                "Адрес объекта недвижимости",
+                "Адрес объекта",
+                "Местоположение",
+            ):
+                if d(text=label).exists(timeout=0.4):
+                    d(text=label).click()
+                    opened = True
+                    break
+        if opened:
+            break
+        _scroll_down(d, 1)
+    if not opened:
+        return ""
+
+    human_pause(android_cfg, scale=0.6)
+    if not d(text="Выбор адреса").exists(timeout=2):
+        return "already_set"
+
+    return _fill_address_picker(d, android_cfg, search_queries)
+
+
+def _photo_tiles_from_xml(xml: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for node in ET.fromstring(xml).iter("node"):
+        attrs = node.attrib
+        if attrs.get("clickable") != "true":
+            continue
+        desc_raw = attrs.get("content-desc") or ""
+        desc = desc_raw.lower()
+        if "сделать" in desc or "camera" in desc or "камер" in desc:
+            continue
+        if (
+            "фото" not in desc
+            and "photo" not in desc
+            and "дата и время" not in desc
+            and "photo taken on" not in desc
+        ):
+            continue
+        parsed = _parse_bounds(attrs.get("bounds", ""))
+        if not parsed:
+            continue
+        x1, y1, x2, y2 = parsed
+        if y1 < _PHOTO_TILE_MIN_Y or (x2 - x1) < 80:
+            continue
+        state = gallery_selection_state(desc_raw)
+        selected = state == "selected" or (
+            state is None
+            and (
+                attrs.get("selected") == "true"
+                or attrs.get("checked") == "true"
+            )
+        )
+        out.append(
+            {
+                "key": _tile_key(x1, y1, x2, y2),
+                "cx": (x1 + x2) // 2,
+                "cy": (y1 + y2) // 2,
+                "x1": x1,
+                "y1": y1,
+                "selected": selected,
+            }
+        )
+    out.sort(key=lambda item: (item["y1"], item["x1"]))
+    return _unique_photo_tiles(out)
+
+
+def _unique_photo_tiles(tiles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for tile in tiles:
+        if tile["key"] in seen:
+            continue
+        seen.add(tile["key"])
+        unique.append(tile)
+    return unique
+
+
+def _gallery_showing_album(d, album: str) -> bool:
+    xml = (d.dump_hierarchy() or "").lower()
+    album_l = album.lower()
+    if f"папка {album_l}" in xml:
+        return True
+    for node in ET.fromstring(d.dump_hierarchy() or "<hierarchy/>").iter("node"):
+        desc = (node.attrib.get("content-desc") or "").lower()
+        if "выбор альбома" in desc and album_l in desc:
+            return True
+    return False
+
+
+def _open_gallery_album(d, album: str) -> None:
+    for _ in range(3):
+        if _gallery_showing_album(d, album) and _photo_tiles_from_hierarchy(d):
+            return
+        for sel in ("Выбор альбома", "Select album"):
+            if d(descriptionContains=sel).exists(timeout=0.8):
+                d(descriptionContains=sel).click()
+                time.sleep(0.9)
+                break
+        for candidate in (f"Папка {album}", album):
+            if d(descriptionContains=candidate).exists(timeout=1.5):
+                d(descriptionContains=candidate).click()
+                time.sleep(0.9)
+                break
+        else:
+            if d(text=album).exists(timeout=0.5):
+                d(text=album).click()
+                time.sleep(0.9)
+            elif _tap_desc_contains(d, album):
+                time.sleep(0.9)
+        if d(text="Telegram").exists(timeout=0.4) or d(
+            descriptionContains="Telegram"
+        ).exists(timeout=0.3):
+            d.press("back")
+            time.sleep(0.8)
+    if not _photo_tiles_from_hierarchy(d):
+        raise RuntimeError(f"Не удалось открыть альбом «{album}»")
+
+
+def _photo_tiles_from_hierarchy(d) -> list[dict[str, Any]]:
+    return _photo_tiles_from_xml(d.dump_hierarchy() or "")
+
+
+def _tap_add_photos_button(d) -> None:
+    labels = ("Добавить фото", "Add photos", "Add photo")
+    for attempt in range(2):
+        _hide_keyboard(d)
+        for label in labels:
+            if d(text=label).exists(timeout=0.5):
+                d(text=label).click()
+                return
+            if d(description=label).exists(timeout=0.3):
+                d(description=label).click()
+                return
+        if d(descriptionContains="Добавить фото").exists(timeout=0.3):
+            d(descriptionContains="Добавить фото").click()
+            return
+        if attempt == 0:
+            _scroll_to_top_if_needed(d, max_swipes=1)
+    raise RuntimeError("«Добавить фото» не найдено")
 
 
 def _add_photos(
@@ -444,72 +1243,46 @@ def _add_photos(
     *,
     album: str,
     max_images: int,
-) -> int:
-    max_images = max(1, min(int(max_images), 20))
-    if d(text="Добавить фото").exists(timeout=2):
-        d(text="Добавить фото").click()
-    elif d(description="Добавить фото").exists(timeout=1):
-        d(description="Добавить фото").click()
-    else:
-        raise RuntimeError("«Добавить фото» не найдено")
+    expected_count: int | None = None,
+) -> tuple[int, int]:
+    target = max(
+        1,
+        min(
+            int(expected_count or max_images),
+            max_images,
+            _VISIBLE_MARKETPLACE_PHOTOS,
+        ),
+    )
+    max_images = max(
+        1,
+        min(int(max_images), _VISIBLE_MARKETPLACE_PHOTOS),
+    )
+    target = min(target, max_images)
+
+    _tap_add_photos_button(d)
     time.sleep(1.2)
     dismiss_permissions(d)
 
-    def _photo_tiles() -> list[tuple[int, int, int, int]]:
-        xml = d.dump_hierarchy()
-        out: list[tuple[int, int, int, int]] = []
-        for node in ET.fromstring(xml).iter("node"):
-            a = node.attrib
-            if a.get("clickable") != "true":
-                continue
-            desc = (a.get("content-desc") or "").lower()
-            if "сделать" in desc or "camera" in desc or "камер" in desc:
-                continue
-            if "фото" not in desc and "photo" not in desc:
-                continue
-            parsed = _parse_bounds(a.get("bounds", ""))
-            if not parsed:
-                continue
-            x1, y1, x2, y2 = parsed
-            if y1 < 210 or (x2 - x1) < 80:
-                continue
-            out.append((y1, x1, (x1 + x2) // 2, (y1 + y2) // 2))
-        out.sort()
-        return out
+    if not _gallery_showing_album(d, album):
+        _open_gallery_album(d, album)
+    elif len(_photo_tiles_from_hierarchy(d)) < 2:
+        _open_gallery_album(d, album)
 
-    tiles = _photo_tiles()
-    # Уже сетка с фото (часто «Галерея» = заголовок) — не кликать заголовок.
-    # Альбом нужен только если сетки нет или открыт radio-list альбомов.
-    on_album_list = d(text="Telegram").exists(timeout=0.4) or (
-        d(text=album).exists(timeout=0.3) and d(text="Галерея").exists(timeout=0.3) and len(tiles) < 2
-    )
-    if on_album_list or len(tiles) < 2:
-        if d(text="Галерея").exists(timeout=0.8) and not on_album_list:
-            d(text="Галерея").click()
-            time.sleep(1.0)
-        if d(descriptionContains=album).exists(timeout=2):
-            d(descriptionContains=album).click()
-        elif d(text=album).exists(timeout=0.5):
-            _tap_desc_contains(d, album)
-        time.sleep(0.5)
-        # radio-list → назад в сетку выбранного альбома
-        if d(text="Telegram").exists(timeout=0.5) or d(descriptionContains="Telegram").exists(
-            timeout=0.3
-        ):
-            d.press("back")
-            time.sleep(1.0)
-        tiles = _photo_tiles()
-
-    if len(tiles) < 1:
+    xml = d.dump_hierarchy() or ""
+    tiles = _photo_tiles_from_xml(xml)
+    if not tiles:
         raise RuntimeError(
-            f"В альбоме «{album}» нет фото. Сначала: prepare --push-media"
+            f"В альбоме «{album}» нет фото на экране. Сначала: prepare --push-media"
         )
 
-    selected = 0
-    for _, __, cx, cy in tiles[:max_images]:
-        d.click(cx, cy)
-        selected += 1
-        time.sleep(0.5)
+    to_click = [tile for tile in tiles if not tile["selected"]][:target]
+    for tile in to_click:
+        d.click(tile["cx"], tile["cy"])
+        time.sleep(0.35)
+
+    selected = count_selected_gallery_photos(d.dump_hierarchy() or "")
+    if selected < len(to_click):
+        selected = len(to_click)
 
     confirmed = False
     for _ in range(20):
@@ -532,19 +1305,54 @@ def _add_photos(
     if not confirmed:
         raise RuntimeError("После выбора фото нет «Далее»/«Готово»")
     human_pause(android_cfg, scale=1.0)
-    return selected
+    return min(selected, target), target
 
 
-def _scroll_to_top(d, n: int = 4) -> None:
+def _composer_add_photos_visible(d) -> bool:
+    for label in ("Добавить фото", "Add photos", "Add photo"):
+        if d(text=label).exists(timeout=0.15) or d(description=label).exists(timeout=0.1):
+            return True
+    return bool(d(descriptionContains="Добавить фото").exists(timeout=0.15))
+
+
+def _composer_header_visible(d) -> bool:
+    if _composer_add_photos_visible(d):
+        return True
+    if d(resourceId="marketplace_composer_price_input").exists(timeout=0.2):
+        try:
+            bounds = d(resourceId="marketplace_composer_price_input").info.get("bounds") or {}
+            if int(bounds.get("top", 999)) < 520:
+                return True
+        except Exception:
+            return True
+    return False
+
+
+def _scroll_to_top_if_needed(d, *, max_swipes: int = 1) -> None:
+    if _composer_header_visible(d):
+        return
+    for _ in range(max_swipes):
+        d.swipe(0.5, 0.28, 0.5, 0.82, 0.2)
+        time.sleep(0.2)
+        if _composer_header_visible(d):
+            return
+
+
+def _scroll_to_top(d, n: int = 1) -> None:
+    if n <= 0:
+        return
+    if n == 1:
+        _scroll_to_top_if_needed(d, max_swipes=1)
+        return
     for _ in range(n):
-        d.swipe(0.5, 0.28, 0.5, 0.82, 0.25)
-        time.sleep(0.3)
+        d.swipe(0.5, 0.28, 0.5, 0.82, 0.2)
+        time.sleep(0.2)
 
 
-def _scroll_down(d, n: int = 2) -> None:
+def _scroll_down(d, n: int = 1) -> None:
     for _ in range(n):
-        d.swipe(0.5, 0.75, 0.5, 0.35, 0.3)
-        time.sleep(0.35)
+        d.swipe(0.5, 0.75, 0.5, 0.35, 0.25)
+        time.sleep(0.25)
 
 
 def _assert_form_not_limited(d) -> None:
@@ -566,6 +1374,7 @@ def _fill_form(
     *,
     album: str | None = None,
     max_images: int | None = None,
+    expected_photos: int | None = None,
 ) -> dict[str, Any]:
     cfg = _mp_cfg(publisher_cfg, android_cfg)
     album = album or cfg.get("album") or ALBUM_DEFAULT
@@ -573,13 +1382,24 @@ def _fill_form(
         max_images
         or cfg.get("max_images")
         or (publisher_cfg.get("media") or {}).get("max_marketplace_images")
-        or 8
+        or _MAX_MARKETPLACE_PHOTOS
     )
     listing = job.listing
     meta: dict[str, Any] = {}
 
-    _scroll_to_top(d)
+    _scroll_to_top_if_needed(d)
     _assert_form_not_limited(d)
+    if _is_composer_form(d):
+        return _fill_composer_form(
+            d,
+            job,
+            android_cfg,
+            publisher_cfg,
+            album=album,
+            max_images=max_images,
+            expected_photos=expected_photos,
+        )
+
     _set_rent(d, android_cfg)
     meta["rent"] = "Сдается в аренду"
     _assert_form_not_limited(d)
@@ -605,18 +1425,30 @@ def _fill_form(
     else:
         raise RuntimeError("Не удалось указать адрес объекта (обязательное поле)")
 
-    caption = (job.caption_fb or job.caption_social or "").strip()
+    caption = (job.caption_fb or "").strip()
     if caption:
         if d(text="Выбор адреса").exists(timeout=0.3):
             raise RuntimeError("Остались на «Выбор адреса» — адрес не подтверждён")
         _set_listing_description(d, caption, android_cfg)
         meta["caption_len"] = len(caption)
 
-    _scroll_to_top(d)
+    _scroll_to_top_if_needed(d)
     if d(text="Выбор адреса").exists(timeout=0.3):
         raise RuntimeError("Перед фото снова экран «Выбор адреса»")
-    n = _add_photos(d, android_cfg, album=album, max_images=max_images)
-    meta["photos"] = n
+    photo_target = min(
+        int(expected_photos or max_images),
+        max_images,
+        _VISIBLE_MARKETPLACE_PHOTOS,
+    )
+    selected, expected = _add_photos(
+        d,
+        android_cfg,
+        album=album,
+        max_images=max_images,
+        expected_count=photo_target,
+    )
+    meta["photos"] = selected
+    meta["photos_expected"] = expected
     return meta
 
 
@@ -782,6 +1614,70 @@ def _publish_or_stop(
     )
 
 
+def resume_composer_from_location(
+    d,
+    job: PublishJob,
+    android_cfg: dict[str, Any],
+    publisher_cfg: dict[str, Any],
+    *,
+    confirm_post: bool = False,
+) -> tuple[dict[str, Any], ChannelResult]:
+    """Продолжить composer-форму с шага «Местоположение» (фото/название/цена уже на экране)."""
+    if not _is_composer_form(d) and not _on_location_map_screen(d):
+        raise RuntimeError(
+            "Откройте форму «Новое объявление» или экран карты местоположения"
+        )
+    listing = job.listing
+    meta: dict[str, Any] = {"form": "composer", "resume": "location"}
+
+    addr = _set_composer_location(d, android_cfg, publisher_cfg, job)
+    if not addr:
+        raise RuntimeError("Не удалось указать местоположение")
+    meta["address"] = addr
+
+    price = _format_price(listing.price_monthly)
+    caption = (job.caption_fb or "").strip()
+    if caption:
+        if price and _composer_price_value(d) != price:
+            _set_composer_price(d, price)
+        _set_composer_description(d, caption, android_cfg)
+        meta["caption_len"] = len(caption)
+
+    _go_to_publish_screen(d, android_cfg)
+    result = _publish_or_stop(
+        d,
+        confirm_post=confirm_post,
+        android_cfg=android_cfg,
+    )
+    return meta, result
+
+
+def resume_composer_from_description(
+    d,
+    job: PublishJob,
+    android_cfg: dict[str, Any],
+    publisher_cfg: dict[str, Any],
+    *,
+    confirm_post: bool = False,
+) -> tuple[dict[str, Any], ChannelResult]:
+    """Продолжить composer-форму: только описание (+ публикация при --live)."""
+    if not _is_composer_form(d):
+        raise RuntimeError("Откройте форму «Новое объявление» на телефоне")
+    meta: dict[str, Any] = {"form": "composer", "resume": "description"}
+    caption = (job.caption_fb or "").strip()
+    if not caption:
+        raise RuntimeError("caption_fb пустой в Notion")
+    _set_composer_description(d, caption, android_cfg)
+    meta["caption_len"] = len(caption)
+    _go_to_publish_screen(d, android_cfg)
+    result = _publish_or_stop(
+        d,
+        confirm_post=confirm_post,
+        android_cfg=android_cfg,
+    )
+    return meta, result
+
+
 class FbMarketplaceChannel:
     name = "fb_marketplace"
 
@@ -811,7 +1707,7 @@ class FbMarketplaceChannel:
         package = _package(android_cfg)
         listing = job.listing
         mp_cfg = _mp_cfg(publisher_cfg, android_cfg)
-        album = mp_cfg.get("album") or "brand_open_home"
+        album = marketplace_folder_name(job.object_id)
         note = (
             f"FB MP rent: brand_images={len(images)}; album={album}; "
             f"price={listing.price_monthly}; rooms={listing.rooms}; "
@@ -855,14 +1751,19 @@ class FbMarketplaceChannel:
             dismiss_permissions(d)
 
             _ensure_personal_profile(d, android_cfg)
-            _open_property_form(d, android_cfg)
+            _open_listing_form(d, android_cfg)
             meta = _fill_form(
                 d,
                 job,
                 android_cfg,
                 publisher_cfg,
                 album=album,
-                max_images=min(len(images), int(mp_cfg.get("max_images") or 8)),
+                max_images=min(
+                    len(images),
+                    _VISIBLE_MARKETPLACE_PHOTOS,
+                    int(mp_cfg.get("max_images") or _VISIBLE_MARKETPLACE_PHOTOS),
+                ),
+                expected_photos=min(len(images), _VISIBLE_MARKETPLACE_PHOTOS),
             )
             note = f"{note}; filled={meta}"
             _go_to_publish_screen(d, android_cfg)

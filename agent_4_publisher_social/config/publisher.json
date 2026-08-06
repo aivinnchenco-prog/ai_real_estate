@@ -16,7 +16,7 @@
   },
   "media": {
     "max_carousel_images": 10,
-    "max_marketplace_images": 20,
+    "max_marketplace_images": 16,
     "max_groups_images": 10,
     "hook_cover_first": true,
     "allow_raw_gallery_fallback": false,
@@ -106,7 +106,7 @@
     "address_fallback": "Amphoe Thalang",
     "album": "brand_open_home",
     "device_media_dir": "/sdcard/Download/brand_open_home",
-    "max_images": 8,
+    "max_images": 16,
     "notes": "Фото ТОЛЬКО из Notion brand_open_home_url → альбом brand_open_home. Ссылку на объявление не копируем."
   },
   "fb_groups": {

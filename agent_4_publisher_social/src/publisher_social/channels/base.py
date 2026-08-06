@@ -23,6 +23,11 @@ def carousel_folder_name(object_id: str) -> str:
     return f"Carousel {object_id.replace('/', '_')}"
 
 
+def marketplace_folder_name(object_id: str) -> str:
+    """Per-object Marketplace album for brand_open_home_url images."""
+    return f"Open Home {object_id.replace('/', '_')}"
+
+
 @dataclass
 class ChannelResult:
     channel: str

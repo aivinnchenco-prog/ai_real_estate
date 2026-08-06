@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 
-from ..channels.base import carousel_folder_name
+from ..channels.base import carousel_folder_name, marketplace_folder_name
 
 
 def _media_set_digest(paths: list[str]) -> str:
@@ -31,6 +31,12 @@ def carousel_device_dir(base_media_dir: str | PurePosixPath, object_id: str) -> 
     """One folder per object under publisher_social — not the shared flat gallery."""
     base = PurePosixPath(str(base_media_dir).rstrip("/"))
     return str(base / carousel_folder_name(object_id))
+
+
+def marketplace_device_dir(marketplace_media_dir: str | PurePosixPath, object_id: str) -> str:
+    """One folder per object for brand_open_home_url — separate from FB Groups carousel."""
+    base = PurePosixPath(str(marketplace_media_dir).rstrip("/"))
+    return str(base / marketplace_folder_name(object_id))
 
 
 def verify_remote_paths(device: "AdbDevice", paths: list[str]) -> list[str]:
@@ -229,9 +235,20 @@ def push_files(
             )
 
     remote_mp: list[str] = []
-    mp_dir = marketplace_media_dir or "/sdcard/Download/brand_open_home"
+    mp_dir = marketplace_device_dir(
+        marketplace_media_dir or "/sdcard/Download/brand_open_home",
+        object_id,
+    )
     for local in local_marketplace_images or []:
         path = Path(local)
-        # имена как в галерее brand — без чужого prefix object, чтобы альбом был чистым
         remote_mp.append(device.push(path, path.name, media_dir=mp_dir))
+
+    if remote_mp:
+        missing = verify_remote_paths(device, remote_mp)
+        if missing:
+            raise RuntimeError(
+                "marketplace media missing on device after push: "
+                f"{missing[0]} (album={marketplace_folder_name(object_id)})"
+            )
+
     return remote_video, remote_images, remote_mp
