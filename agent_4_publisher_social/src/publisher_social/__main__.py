@@ -7,7 +7,7 @@ import sys
 
 from .android.adb import check_adb
 from .android.ui import connect_device, ensure_unlocked
-from .config import load_android_config, load_publisher_config
+from .config import load_android_config, load_publisher_config, validate_production_channels
 from . import notion_client as notion
 from .dotenv_util import load_dotenv
 from .models import CHANNELS
@@ -34,8 +34,8 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
         "--channel",
         action="append",
         dest="channels",
-        choices=list(CHANNELS),
-        help="Канал (можно несколько раз). По умолчанию — все pending.",
+        help="Канал (можно несколько раз). По умолчанию — все pending. "
+        "Только fb_groups и fb_marketplace.",
     )
     parser.add_argument("--dry-run", action="store_true", help="Только план, без телефона/UI")
     parser.add_argument(
@@ -61,6 +61,17 @@ def cmd_check_device(_: argparse.Namespace) -> int:
     return 0 if status.get("ok") else 1
 
 
+def _validate_channel_args(args: argparse.Namespace) -> int | None:
+    if not args.channels:
+        return None
+    try:
+        validate_production_channels(args.channels)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    return None
+
+
 def _resolve_run_flags(args: argparse.Namespace) -> tuple[bool, bool, bool]:
     """dry_run, push_media, confirm_post"""
     live = bool(getattr(args, "live", False))
@@ -82,6 +93,8 @@ def _result_flag(result) -> str:
 
 
 def cmd_queue(args: argparse.Namespace) -> int:
+    if (code := _validate_channel_args(args)) is not None:
+        return code
     dry_run, push_media, confirm_post = _resolve_run_flags(args)
     exit_code = 0
 
@@ -234,14 +247,7 @@ def cmd_publish_retry(args: argparse.Namespace) -> int:
     if not pages:
         print("Страница не найдена", file=sys.stderr)
         return 1
-    channels = args.channels or [
-        "instagram_reel",
-        "youtube_shorts",
-        "linkedin",
-        "fb_groups",
-        "instagram_carousel",
-        "fb_marketplace",
-    ]
+    channels = args.channels or ["fb_groups", "fb_marketplace"]
     job = build_job_from_page(pages[0], channels=channels)
     print(summarize_job(job))
     print(f"Retry channels: {','.join(channels)} (max {args.max_attempts} attempts each)")
@@ -283,6 +289,8 @@ def cmd_publish_chain(args: argparse.Namespace) -> int:
 
 
 def cmd_publish(args: argparse.Namespace) -> int:
+    if (code := _validate_channel_args(args)) is not None:
+        return code
     dry_run, push_media, confirm_post = _resolve_run_flags(args)
     pages = fetch_ready_pages(page_id=args.page_id, limit=1)
     if not pages:
@@ -296,7 +304,7 @@ def cmd_publish(args: argparse.Namespace) -> int:
         print("UI-режим: дойдём до публикации, но не нажмём Post (нужен --live)")
     results = run_channels(
         job,
-        channels=args.channels or job.channels_pending or ["tiktok"],
+        channels=args.channels or job.channels_pending or list(CHANNELS),
         dry_run=dry_run,
         push_media=push_media,
         confirm_post=confirm_post,
@@ -356,7 +364,7 @@ def cmd_capture_url(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="publisher_social",
-        description="Notion/R2 → Android phone → TikTok / Instagram / FB Marketplace / FB Groups",
+        description="Notion/R2 → Android phone → FB Groups / FB Marketplace",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -426,12 +434,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cap.add_argument(
         "--channel",
         required=True,
-        choices=[
-            "tiktok",
-            "tiktok_carousel",
-            "instagram_reel",
-            "instagram_carousel",
-        ],
+        choices=list(CHANNELS),
     )
     p_cap.add_argument("--wait", type=float, default=5.0, help="Секунд ждать перед захватом")
     p_cap.set_defaults(func=cmd_capture_url)
@@ -455,6 +458,9 @@ def main(argv: list[str] | None = None) -> int:
     }
     if args.command not in lock_commands:
         return int(args.func(args))
+
+    if hasattr(args, "channels") and (code := _validate_channel_args(args)) is not None:
+        return code
 
     try:
         timeout = float(os.environ.get("PUBLISHER_LOCK_TIMEOUT") or 0)

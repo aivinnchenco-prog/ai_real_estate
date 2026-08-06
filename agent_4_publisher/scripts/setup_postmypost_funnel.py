@@ -33,7 +33,7 @@ from publish_pipeline import (  # noqa: E402
     notion_update_fields,
     published_url_field,
 )
-from setup_chatplace_funnel import (  # noqa: E402
+from funnel_notion import (  # noqa: E402
     all_chatplace_kinds_done,
     chatplace_done_field,
     chatplace_id_field,

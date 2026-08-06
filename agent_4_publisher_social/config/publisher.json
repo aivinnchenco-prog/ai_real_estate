@@ -1,13 +1,6 @@
 {
-  "$comment": "Publisher social — Notion + R2 → Android phone → TikTok / Instagram / FB Marketplace / FB Groups. Без Metricool и без Playwright.",
+  "$comment": "Publisher social — Notion + R2 → Android phone → FB Groups / FB Marketplace only. Остальные соцсети — PostMyPost (agent_4_publisher).",
   "channels": [
-    "tiktok",
-    "tiktok_carousel",
-    "instagram_reel",
-    "instagram_carousel",
-    "youtube_shorts",
-    "linkedin",
-    "twitter",
     "fb_groups",
     "fb_marketplace"
   ],
@@ -17,15 +10,8 @@
     "min_minutes_between_posts": 120,
     "$comment_gap": "Пауза между НОВЫМИ объектами: читаем Notion «Дата и время публикации» у последнего объекта. Если прошло >= 120 мин — публикуем сразу. Уже начатый объект (колонка заполнена / есть прогресс) добивается без паузы.",
     "per_channel_daily_max": {
-      "tiktok": 3,
-      "tiktok_carousel": 2,
-      "instagram_reel": 2,
-      "instagram_carousel": 1,
       "fb_marketplace": 5,
-      "fb_groups": 5,
-      "linkedin": 2,
-      "twitter": 3,
-      "youtube_shorts": 2
+      "fb_groups": 5
     }
   },
   "media": {
@@ -82,112 +68,27 @@
       "locked": "phone_publisher_locked",
       "taken_at": "phone_publisher_taken_at",
       "log": "phone_publisher_log",
-      "tiktok_done": "phone_tiktok_done",
-      "tiktok_carousel_done": "phone_tiktok_carousel_done",
-      "instagram_reel_done": "phone_instagram_reel_done",
-      "instagram_carousel_done": "phone_instagram_carousel_done",
       "fb_marketplace_done": "phone_fb_marketplace_done",
-      "fb_groups_done": "phone_fb_groups_done",
-      "linkedin_done": "phone_linkedin_done",
-      "twitter_done": "phone_twitter_done",
-      "youtube_shorts_done": "phone_youtube_shorts_done"
+      "fb_groups_done": "phone_fb_groups_done"
     }
   },
   "orchestration": {
     "one_channel_per_live_run": true,
     "automatic_live_retries": false,
-    "video_channels": ["tiktok", "instagram_reel", "youtube_shorts"],
-    "carousel_channels": ["linkedin", "twitter", "fb_groups"],
+    "video_channels": [],
+    "carousel_channels": ["fb_groups"],
     "final_channels": ["fb_marketplace"],
-    "delayed_carousel": {
-      "tiktok_carousel": {"after": "tiktok", "delay_minutes": 60},
-      "instagram_carousel": {"after": "instagram_reel", "delay_minutes": 60}
-    },
-    "$comment_order": "Live: ровно один канал за запуск, затем процесс завершается для отчёта/ручной проверки. Порядок: video → carousel → final; fb_marketplace всегда последний."
+    "delayed_carousel": {},
+    "$comment_order": "Live: ровно один канал за запуск. Порядок: fb_groups → fb_marketplace."
   },
   "verification": {
     "post_url_source": "api",
     "capture_post_url_on_android": false,
     "url_optional_channels": [
-      "tiktok",
-      "tiktok_carousel",
-      "instagram_reel",
-      "instagram_carousel",
-      "youtube_shorts",
-      "linkedin",
-      "twitter",
       "fb_groups",
       "fb_marketplace"
     ],
-    "$comment": "Телефон только публикует. Отсутствие URL после Android live считается accepted; ссылки будут записаны позже отдельной API-интеграцией."
-  },
-  "youtube_shorts": {
-    "album": "Видео",
-    "max_title_chars": 100,
-    "max_description_chars": 5000,
-    "location": "Phuket",
-    "location_aliases": ["Phuket, Thailand", "Phuket", "Amphoe Thalang", "Пхукет"],
-    "audience": "not_for_kids",
-    "title_formula": "Аренда {вилла|квартира} {N}BR Phuket {Район}",
-    "set_related_video": false,
-    "notes": "Пикер: «Видео», верхний-левый. После «Загрузить» Android-сценарий завершается; URL позже поступит через API."
-  },
-  "linkedin": {
-    "album": "publisher_social",
-    "max_images": 8,
-    "use_caption_fb": false,
-    "notes": "Создать → Фото/альбом → текст → Разместить. После публикации URL через телефон не копируется."
-  },
-  "twitter": {
-    "video_album": "Видео",
-    "image_album": "publisher_social",
-    "media": "video",
-    "max_images": 4,
-    "max_chars": 280,
-    "use_caption_fb": false,
-    "set_location": true,
-    "location": "Phuket",
-    "location_aliases": [
-      "Amphoe Thalang, Changwat Phuket",
-      "Phuket, Thailand",
-      "Changwat Phuket, Thailand",
-      "Amphoe Thalang",
-      "Phuket"
-    ],
-    "notes": "X video: Фотографии → Видео → последнее видео в списке → Готово → текст → место → Опубликовать. После публикации URL через телефон не копируется. media=images для фото (макс 4)."
-  },
-  "tiktok": {
-    "location": "Пхукет",
-    "location_aliases": ["Пхукет", "Phuket"],
-    "video_album": "Видео",
-    "carousel_album": "publisher_social",
-    "carousel": {
-      "enabled": true,
-      "max_images": 8
-    }
-  },
-  "instagram": {
-    "location": "Phuket, Thailand",
-    "location_aliases": [
-      "Phuket, Thailand",
-      "Phuket",
-      "Пхукет",
-      "Phuket Island, Thailand"
-    ],
-    "video_album": "Видео",
-    "carousel_album": "publisher_social",
-    "share_to_threads": false,
-    "share_to_facebook": false,
-    "share_to_story": false,
-    "audience": "public",
-    "reel": {
-      "enabled": true
-    },
-    "carousel": {
-      "enabled": true,
-      "max_images": 8
-    },
-    "notes": "Reel: + → новое видео → галерея «Видео» → последнее видео в списке → Далее → подпись → место → Далее → Поделиться. После публикации URL через телефон не копируется. Кросспост Threads/FB/Story — дефолты в приложении IG, UI не трогаем."
+    "$comment": "Телефон только публикует FB Groups/Marketplace. Отсутствие URL после Android live считается accepted."
   },
   "fb_marketplace": {
     "create_path_hint": "Marketplace → Продать → Продажа и аренда недвижимости",
@@ -206,9 +107,5 @@
   },
   "android": {
     "config_file": "config/android.json"
-  },
-  "chatplace": {
-    "enabled": true,
-    "$comment": "После post_url_instagram_reel вызывается agent_4_publisher/scripts/spawn_chatplace_for_reel.py"
   }
 }

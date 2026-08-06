@@ -149,26 +149,29 @@ class PipelineTests(unittest.TestCase):
 
     def test_real_notion_url_is_reconciled_into_local_verified_state(self) -> None:
         cfg = base_config()
+        cfg["channels"] = ["fb_groups", "fb_marketplace"]
         cfg["notion"]["fields"] = {
-            "post_url_tiktok": "TikTok URL",
+            "post_url_fb_groups": "FB Groups URL",
         }
         page = {
             "id": "page-object-1",
             "properties": {
-                "TikTok URL": {
-                    "type": "url",
-                    "url": "https://www.tiktok.com/@account/video/123",
+                "FB Groups URL": {
+                    "type": "rich_text",
+                    "rich_text": [
+                        {"plain_text": "https://www.facebook.com/groups/example/posts/123"}
+                    ],
                 }
             },
         }
-        job = make_job("object-1", pending=["tiktok_carousel"])
+        job = make_job("object-1", pending=["fb_marketplace"])
 
         reconciled = pipeline.reconcile_local_completed_from_notion(page, job, cfg)
 
-        self.assertEqual(reconciled, ["tiktok"])
-        done = state.load_state()["objects"]["object-1"]["channels_done"]["tiktok"]
+        self.assertEqual(reconciled, ["fb_groups"])
+        done = state.load_state()["objects"]["object-1"]["channels_done"]["fb_groups"]
         self.assertEqual(done["status"], "verified")
-        self.assertIn("tiktok.com", done["post_url"])
+        self.assertIn("facebook.com", done["post_url"])
         self.assertEqual(state.load_state()["daily"], {})
 
     def test_queue_consumes_due_then_runs_only_immediate_channels(self) -> None:

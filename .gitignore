@@ -35,11 +35,8 @@ __pycache__/
 .DS_Store
 **/.DS_Store
 
-# Airbnb scraper: канон — Agent-real-estate-1, остальное (старые дубликаты) игнорим
-agent_1_parser/airbnb_scraper/*
-!agent_1_parser/airbnb_scraper/Agent-real-estate-1/
-# Runtime-данные бота (логи активности, очередь задач)
-agent_1_parser/airbnb_scraper/Agent-real-estate-1/data/
+# Airbnb parser runtime data
+agent_1_parser/airbnb_parser/data/
 **/temp_images/
 **/Error.html
 

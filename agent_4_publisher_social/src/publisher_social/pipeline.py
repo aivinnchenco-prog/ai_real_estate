@@ -15,6 +15,7 @@ from .config import (
     load_publisher_config,
     media_cache_dir,
     notion_fields,
+    production_channels,
     status_ready,
 )
 from .dotenv_util import package_root
@@ -77,10 +78,8 @@ def _channel_url_field(channel: str, fields: dict[str, str]) -> str | None:
 def _orchestration_plan(config: dict[str, Any]) -> dict[str, Any]:
     orch = config.get("orchestration") or {}
     return {
-        "video": list(orch.get("video_channels") or ["tiktok", "instagram_reel", "youtube_shorts"]),
-        "carousel": list(
-            orch.get("carousel_channels") or ["linkedin", "twitter", "fb_groups"]
-        ),
+        "video": list(orch.get("video_channels") or []),
+        "carousel": list(orch.get("carousel_channels") or ["fb_groups"]),
         # всегда в конце, после остальных соцсетей
         "final": list(orch.get("final_channels") or ["fb_marketplace"]),
         "delayed": dict(orch.get("delayed_carousel") or {}),
@@ -349,7 +348,7 @@ def reconcile_local_completed_from_notion(
     fields = notion_fields(config)
     state = load_state()
     reconciled: list[str] = []
-    for channel in config.get("channels") or CHANNELS:
+    for channel in production_channels(config):
         if is_channel_done(state, job.object_id, channel):
             continue
         url = _post_url_in_notion(page, channel, fields)
@@ -379,7 +378,7 @@ def pending_channels_for_page(
 ) -> list[str]:
     fields = notion_fields(config)
     state = load_state()
-    wanted = list(channels or config.get("channels") or CHANNELS)
+    wanted = list(channels or production_channels(config))
     # Facebook Marketplace — всегда последним среди pending
     if "fb_marketplace" in wanted:
         wanted = [c for c in wanted if c != "fb_marketplace"] + ["fb_marketplace"]
@@ -733,7 +732,7 @@ def run_channels(
 ) -> list[ChannelResult]:
     cfg = load_publisher_config()
     android_cfg = load_android_config()
-    wanted = list(channels or job.channels_pending or cfg.get("channels") or CHANNELS)
+    wanted = list(channels or job.channels_pending or production_channels(cfg))
     if "fb_marketplace" in wanted:
         wanted = [c for c in wanted if c != "fb_marketplace"] + ["fb_marketplace"]
     if _stepwise_live_enabled(cfg, dry_run=dry_run, confirm_post=confirm_post):
@@ -1114,41 +1113,6 @@ def run_scheduled(
     return results
 
 
-def _maybe_spawn_chatplace_reel(page_id: str, config: dict[str, Any]) -> None:
-    """После записи post_url_instagram_reel — отложенная ChatPlace-воронка (Agent 4)."""
-    chat_cfg = config.get("chatplace") or {}
-    if not chat_cfg.get("enabled", True):
-        return
-    # Monorepo: agent_4_publisher_social → agent_4_publisher
-    # Legacy sibling: Publisher social → Real Estate Agent/agent_4_publisher
-    root = package_root()
-    script_candidates = [
-        root.parent / "agent_4_publisher" / "scripts" / "spawn_chatplace_for_reel.py",
-        root.parent / "Real Estate Agent" / "agent_4_publisher" / "scripts" / "spawn_chatplace_for_reel.py",
-    ]
-    script = next((p for p in script_candidates if p.exists()), script_candidates[0])
-    if not script.exists():
-        append_log(load_state(), page_id, "chatplace spawn skipped: script not found")
-        return
-    import subprocess
-
-    try:
-        proc = subprocess.run(
-            [sys.executable, str(script), "--page-id", page_id],
-            cwd=script.parent,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        append_log(
-            load_state(),
-            page_id,
-            f"chatplace reel spawn exit={proc.returncode}: {(proc.stdout or proc.stderr)[:200]}",
-        )
-    except Exception as e:  # noqa: BLE001
-        append_log(load_state(), page_id, f"chatplace reel spawn failed: {e}")
-
-
 def retry_pending_notion_updates(
     *,
     only_keys: set[str] | None = None,
@@ -1182,8 +1146,6 @@ def retry_pending_notion_updates(
 
         clear_notion_update(state, key)
         delivered += 1
-        if entry.get("channel") == "instagram_reel":
-            _maybe_spawn_chatplace_reel(entry["page_id"], load_publisher_config())
     return delivered, failed
 
 

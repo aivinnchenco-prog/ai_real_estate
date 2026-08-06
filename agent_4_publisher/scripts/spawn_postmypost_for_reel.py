@@ -29,12 +29,9 @@ def main() -> int:
 
     config = load_config()
     if args.dry_run:
-        from setup_postmypost_funnel import (
-            is_chatplace_kind_done,
-            is_live_social_url,
-            should_run_postmypost_automation,
-        )
+        from funnel_notion import is_chatplace_kind_done, is_live_social_url
         from publish_pipeline import get_prop, notion_get_page
+        from setup_postmypost_funnel import should_run_postmypost_automation
 
         page = notion_get_page(args.page_id)
         published = config["notion"]["published_url_fields"]

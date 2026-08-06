@@ -67,3 +67,27 @@ def load_fb_groups() -> list[str]:
             continue
         groups.append(line)
     return groups
+
+
+PRODUCTION_CHANNELS = ("fb_groups", "fb_marketplace")
+
+
+def production_channels(config: dict[str, Any] | None = None) -> list[str]:
+    """Live phone queue channels from config, restricted to production FB channels."""
+    cfg = config or load_publisher_config()
+    allowed = set(PRODUCTION_CHANNELS)
+    raw = list(cfg.get("channels") or PRODUCTION_CHANNELS)
+    return [ch for ch in raw if ch in allowed]
+
+
+def validate_production_channels(channels: list[str]) -> None:
+    """Reject CLI channels that are not in the phone production queue."""
+    allowed = set(PRODUCTION_CHANNELS)
+    unsupported = [ch for ch in channels if ch not in allowed]
+    if unsupported:
+        names = ", ".join(sorted(unsupported))
+        raise ValueError(
+            f"Канал(ы) не поддерживаются телефонным publisher: {names}. "
+            f"Доступны только: {', '.join(PRODUCTION_CHANNELS)}. "
+            "Instagram, TikTok, YouTube и др. публикуются через PostMyPost."
+        )

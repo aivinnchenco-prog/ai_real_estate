@@ -1,4 +1,11 @@
-# Airbnb scraper — Telegram CRM bot
+# Airbnb parser — Telegram CRM bot
+
+**Canonical path:** `agent_1_parser/airbnb_parser/`
+
+```bash
+cd agent_1_parser/airbnb_parser
+python3 main.py
+```
 
 Бот для парсинга Airbnb, записи в Google Sheets/Drive и управления задачами через Supabase + Cursor SDK.
 

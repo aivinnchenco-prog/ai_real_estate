@@ -24,7 +24,7 @@ ROOT_ENV = ROOT / ".env"
 
 # Для каждого .env агента: {локальное_имя: корневое_имя}
 AGENT_ENV_MAP: dict[str, dict[str, str]] = {
-    "agent_1_parser/airbnb_scraper/Agent-real-estate-1/.env": {
+    "agent_1_parser/airbnb_parser/.env": {
         "TG_BOT_TOKEN": "TG_BOT_TOKEN_AGENT1",
         "ADMIN_TG_IDS": "ADMIN_TG_IDS",
         "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
@@ -127,12 +127,6 @@ AGENT_ENV_MAP: dict[str, dict[str, str]] = {
 # Collect-only источники: легаси-копии, из которых значения забираем,
 # но обратно ничего не пишем. {файл: {локальное_имя: корневое_имя}}
 LEGACY_COLLECT_SOURCES: dict[str, dict[str, str]] = {
-    "agent_1_parser/airbnb_scraper/.env": {
-        "TG_BOT_TOKEN": "TG_BOT_TOKEN_AGENT1",
-        "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
-        "ANTHROPIC_MODEL": "ANTHROPIC_MODEL",
-        "CURSOR_API_KEY": "CURSOR_API_KEY",
-    },
 }
 
 # Порядок приоритета источников при --collect (первый найденный побеждает)
@@ -142,8 +136,7 @@ COLLECT_ORDER = [
     "agent_3_director/.env",
     "agent_2_registrar/_import/assistant-media/.env.real-estate",
     "agent_1_parser/fb_parser/.env",
-    "agent_1_parser/airbnb_scraper/Agent-real-estate-1/.env",
-    "agent_1_parser/airbnb_scraper/.env",
+    "agent_1_parser/airbnb_parser/.env",
 ]
 
 

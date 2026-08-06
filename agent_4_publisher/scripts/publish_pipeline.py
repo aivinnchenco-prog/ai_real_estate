@@ -1112,11 +1112,8 @@ def spawn_postmypost_if_reel_url_ready(
 ) -> dict[str, Any] | None:
     """Отложенная PostMyPost automation для IG Reel после post_url_instagram_reel."""
     try:
-        from setup_postmypost_funnel import (
-            is_chatplace_kind_done,
-            is_live_social_url,
-            should_run_postmypost_automation,
-        )
+        from funnel_notion import is_chatplace_kind_done, is_live_social_url
+        from setup_postmypost_funnel import should_run_postmypost_automation
     except ImportError:
         return None
 
@@ -1144,109 +1141,36 @@ def spawn_postmypost_if_reel_url_ready(
     )
 
 
-def spawn_deferred_chatplace_funnel(
+def spawn_agent5_postmypost_ai_agent(
     page_id: str,
     platform: str,
-    scheduled_time: str,
     config: dict[str, Any],
     *,
     post_id: str | None = None,
-    post_kind: str | None = None,
+    post_url: str | None = None,
 ) -> dict[str, Any] | None:
+    """Agent 5: record PostMyPost AI agent run after successful publication."""
+    if not postmypost_enabled(config):
+        return None
+    repo_root = package_root().parent
+    root_str = str(repo_root)
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
     try:
-        from setup_chatplace_funnel import should_run_chatplace
+        from agent_5_usher.postmypost_ai_agent import queue_postmypost_ai_agent
+        from metricool_post_search import object_id_from_page
     except ImportError:
-        return None
-
-    upload_video = post_kind == "reel"
-    mode = "video" if post_kind == "reel" else "carousel" if post_kind == "carousel" else None
-    if not should_run_chatplace(platform, config, upload_video=upload_video, mode=mode):
-        return None
-
-    delay = int(config.get("chatplace", {}).get("delay_minutes_after_publish", 15))
-    script = package_root() / "scripts" / "deferred_chatplace_funnel.py"
-    log_dir = package_root() / "data" / "chatplace_jobs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / (
-        f"{page_id}_{platform}_{post_kind}.log" if post_kind else f"{page_id}_{platform}.log"
-    )
-    cmd = [
-        sys.executable,
-        str(script),
-        "--page-id",
-        page_id,
-        "--platform",
-        platform,
-        "--delay-minutes",
-        str(delay),
-    ]
-    if post_id:
-        cmd.extend(["--post-id", post_id])
-    if scheduled_time:
-        cmd.extend(["--scheduled-time", scheduled_time])
-    if post_kind:
-        cmd.extend(["--post-kind", post_kind])
-    with log_file.open("a", encoding="utf-8") as log:
-        log.write(
-            f"\n--- chatplace spawn {datetime.now(timezone.utc).isoformat()} "
-            f"page={page_id} platform={platform} delay_min={delay} ---\n"
-        )
-        log.flush()
-        proc = subprocess.Popen(
-            cmd,
-            cwd=str(package_root()),
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env=os.environ.copy(),
-        )
-    return {
-        "spawned": True,
-        "pid": proc.pid,
-        "log_file": str(log_file),
-        "delay_minutes": delay,
-        "platform": platform,
-        "post_kind": post_kind,
-    }
-
-
-def spawn_chatplace_if_reel_url_ready(
-    page_id: str,
-    config: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
-    """Отложенная ChatPlace-воронка reel, когда post_url_instagram_reel уже в Notion."""
-    try:
-        from setup_chatplace_funnel import (
-            is_chatplace_kind_done,
-            is_live_social_url,
-            should_run_chatplace,
-        )
-    except ImportError:
-        return None
-
-    cfg = config or load_config()
-    if not should_run_chatplace("instagram", cfg, upload_video=True, mode="video"):
         return None
 
     page = notion_get_page(page_id)
-    if is_chatplace_kind_done(page, cfg, "instagram", "reel"):
-        return None
-
-    fields = cfg["notion"]["fields"]
-    published = cfg["notion"]["published_url_fields"]
-    reel_field = published.get("instagram_reel", nfc.POST_URL_INSTAGRAM_REEL)
-    reel_url = get_prop(page, reel_field, "url")
-    if not is_live_social_url(reel_url, "instagram"):
-        return None
-
-    # Пауза от момента появления ссылки (не от Metricool publicationDate)
-    scheduled = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-    return spawn_deferred_chatplace_funnel(
-        page_id,
-        "instagram",
-        scheduled,
-        cfg,
-        post_kind="reel",
+    object_id = object_id_from_page(page, config) or page_id
+    return queue_postmypost_ai_agent(
+        page_id=page_id,
+        object_id=object_id,
+        publication_id=post_id,
+        post_url=post_url,
+        platform=platform,
+        config=config,
     )
 
 
@@ -1517,17 +1441,15 @@ def publish_one(
             )
             if pmp_spawn:
                 result["deferred_postmypost_funnel"] = pmp_spawn
-        else:
-            cp_spawn = spawn_deferred_chatplace_funnel(
+            agent5 = spawn_agent5_postmypost_ai_agent(
                 page_id,
                 platform,
-                scheduled_time,
                 config,
                 post_id=post_id,
-                post_kind=post_kind,
+                post_url=published_url or url_to_save,
             )
-            if cp_spawn:
-                result["deferred_chatplace_funnel"] = cp_spawn
+            if agent5:
+                result["agent5_postmypost_ai_agent"] = agent5
         return result
 
     except Exception as e:

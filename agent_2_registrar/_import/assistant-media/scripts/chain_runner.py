@@ -256,16 +256,15 @@ def run_phone_publisher(
 
 
 def spawn_ig_funnel_for_reel(page_id: str, pub_cfg: dict | None = None) -> int:
-    """IG comment→DM воронка после post_url_instagram_reel (PostMyPost или ChatPlace)."""
+    """IG comment→DM automation после post_url_instagram_reel (PostMyPost)."""
     cfg = pub_cfg or {}
     pmp = cfg.get("postmypost") or {}
-    auto = (pmp.get("automation") or {}).get("enabled", True)
-    if pmp.get("enabled") and auto is not False:
-        script_name = "spawn_postmypost_for_reel.py"
-        label = "PostMyPost reel automation"
-    else:
-        script_name = "spawn_chatplace_for_reel.py"
-        label = "ChatPlace reel funnel"
+    auto = (pmp.get("automation") or {}).get("enabled", False)
+    if not pmp.get("enabled") or auto is False:
+        print("[chain] SKIP PostMyPost reel automation: disabled in publisher.json", file=sys.stderr)
+        return 0
+    script_name = "spawn_postmypost_for_reel.py"
+    label = "PostMyPost reel automation"
     script = ROOT.parents[2] / "agent_4_publisher" / "scripts" / script_name
     if not script.exists():
         print(f"[chain] SKIP {label}: not found {script}", file=sys.stderr)
@@ -278,8 +277,8 @@ def spawn_ig_funnel_for_reel(page_id: str, pub_cfg: dict | None = None) -> int:
     return proc.returncode
 
 
-def spawn_chatplace_for_reel(page_id: str) -> int:
-    """Обратная совместимость — делегирует spawn_ig_funnel_for_reel."""
+def spawn_postmypost_automation_for_reel(page_id: str) -> int:
+    """PostMyPost IG automation после reel URL в Notion."""
     pub_cfg_path = ROOT.parents[2] / "agent_4_publisher" / "config" / "publisher.json"
     pub_cfg: dict = {}
     if pub_cfg_path.exists():
@@ -287,6 +286,11 @@ def spawn_chatplace_for_reel(page_id: str) -> int:
 
         pub_cfg = _json.loads(pub_cfg_path.read_text(encoding="utf-8"))
     return spawn_ig_funnel_for_reel(page_id, pub_cfg)
+
+
+def spawn_chatplace_for_reel(page_id: str) -> int:
+    """Legacy alias — ChatPlace удалён, делегирует PostMyPost automation."""
+    return spawn_postmypost_automation_for_reel(page_id)
 
 
 def run_agent6(page_id: str, platform: str, publisher_script: Path,
