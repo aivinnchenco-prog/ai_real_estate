@@ -49,6 +49,14 @@ agent_3_director/data/
 # Runtime-логи отложенной синхронизации Агента 4
 agent_4_publisher/data/deferred_sync/
 
+# Agent 2 chain runtime (locks, notify state)
+agent_2_registrar/_import/assistant-media/data/montage.lock
+agent_2_registrar/_import/assistant-media/data/error_notify_state.json
+
+# FB parser Playwright storage state (session cookies)
+agent_1_parser/fb_parser/fb_storage_state.json
+**/fb_storage_state.json
+
 # Publisher social (телефон): runtime state / media / locks
 agent_4_publisher_social/data/media/
 agent_4_publisher_social/data/jobs/

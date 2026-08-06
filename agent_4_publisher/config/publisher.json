@@ -481,10 +481,11 @@
       "fb_groups",
       "fb_marketplace"
     ],
-    "runner": "chain",
+    "runner": "termux",
     "project_path": "agent_4_publisher_social",
     "command": "publish",
     "scheduled_command": "publish-scheduled",
+    "$comment_runner": "termux: телефон сам опрашивает Notion (pub start, ~5 мин). chain: Mac/VPS вызывает ADB напрямую.",
     "$comment": "mode=fb_only: телефон только для FB Groups/Marketplace. Остальные сети — PostMyPost.",
     "$comment_path": "Путь относительно корня Real Estate Agent. Fallback: «Publisher social» в папке Агенты."
   },

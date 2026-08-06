@@ -167,20 +167,37 @@ def clear_tag_if_was_failing() -> bool:
 
 
 def resolve_publish_platforms(chain: dict) -> list[str]:
-    """Список Metricool-платформ: приоритет у agent_4_publisher/config/publisher.json."""
+    """Platforms for publish_pipeline (--platform all).
+
+    PostMyPost or Metricool — список из agent_4_publisher/config/publisher.json.
+    Пустой список только если оба API-publisher выключены.
+    """
     estate_root = ROOT.parents[2]
     pub_path = estate_root / "agent_4_publisher" / "config" / "publisher.json"
+    fallback = list(chain.get("publish_platforms") or ["instagram"])
     try:
         with pub_path.open(encoding="utf-8") as f:
             pub_cfg = json.load(f)
-        if not pub_cfg.get("metricool", {}).get("enabled", True):
-            return []
-        plats = pub_cfg.get("publish_platforms")
-        if plats:
-            return list(plats)
     except (OSError, json.JSONDecodeError, AttributeError):
-        pass
-    return list(chain.get("publish_platforms") or ["instagram"])
+        return fallback
+
+    plats = list(pub_cfg.get("publish_platforms") or fallback)
+    metricool_on = bool(pub_cfg.get("metricool", {}).get("enabled", True))
+    postmypost_on = bool(pub_cfg.get("postmypost", {}).get("enabled"))
+    if postmypost_on or metricool_on:
+        return plats
+    return fallback
+
+
+def phone_publisher_live(chain: dict, pub_cfg: dict) -> bool:
+    """Live ADB posting when runner=chain on Mac; Termux stays dry on VPS."""
+    pp = pub_cfg.get("phone_publisher") or {}
+    runner = str(pp.get("runner") or "termux").strip().lower()
+    if runner in ("termux", "phone", "external"):
+        return False
+    if "live" in pp:
+        return bool(pp.get("live"))
+    return bool(chain.get("phone_publisher_live", False))
 
 
 def load_agent4_publisher_config() -> dict:
@@ -589,7 +606,7 @@ def continue_chain(
                     )
                     continue
                 log_event(listing.object_id, "chain", "phone_publisher_start", page_id=listing.page_id)
-                live = bool(chain.get("phone_publisher_live", False))
+                live = phone_publisher_live(chain, pub_cfg)
                 code6 = run_phone_publisher(listing.page_id, pub_cfg, live=live)
                 if code6 != 0:
                     exit_code = code6
@@ -602,37 +619,52 @@ def continue_chain(
                 elif live:
                     spawn_chatplace_for_reel(listing.page_id)
             if phone_fb_only:
-                fb_channels = list(
-                    (pub_cfg.get("phone_publisher") or {}).get("channels")
-                    or ["fb_groups", "fb_marketplace"]
-                )
-                log_event(
-                    listing.object_id,
-                    "chain",
-                    "phone_fb_start",
-                    page_id=listing.page_id,
-                    channels=",".join(fb_channels),
-                )
-                live = bool(chain.get("phone_publisher_live", False))
-                code_fb_phone = run_phone_publisher(
-                    listing.page_id,
-                    pub_cfg,
-                    live=live,
-                    channels=fb_channels,
-                )
-                if code_fb_phone != 0:
-                    exit_code = code_fb_phone
+                runner = str(
+                    (pub_cfg.get("phone_publisher") or {}).get("runner") or "termux"
+                ).strip().lower()
+                if runner in ("termux", "phone", "external"):
+                    print(
+                        f"[chain] Agent 6 defer {listing.object_id}: "
+                        "FB phone publisher = Termux (VPS/Mac не постит)"
+                    )
                     log_event(
                         listing.object_id,
                         "chain",
-                        "phone_fb_failed",
-                        code=code_fb_phone,
+                        "phone_fb_deferred_termux",
+                        page_id=listing.page_id,
                     )
-                    notify(
-                        f"Phone FB publisher упал на объекте {listing.object_id}. "
-                        "Проверьте ADB/телефон и last_error в Notion.",
-                        tag=f"phone_fb_failed:{listing.object_id}",
+                else:
+                    fb_channels = list(
+                        (pub_cfg.get("phone_publisher") or {}).get("channels")
+                        or ["fb_groups", "fb_marketplace"]
                     )
+                    log_event(
+                        listing.object_id,
+                        "chain",
+                        "phone_fb_start",
+                        page_id=listing.page_id,
+                        channels=",".join(fb_channels),
+                    )
+                    live = phone_publisher_live(chain, pub_cfg)
+                    code_fb_phone = run_phone_publisher(
+                        listing.page_id,
+                        pub_cfg,
+                        live=live,
+                        channels=fb_channels,
+                    )
+                    if code_fb_phone != 0:
+                        exit_code = code_fb_phone
+                        log_event(
+                            listing.object_id,
+                            "chain",
+                            "phone_fb_failed",
+                            code=code_fb_phone,
+                        )
+                        notify(
+                            f"Phone FB publisher упал на объекте {listing.object_id}. "
+                            "Проверьте ADB/телефон и last_error в Notion.",
+                            tag=f"phone_fb_failed:{listing.object_id}",
+                        )
             for script_name in fb_branches:
                 branch = script_name.replace("_pipeline.py", "")
                 log_event(listing.object_id, "chain", f"{branch}_start", page_id=listing.page_id)

@@ -149,7 +149,16 @@ async def cmd_start(message: Message):
 # /agent4 <ID> — публикация (Metricool + FB-ветки) для одного объекта
 # Оба идут через chain_runner: он уважает флаги «Монтаж»/«Публикация» и статусы.
 
-CHAIN_DIR = Path(__file__).resolve().parents[3] / "agent_2_registrar" / "_import" / "assistant-media"
+from agent2_handoff import find_agent2_root
+
+# Корень chain_runner (Agent 2→3→4). Не parents[3]: canonical airbnb_parser на уровень выше legacy-пути.
+def _chain_dir() -> Path:
+    root = find_agent2_root()
+    if root is None:
+        raise FileNotFoundError(
+            "agent_2_registrar/_import/assistant-media не найден (задай AGENT2_ROOT в .env)"
+        )
+    return root
 _OBJECT_ID_RE = re.compile(r"^[A-Za-z]{0,3}_?\d{8}_\d{3}$")
 _agent_runs: set[str] = set()
 
@@ -190,7 +199,7 @@ async def _run_chain_for_object(message: Message, from_agent: int,
             cmd.append("--force-montage")
         proc = await asyncio.create_subprocess_exec(
             *cmd,
-            cwd=str(CHAIN_DIR),
+            cwd=str(_chain_dir()),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
@@ -416,7 +425,7 @@ async def _kick_chain_after_flags(object_id: str) -> None:
         proc = await asyncio.create_subprocess_exec(
             sys.executable, "scripts/chain_runner.py",
             "--from-agent", "3", "--object-id", object_id,
-            cwd=str(CHAIN_DIR),
+            cwd=str(_chain_dir()),
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )

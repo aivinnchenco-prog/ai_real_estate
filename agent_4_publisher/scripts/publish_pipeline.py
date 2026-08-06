@@ -1561,8 +1561,14 @@ def main() -> int:
                     post_mode=post_mode,
                     scheduled_time=scheduled,
                 )
-                if batch.failed:
-                    print(f"ERROR {pid}: batch had failures", file=sys.stderr)
+                if batch.status == "failed":
+                    print(f"ERROR {pid}: batch failed", file=sys.stderr)
+                elif batch.status == "partial_success":
+                    print(
+                        f"WARNING {pid}: partial_success published={batch.published} "
+                        f"failed={batch.failed}",
+                        file=sys.stderr,
+                    )
             except Exception as e:
                 print(f"ERROR {pid}: {e}", file=sys.stderr)
         return 0
@@ -1594,8 +1600,14 @@ def main() -> int:
         )
         if batch.status == "blocked":
             return 1
-        if batch.failed:
+        if batch.status == "failed":
             return 1
+        if batch.status == "partial_success":
+            print(
+                f"WARNING {args.page_id}: partial_success published={batch.published} "
+                f"failed={batch.failed}",
+                file=sys.stderr,
+            )
         return 0
 
     parser.error("--page-id required unless --queue")
