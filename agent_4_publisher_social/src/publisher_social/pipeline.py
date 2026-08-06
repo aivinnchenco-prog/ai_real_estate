@@ -751,8 +751,8 @@ def run_channels(
         confirm_post=confirm_post,
     )
 
-    # UI-прогон (--ui / --live) тоже требует медиа на телефоне
-    need_push = push_media and not dry_run
+    # UI-прогон (--ui / --live) всегда требует свежий adb push в папку объекта
+    need_push = not dry_run and (push_media or confirm_post)
     job = prepare_job(
         job,
         push_to_device=need_push,
@@ -906,7 +906,7 @@ def run_channels_with_retry(
         if not (cfg.get("orchestration") or {}).get("automatic_live_retries", False):
             max_attempts = 1
 
-    if push_media and confirm_post and not dry_run:
+    if not dry_run and (push_media or confirm_post):
         status = check_adb(android_cfg)
         if not status.get("ok"):
             raise RuntimeError(status.get("error") or "adb not ready")

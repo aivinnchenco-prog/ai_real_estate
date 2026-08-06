@@ -80,6 +80,7 @@ class MediaSelectionTests(unittest.TestCase):
         device.push.side_effect = (
             lambda _path, name, media_dir=None: f"{media_dir}/{name}"
         )
+        device.run.return_value = Mock(returncode=0, stdout="ok", stderr="")
 
         with TemporaryDirectory() as temp_dir:
             first = Path(temp_dir) / "slide_01.jpg"
@@ -98,8 +99,7 @@ class MediaSelectionTests(unittest.TestCase):
         album = albums.pop()
         self.assertRegex(
             album,
-            r"^/sdcard/Download/publisher_social_carousel_"
-            r"F_20260719_014_[0-9a-f]{12}$",
+            r"^/sdcard/Download/publisher_social/Carousel F_20260719_014$",
         )
         self.assertEqual(
             [path.rsplit("/", 1)[1] for path in remote_images],

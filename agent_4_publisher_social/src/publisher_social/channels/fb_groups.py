@@ -429,12 +429,45 @@ def _select_discussion_photos(
     return ui_count
 
 
+def _open_gallery_album(d, album: str, object_id: str = "") -> None:
+    """Open the per-object carousel album before picking thumbnails."""
+    candidates = [album]
+    if object_id:
+        from .base import carousel_folder_name
+
+        named = carousel_folder_name(object_id)
+        if named not in candidates:
+            candidates.append(named)
+        if object_id not in candidates:
+            candidates.append(object_id)
+    if not d(descriptionContains="Выбор альбома").exists(timeout=2):
+        return
+    d(descriptionContains="Выбор альбома").click()
+    time.sleep(1.0)
+    for name in candidates:
+        if not name:
+            continue
+        if d(text=name).exists(timeout=0.8):
+            d(text=name).click()
+            time.sleep(1.0)
+            return
+        if d(descriptionContains=name).exists(timeout=0.5):
+            d(descriptionContains=name).click()
+            time.sleep(1.0)
+            return
+    raise RuntimeError(
+        f"FB Groups: альбом «{album}» не найден в галерее "
+        f"(ожидалась папка объекта на телефоне)"
+    )
+
+
 def _discussion_add_photos(
     d,
     android_cfg: dict[str, Any],
     *,
     album: str,
     max_images: int,
+    object_id: str = "",
 ) -> int:
     max_images = max(1, min(int(max_images), 10))
     if d(text="Галерея").exists(timeout=3):
@@ -448,17 +481,7 @@ def _discussion_add_photos(
     human_pause(android_cfg, scale=0.9)
     dismiss_permissions(d)
 
-    if album and d(descriptionContains="Выбор альбома").exists(timeout=1):
-        d(descriptionContains="Выбор альбома").click()
-        time.sleep(1.0)
-        if d(text=album).exists(timeout=1) or d(descriptionContains=album).exists(
-            timeout=0.5
-        ):
-            if d(descriptionContains=album).exists():
-                d(descriptionContains=album).click()
-            else:
-                d(text=album).click()
-            time.sleep(1.0)
+    _open_gallery_album(d, album, object_id=object_id)
 
     selected = _select_discussion_photos(d, android_cfg, max_images=max_images)
     for _ in range(15):
@@ -663,6 +686,7 @@ class FbGroupsChannel:
         album = device_media_album(
             job.device_images,
             cfg.get("album") or ALBUM_DEFAULT,
+            object_id=job.object_id,
         )
         max_images = min(
             len(images),
@@ -678,6 +702,16 @@ class FbGroupsChannel:
             f"caption_len={len(caption)}"
         )
 
+        if not job.device_images and not dry_run:
+            return ChannelResult(
+                channel=self.name,
+                ok=False,
+                reason="device_images_missing",
+                note=(
+                    f"{note}; carousel not on phone — run with --live "
+                    f"(auto push) or prepare --push-media"
+                ),
+            )
         if dry_run:
             return ChannelResult(
                 channel=self.name, ok=True, skipped=True, reason="dry-run", note=note
@@ -729,6 +763,7 @@ class FbGroupsChannel:
                             android_cfg,
                             album=album,
                             max_images=max_images,
+                            object_id=job.object_id,
                         )
                     _discussion_set_caption(d, caption, android_cfg)
                     place = _discussion_set_place(d, android_cfg, publisher_cfg)

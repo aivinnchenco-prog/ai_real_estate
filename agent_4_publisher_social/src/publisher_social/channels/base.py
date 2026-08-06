@@ -18,6 +18,11 @@ CAROUSEL_PUBLISH_CHANNELS = (
 )
 
 
+def carousel_folder_name(object_id: str) -> str:
+    """Per-object phone album name (legacy: Carousel F2026_07_19 / object id)."""
+    return f"Carousel {object_id.replace('/', '_')}"
+
+
 @dataclass
 class ChannelResult:
     channel: str
@@ -53,12 +58,14 @@ def require_designed_carousel(
     )
 
 
-def device_media_album(paths: list[str], fallback: str) -> str:
+def device_media_album(paths: list[str], fallback: str, *, object_id: str = "") -> str:
     """Имя Android-альбома из фактического каталога pushed media."""
     if paths:
         parent = PurePosixPath(paths[0]).parent.name
         if parent:
             return parent
+    if object_id:
+        return carousel_folder_name(object_id)
     return fallback
 
 

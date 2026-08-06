@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import os
 import hashlib
+import shlex
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+
+from ..channels.base import carousel_folder_name
 
 
 def _media_set_digest(paths: list[str]) -> str:
@@ -21,6 +25,28 @@ def _media_set_digest(paths: list[str]) -> str:
                 digest.update(chunk)
         digest.update(b"\0")
     return digest.hexdigest()[:12]
+
+
+def carousel_device_dir(base_media_dir: str | PurePosixPath, object_id: str) -> str:
+    """One folder per object under publisher_social — not the shared flat gallery."""
+    base = PurePosixPath(str(base_media_dir).rstrip("/"))
+    return str(base / carousel_folder_name(object_id))
+
+
+def verify_remote_paths(device: "AdbDevice", paths: list[str]) -> list[str]:
+    """Return remote paths that are missing on the device after adb push."""
+    missing: list[str] = []
+    for remote in paths:
+        if not remote:
+            continue
+        try:
+            proc = device.run("shell", f"ls {shlex.quote(remote)}", check=False)
+            out = (proc.stdout or "") + (proc.stderr or "")
+            if proc.returncode != 0 or "No such file" in out:
+                missing.append(remote)
+        except Exception:
+            missing.append(remote)
+    return missing
 
 
 @dataclass
@@ -48,6 +74,10 @@ class AdbDevice:
         proc = self.run("shell", *args, check=check)
         return (proc.stdout or "").strip()
 
+    def shell_script(self, script: str, check: bool = True) -> str:
+        proc = self.run("shell", script, check=check)
+        return (proc.stdout or "").strip()
+
     def devices(self) -> list[str]:
         proc = subprocess.run(
             [self.adb_bin, "devices"],
@@ -64,7 +94,7 @@ class AdbDevice:
         return out
 
     def ensure_media_dir(self) -> None:
-        self.shell("mkdir", "-p", self.media_dir)
+        self.shell_script(f"mkdir -p {shlex.quote(self.media_dir)}")
 
     def push(
         self,
@@ -74,18 +104,14 @@ class AdbDevice:
         media_dir: str | None = None,
     ) -> str:
         dest_dir = (media_dir or self.media_dir).rstrip("/")
-        self.shell("mkdir", "-p", dest_dir)
+        self.shell_script(f"mkdir -p {shlex.quote(dest_dir)}")
         name = remote_name or local.name
         remote = f"{dest_dir}/{name}"
         self.run("push", str(local), remote)
         # Триггер медиасканера, чтобы Instagram/TikTok/FB увидели файл
-        self.shell(
-            "am",
-            "broadcast",
-            "-a",
-            "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
-            "-d",
-            f"file://{remote}",
+        self.shell_script(
+            "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE "
+            f"-d file:{shlex.quote(remote)}",
             check=False,
         )
         return remote
@@ -178,16 +204,12 @@ def push_files(
     prefix = object_id.replace("/", "_")
     remote_video: str | None = None
     if local_video:
+        video_dir = carousel_device_dir(device.media_dir, object_id)
         path = Path(local_video)
-        remote_video = device.push(path, f"{prefix}_{path.name}")
+        remote_video = device.push(path, path.name, media_dir=video_dir)
 
     remote_images: list[str] = []
-    base_media_dir = PurePosixPath(device.media_dir)
-    media_set_id = _media_set_digest(local_images) if local_images else "empty"
-    carousel_media_dir = str(
-        base_media_dir.parent
-        / f"{base_media_dir.name}_carousel_{prefix}_{media_set_id}"
-    )
+    carousel_media_dir = carousel_device_dir(device.media_dir, object_id)
     for local in local_images:
         path = Path(local)
         remote_images.append(
@@ -197,6 +219,14 @@ def push_files(
                 media_dir=carousel_media_dir,
             )
         )
+
+    if remote_images:
+        missing = verify_remote_paths(device, remote_images)
+        if missing:
+            raise RuntimeError(
+                "carousel media missing on device after push: "
+                f"{missing[0]} (album={carousel_folder_name(object_id)})"
+            )
 
     remote_mp: list[str] = []
     mp_dir = marketplace_media_dir or "/sdcard/Download/brand_open_home"
