@@ -95,6 +95,28 @@ python3 -m publisher_social publish --page-id PAGE_ID --channel fb_marketplace -
 python3 -m publisher_social publish --page-id PAGE_ID --channel fb_marketplace --live
 ```
 
+### FB Marketplace automation (phone only)
+
+Только канал `fb_marketplace` использует state machine + semantic validation:
+
+- UI tree (`dump_hierarchy`) — основной источник; snapshot обновляется после каждого перехода
+- Селекторы — `config/marketplace_selectors.json` (RU/EN aliases, без правок Python)
+- Пороги и retries — `config/marketplace_ui.json`
+- Vision — fallback, **выключен по умолчанию** (`vision.enabled=false`)
+- Coordinate clicks — последний fallback, **выключен по умолчанию**
+- Publish — только после `final_content_validation`
+- Unknown UI / checkpoint / low confidence → **safe stop** (`needs_review`, `blocked_checkpoint`, `validation_failed`)
+- Diagnostics — `diagnostics/<object_id>/<timestamp>/` (`screenshot.png`, `ui_dump.xml`, `context.json`, `actions.jsonl`)
+
+Resume после `needs_review`:
+
+```bash
+PYTHONPATH=src python3 scripts/resume_mp_description.py --page-id PAGE_ID --live
+PYTHONPATH=src python3 scripts/resume_mp_location.py --page-id PAGE_ID --live
+```
+
+Staging: включить vision только в `publisher.json` → `marketplace_ui.vision.enabled=true` (provider `fake` для offline tests).
+
 ## Twitter / X — код готов
 
 Пакет: `com.twitter.android`
