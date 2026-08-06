@@ -146,18 +146,19 @@ python3 scripts/publish_pipeline.py --page-id PAGE_ID --mode all --force
 
 | Поле | Тип | Назначение |
 |------|-----|------------|
-| `agent6_locked` | Checkbox | Объект взят Agent 6, авто-повтор запрещён |
+| `agent6_locked` | Checkbox | Активный publisher-процесс (не признак публикации) |
 | `agent6_carousel_done` | Checkbox | Карусель запланирована |
 | `agent6_video_done` | Checkbox | Видео запланировано |
 | `agent6_taken_at` | Date | Когда взяли в работу |
 | `agent6_mode` | Select | `auto` / `manual` / `force` |
 
 **Алгоритм:**
-1. Перед работой: если `agent6_locked` и не `--force` → SKIP
-2. Сразу после взятия: `agent6_locked = true`, `agent6_taken_at = now`
+1. Перед работой: если `agent6_locked` и не текущий run → SKIP (другой процесс)
+2. Lock ставится один раз перед batch; текущий run обходит собственный lock
 3. После успеха F1: `agent6_carousel_done = true`
 4. После успеха F2: `agent6_video_done = true`
-5. Сброс только вручную: снять `agent6_locked` в Notion или `--force --reset-lock`
+5. Lock снимается автоматически в `finally` после batch (success/partial/fail)
+6. Ручной сброс lock — только после аварийного `kill -9`/crash или `--force --reset-lock`
 
 ---
 

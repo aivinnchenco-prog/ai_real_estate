@@ -1163,7 +1163,8 @@ def spawn_agent5_postmypost_ai_agent(
         return None
 
     page = notion_get_page(page_id)
-    object_id = object_id_from_page(page, config) or page_id
+    fields = config["notion"]["fields"]
+    object_id = object_id_from_page(page, fields) or page_id
     return queue_postmypost_ai_agent(
         page_id=page_id,
         object_id=object_id,
@@ -1184,6 +1185,7 @@ def publish_one(
     force: bool = False,
     bypass_lock: bool = False,
     mode: str | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     backend = social_publisher_backend(config)
     if not backend:
@@ -1314,6 +1316,7 @@ def publish_one(
         "scheduled_time": scheduled_time,
         "timezone": publisher_timezone(config, backend),
         "object_id": object_id or None,
+        "run_id": run_id,
     }
     if quota_day_offset > 0:
         result["quota_shifted_days"] = quota_day_offset
@@ -1335,12 +1338,6 @@ def publish_one(
     taken_props: dict[str, Any] = {
         fields["status"]: {"status": {"name": applied_taken}},
     }
-    lock_field = fields.get("agent6_locked")
-    if lock_field:
-        taken_props[lock_field] = notion_checkbox_property(True)
-    taken_at_field = fields.get("agent6_taken_at")
-    if taken_at_field and not get_prop(page, taken_at_field, "date"):
-        taken_props[taken_at_field] = notion_date_property(utc_today_iso())
     notion_update_fields(page_id, taken_props)
 
     try:
@@ -1386,28 +1383,31 @@ def publish_one(
 
         pg_field = post_id_field_name(fields)
         err_field = fields.get("publish_error", nfc.LAST_ERROR)
+        # Persist publication id + URL before secondary side-effects (Agent 5, funnels).
         notion_props: dict[str, Any] = {
             fields["status"]: {"status": {"name": status_scheduled}},
             pg_field: {"rich_text": [{"text": {"content": post_id}}]},
             err_field: {"rich_text": []},
         }
-        if carousel_urls and fields.get("agent6_carousel_done"):
-            notion_props[fields["agent6_carousel_done"]] = notion_checkbox_property(True)
-        if upload_video and video_url and fields.get("agent6_video_done"):
-            notion_props[fields["agent6_video_done"]] = notion_checkbox_property(True)
         url_field = published_url_field(
             platform, config, upload_video=upload_video, mode=mode
         )
         if url_field and url_to_save:
             notion_props[url_field] = notion_url_property(url_to_save)
+        notion_update_fields(page_id, notion_props)
+
+        notion_props_extra: dict[str, Any] = {}
+        if carousel_urls and fields.get("agent6_carousel_done"):
+            notion_props_extra[fields["agent6_carousel_done"]] = notion_checkbox_property(True)
+        if upload_video and video_url and fields.get("agent6_video_done"):
+            notion_props_extra[fields["agent6_video_done"]] = notion_checkbox_property(True)
         publish_at_field = fields.get("publish_at") or nfc.PUBLISH_AT
         if publish_at_field and scheduled_time:
-            # Календарь CRM: дата/время выхода поста (перезаписываем на фактический слот)
-            notion_props[publish_at_field] = notion_datetime_property(
+            notion_props_extra[publish_at_field] = notion_datetime_property(
                 scheduled_time, publisher_timezone(config, backend)
             )
-
-        notion_update_fields(page_id, notion_props)
+        if notion_props_extra:
+            notion_update_fields(page_id, notion_props_extra)
 
         result["publisher_backend"] = backend
         result["metricool_post_id"] = post_id
@@ -1441,15 +1441,22 @@ def publish_one(
             )
             if pmp_spawn:
                 result["deferred_postmypost_funnel"] = pmp_spawn
-            agent5 = spawn_agent5_postmypost_ai_agent(
-                page_id,
-                platform,
-                config,
-                post_id=post_id,
-                post_url=published_url or url_to_save,
-            )
-            if agent5:
-                result["agent5_postmypost_ai_agent"] = agent5
+            try:
+                agent5 = spawn_agent5_postmypost_ai_agent(
+                    page_id,
+                    platform,
+                    config,
+                    post_id=post_id,
+                    post_url=published_url or url_to_save,
+                )
+                if agent5:
+                    result["agent5_postmypost_ai_agent"] = agent5
+            except Exception as exc:
+                print(
+                    f"[publisher] agent5 adapter skipped page_id={page_id} "
+                    f"platform={platform} run_id={run_id or '-'}: {exc}",
+                    file=sys.stderr,
+                )
         return result
 
     except Exception as e:
@@ -1478,6 +1485,11 @@ def main() -> int:
     parser.add_argument("--queue", action="store_true", help="Process all ready records")
     parser.add_argument("--dry-run", action="store_true", help="Validate without publishing")
     parser.add_argument("--force", action="store_true", help="Publish even if agent6_locked")
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Retry only slots without confirmed post_url (skips already published)",
+    )
     parser.add_argument(
         "--mode",
         choices=["carousel", "video", "auto"],
@@ -1531,25 +1543,26 @@ def main() -> int:
         for page in pages:
             pid = page["id"]
             print(f"\n--- Processing {pid} ---")
+            from publisher_run import default_platforms_for_all, publish_page_batch
+
+            plat_list = (
+                [args.platform]
+                if args.platform and args.platform != "all"
+                else default_platforms_for_all()
+            )
             try:
-                fields = config["notion"]["fields"]
-                bypass_lock = args.force or is_agent6_locked(page, fields)
-                for job_mode, job_time in platform_jobs(
-                    args.platform, scheduled, config, post_mode
-                ):
-                    out = publish_one(
-                        pid,
-                        args.platform,
-                        job_time,
-                        args.dry_run,
-                        config,
-                        force=args.force,
-                        bypass_lock=bypass_lock,
-                        mode=job_mode,
-                    )
-                    print(json.dumps(out, indent=2, ensure_ascii=False))
-                    if not out.get("skipped") and not args.dry_run:
-                        bypass_lock = True
+                batch = publish_page_batch(
+                    pid,
+                    plat_list,
+                    config,
+                    dry_run=args.dry_run,
+                    force=args.force,
+                    retry_failed=args.retry_failed,
+                    post_mode=post_mode,
+                    scheduled_time=scheduled,
+                )
+                if batch.failed:
+                    print(f"ERROR {pid}: batch had failures", file=sys.stderr)
             except Exception as e:
                 print(f"ERROR {pid}: {e}", file=sys.stderr)
         return 0
@@ -1566,31 +1579,24 @@ def main() -> int:
         parser.error("--platform required")
 
     if args.page_id:
-        fields = config["notion"]["fields"]
-        page0 = notion_get_page(args.page_id)
-        bypass_lock = args.force or is_agent6_locked(page0, fields)
-        exit_code = 0
-        for platform in platforms:
-            for job_mode, job_time in platform_jobs(platform, scheduled, config, post_mode):
-                try:
-                    out = publish_one(
-                        args.page_id,
-                        platform,
-                        job_time,
-                        args.dry_run,
-                        config,
-                        force=args.force,
-                        bypass_lock=bypass_lock,
-                        mode=job_mode,
-                    )
-                except Exception as e:
-                    print(f"ERROR {platform}/{job_mode or 'auto'}: {e}", file=sys.stderr)
-                    exit_code = 1
-                    continue
-                print(json.dumps(out, indent=2, ensure_ascii=False))
-                if not out.get("skipped") and not args.dry_run:
-                    bypass_lock = True
-        return exit_code
+        from publisher_run import default_platforms_for_all, publish_page_batch
+
+        batch_platforms = platforms if platforms else default_platforms_for_all()
+        batch = publish_page_batch(
+            args.page_id,
+            batch_platforms,
+            config,
+            dry_run=args.dry_run,
+            force=args.force,
+            retry_failed=args.retry_failed,
+            post_mode=post_mode,
+            scheduled_time=scheduled,
+        )
+        if batch.status == "blocked":
+            return 1
+        if batch.failed:
+            return 1
+        return 0
 
     parser.error("--page-id required unless --queue")
     return 0
