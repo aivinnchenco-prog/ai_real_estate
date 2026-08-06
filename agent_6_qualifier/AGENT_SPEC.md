@@ -6,19 +6,19 @@
 
 > **Карта ролей и legacy-имён:** корневой [`ROLE_MAP.md`](../ROLE_MAP.md).
 >
-> **Важно:** в коде пока используются исторические имена пакетов — `src/agent7/` (Qualifier) и
-> `src/agent8/` (Envoy + Notary). Папки `agent_7_envoy/` и `agent_8_notary/` — целевые места
-> выделения; runtime пока в `agent_6_qualifier/`. Переименование пакетов — отдельный этап миграции.
+> **Важно:** canonical Python-пакеты — `agent6_qualifier` (Qualifier), `agent7_envoy` (Envoy),
+> `agent8_notary` (Notary). Пакеты `agent7` и `agent8` — **legacy compatibility shims** (thin
+> re-export); старые импорты продолжают работать. Runtime в `agent_6_qualifier/`.
 
 **Три роли живут в этом проекте:**
 
-| Целевая роль | Код сейчас | Основные модули |
-|--------------|------------|-----------------|
-| Agent 6 Qualifier | пакет `agent7` | `qualifier.py`, `tg_userbot.py`, `matching.py`, `brain.py` |
-| Agent 7 Envoy | canonical `agent7_envoy` + legacy shims `agent8` (кроме notary), `agent7/airbnb_check`, `agent7/owner_registry` | `auto.py`, `outreach.py`, `calendar_check.py`, `owner_result.py`, owner-шаблоны в `templates.py` |
-| Agent 8 Notary | canonical `agent8_notary` + legacy `agent8/booking_doc.py` + `scripts/generate_booking_request.js` | docx брони, прикрепление к amoCRM |
+| Целевая роль | Canonical package | Legacy shims | Основные модули |
+|--------------|-------------------|--------------|-----------------|
+| Agent 6 Qualifier | `agent6_qualifier` | `agent7.*` | `qualifier.py`, `tg_userbot.py`, `matching.py`, `brain.py` |
+| Agent 7 Envoy | `agent7_envoy` | `agent8.*`, `agent8.envoy.*`, `agent7/airbnb_check`, `agent7/owner_registry` | `auto.py`, `outreach.py`, `calendar_check.py`, `owner_result.py`, owner-шаблоны в `agent6_qualifier/templates.py` |
+| Agent 8 Notary | `agent8_notary` | `agent8.booking_doc`, `agent8.notary.*`, `agent8.notary_service` + `scripts/generate_booking_request.js` | docx брони, прикрепление к amoCRM |
 
-Общие модули (Notion, модели, amoCRM, шаблоны клиента) — в `agent7`; Envoy и Notary их переиспользуют.
+Общие модули (Notion, модели, amoCRM, шаблоны клиента) — в `agent6_qualifier`; Envoy и Notary их переиспользуют.
 
 ---
 
@@ -134,7 +134,7 @@ legacy import: `agent8.owner_result`).
   доступность уточняется только сообщением владельцу через Envoy.
 Pre-check Envoy всегда идёт по «Календарь»; пусто — сразу пишем владельцу.
 
-Поддерживаемые типы ссылок в `Календарь` (диспетчер `agent8/calendar_check.py`):
+Поддерживаемые типы ссылок в `Календарь` (диспетчер `agent7_envoy.calendar_check`; legacy: `agent8.calendar_check`):
 
 | Тип ссылки | Как проверяем | Статус |
 |--|--|--|
@@ -208,7 +208,7 @@ Pre-check распространяется и на **альтернативы**:
 
 **Это не договор аренды и не договор оплаты.** Итоговые условия и оплата оформляются отдельным договором после показа и согласования с владельцем — полноценный шаблон такого договора **ещё не реализован**.
 
-Код: `src/agent8/booking_doc.py`, `scripts/generate_booking_request.js`, выход — `data/contracts/`.
+Код: canonical `src/agent8_notary/booking_doc.py` (legacy shim: `src/agent8/booking_doc.py`), `scripts/generate_booking_request.js`, выход — `data/contracts/`.
 
 ---
 
