@@ -32,7 +32,7 @@ NOTIFY_FAIL=1          # писать о провалах
 NOTIFY_IDLE=0          # писать, когда очередь пуста (обычно шум)
 DAILY_DIGEST_HOUR=21   # час, когда прислать сводку за день (-1 = выключить)
 MAX_LOG_MB=20
-STOP_AFTER_CHANNEL=1   # после результата live-канала отправить отчёт и завершить раннер
+STOP_AFTER_FB_BATCH=1   # live: после полного fb_groups→fb_marketplace batch — отчёт и остановка
 # shellcheck disable=SC1090
 [ -f "$CONF" ] && . "$CONF"
 export PROJECT_DIR
@@ -50,6 +50,14 @@ is_live_run() {
     *" --live "*) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+is_facebook_batch_complete() {
+  grep -qE '\[facebook_batch\][[:space:]]+status=' "$OUT_FILE" 2>/dev/null
+}
+
+should_stop_after_fb_batch() {
+  [ "${STOP_AFTER_FB_BATCH:-1}" = "1" ] && is_live_run && is_facebook_batch_complete
 }
 
 send_channel_report() {
@@ -217,8 +225,8 @@ while true; do
       "⏱ ${OBJ:-объект}: live-канал прерван по таймауту 30 мин. Автоповтор не запускается до следующей проверки state." \
       "timeout:${OBJ:-unknown}" || true
     bump fail 1
-    if [ "${STOP_AFTER_CHANNEL:-1}" = "1" ] && is_live_run; then
-      log "пошаговый режим: отчёт сохранён/отправлен, раннер завершён"
+    if should_stop_after_fb_batch; then
+      log "facebook batch завершён: отчёт сохранён/отправлен, раннер завершён"
       break
     fi
 
@@ -248,9 +256,12 @@ ${DETAIL}"
     fi
     send_channel_report "$REPORT" "channel_report:${OBJ:-unknown}" || true
     log "итог цикла: ok=$OK_LINES warn=$WARN_LINES fail=$FAIL_LINES skip=$SKIP_LINES rc=$RC"
-    if [ "${STOP_AFTER_CHANNEL:-1}" = "1" ] && is_live_run; then
-      log "пошаговый режим: отчёт сохранён/отправлен, раннер завершён до ручного запуска"
+    if should_stop_after_fb_batch; then
+      log "facebook batch завершён: отчёт сохранён/отправлен, раннер завершён до ручного запуска"
       break
+    fi
+    if [ "${STOP_AFTER_FB_BATCH:-1}" = "1" ] && is_live_run; then
+      log "live без завершённого facebook batch — раннер продолжит цикл"
     fi
 
   elif [ "$SKIP_LINES" -gt 0 ]; then

@@ -73,13 +73,21 @@
     }
   },
   "orchestration": {
-    "one_channel_per_live_run": true,
     "automatic_live_retries": false,
     "video_channels": [],
     "carousel_channels": ["fb_groups"],
     "final_channels": ["fb_marketplace"],
     "delayed_carousel": {},
-    "$comment_order": "Live: ровно один канал за запуск. Порядок: fb_groups → fb_marketplace."
+    "$comment_order": "Live: один PublicationJob = fb_groups → пауза → fb_marketplace (см. facebook_batch)."
+  },
+  "facebook_batch": {
+    "enabled": true,
+    "channels": [
+      "fb_groups",
+      "fb_marketplace"
+    ],
+    "delay_between_channels_seconds": 25,
+    "stop_on_failure": true
   },
   "verification": {
     "post_url_source": "api",

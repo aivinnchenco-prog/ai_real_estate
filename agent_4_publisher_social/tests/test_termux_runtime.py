@@ -37,7 +37,7 @@ class TermuxRuntimeTests(unittest.TestCase):
                     "QUIET_END=25",
                     "WAKELOCK=0",
                     "DAILY_DIGEST_HOUR=-1",
-                    "STOP_AFTER_CHANNEL=1",
+                    "STOP_AFTER_FB_BATCH=1",
                     "",
                 ]
             ),
@@ -76,6 +76,7 @@ if [ "${FAKE_SEQUENCE:-ok}" = "skip_then_ok" ] && [ "$count" = "1" ]; then
 else
   printf 'object_id=F_20260719_014\n'
   printf '[OK] tiktok: posted url=https://example.invalid/post/1\n'
+  printf '[facebook_batch] status=success\n'
 fi
 """,
         )
@@ -155,7 +156,7 @@ fi
             self.assertEqual((home / "timeout.count").read_text().strip(), "2")
             log = (home / ".publisher" / "runner.log").read_text(encoding="utf-8")
             self.assertIn("служебных пропусков: 1", log)
-            self.assertIn("раннер завершён до ручного запуска", log)
+            self.assertIn("facebook batch завершён", log)
             notices = (home / "notify.calls").read_text(encoding="utf-8")
             self.assertIn("https://example.invalid/post/1", notices)
             self.assertFalse(

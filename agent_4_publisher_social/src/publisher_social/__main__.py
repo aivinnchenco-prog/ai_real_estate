@@ -124,7 +124,6 @@ def cmd_queue(args: argparse.Namespace) -> int:
             if not result.ok and not result.skipped:
                 exit_code = 1
         if confirm_post and scheduled_pairs:
-            print("Пошаговый live завершён после одного scheduled-канала. Ожидается отчёт/проверка.")
             return exit_code
 
     if not pages:
@@ -169,9 +168,6 @@ def cmd_queue(args: argparse.Namespace) -> int:
             )
             if not r.ok and not r.skipped:
                 exit_code = 1
-        if confirm_post and results:
-            print("Пошаговый live завершён после одного канала. Ожидается отчёт/проверка.")
-            return exit_code
     return exit_code
 
 
@@ -201,7 +197,7 @@ def cmd_publish_all(args: argparse.Namespace) -> int:
     job = build_job_from_page(pages[0], channels=None)
     print(summarize_job(job))
     if confirm_post:
-        print("!!! LIVE publish-all: будет выполнен только следующий канал, затем остановка !!!")
+        print("!!! LIVE publish-all: fb_groups → fb_marketplace в одном batch !!!")
     results = run_publish_all(
         job,
         dry_run=dry_run,
@@ -277,7 +273,7 @@ def cmd_publish_chain(args: argparse.Namespace) -> int:
     dry_run, push_media, confirm_post = _resolve_run_flags(args)
     reset = list(args.reset_channel) if args.reset_channel else None
     if confirm_post:
-        print("!!! LIVE publish-chain: только следующий scheduled/pending канал, затем остановка !!!")
+        print("!!! LIVE publish-chain: fb_groups → fb_marketplace в одном batch !!!")
     return run_publish_chain(
         args.page_id,
         dry_run=dry_run,
@@ -388,7 +384,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_all = sub.add_parser(
         "publish-all",
-        help="Пошаговый план всех каналов; live выполняет только следующий канал",
+        help="Прогнать все каналы объекта (FB: groups → marketplace batch)",
     )
     p_all.add_argument("--page-id", required=True)
     _add_common(p_all)
@@ -403,7 +399,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_retry = sub.add_parser(
         "publish-retry",
-        help="Повтор канала; в live только один канал и одна попытка до отчёта",
+        help="Повтор каналов FB batch с ограничением попыток",
     )
     p_retry.add_argument("--page-id", required=True)
     p_retry.add_argument("--max-attempts", type=int, default=3)
@@ -412,7 +408,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_chain = sub.add_parser(
         "publish-chain",
-        help="Оркестратор: следующий scheduled/pending канал и остановка",
+        help="Оркестратор: scheduled + pending FB batch за один live run",
     )
     p_chain.add_argument("--page-id", required=True)
     p_chain.add_argument("--max-attempts", type=int, default=2)

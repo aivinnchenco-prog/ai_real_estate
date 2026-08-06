@@ -19,6 +19,12 @@ from .config import (
     status_ready,
 )
 from .dotenv_util import package_root
+from .facebook_batch import (
+    facebook_batch_applies,
+    resolve_facebook_batch_config,
+    run_facebook_phone_batch,
+    summarize_facebook_batch_status,
+)
 from .media import (
     download_job_media,
     resolve_brand_open_home_urls,
@@ -86,35 +92,24 @@ def _orchestration_plan(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _stepwise_live_enabled(
+def _facebook_batch_wanted(
+    channels: list[str] | None,
+    job: PublishJob,
     config: dict[str, Any],
-    *,
-    dry_run: bool,
-    confirm_post: bool,
-) -> bool:
-    orchestration = config.get("orchestration") or {}
-    return bool(
-        confirm_post
-        and not dry_run
-        and orchestration.get("one_channel_per_live_run", True)
-    )
-
-
-def _limit_live_channels(
-    channels: list[str],
-    config: dict[str, Any],
-    *,
-    dry_run: bool,
-    confirm_post: bool,
 ) -> list[str]:
-    """Live-вызов управляет максимум одной соцсетью и затем завершается."""
-    if _stepwise_live_enabled(
-        config,
-        dry_run=dry_run,
-        confirm_post=confirm_post,
-    ):
-        return channels[:1]
-    return channels
+    """Pending FB channels in batch order (groups before marketplace)."""
+    batch_cfg = resolve_facebook_batch_config(config)
+    if not batch_cfg:
+        return list(channels or job.channels_pending or production_channels(config))
+    batch_order = list(batch_cfg["channels"])
+    requested = list(channels or job.channels_pending or production_channels(config))
+    state = load_state()
+    pending = [
+        ch
+        for ch in batch_order
+        if ch in requested and not is_channel_done(state, job.object_id, ch)
+    ]
+    return pending or [ch for ch in batch_order if ch in requested]
 
 
 def immediate_channels_for_queue(
@@ -722,6 +717,81 @@ def fetch_queue_pages(
     return selected, skipped_msgs
 
 
+def _execute_channel(
+    job: PublishJob,
+    ch: str,
+    *,
+    dry_run: bool,
+    confirm_post: bool,
+    cfg: dict[str, Any],
+    android_cfg: dict[str, Any],
+    state: dict[str, Any],
+) -> ChannelResult:
+    inflight = channel_inflight(state, job.object_id, ch)
+    if inflight:
+        return ChannelResult(
+            channel=ch,
+            ok=False,
+            skipped=True,
+            reason=(
+                "manual_verification_required: previous live attempt was "
+                f"interrupted at {inflight.get('started_at') or 'unknown time'}"
+            ),
+            publication_status="submitted_unverified",
+        )
+    if confirm_post and not dry_run:
+        limited = _daily_limit_result(state, ch, cfg)
+        if limited:
+            append_log(state, job.object_id, f"{ch}: {limited.reason}")
+            return limited
+
+    channel = get_channel(ch)
+    if confirm_post and not dry_run:
+        mark_channel_inflight(state, job.object_id, ch)
+    try:
+        result = channel.publish(
+            job,
+            dry_run=dry_run,
+            android_cfg=android_cfg,
+            publisher_cfg=cfg,
+            confirm_post=confirm_post,
+        )
+    except Exception as exc:  # noqa: BLE001
+        result = ChannelResult(channel=ch, ok=False, reason=str(exc))
+    if result.post_url and not _is_real_post_url(result.post_url, ch):
+        invalid_url_note = "captured URL did not match the published channel"
+        result.post_url = None
+        result.note = f"{(result.note or '').rstrip()}; {invalid_url_note}".strip("; ")
+    result.publication_status = _result_publication_status(
+        result,
+        ch,
+        cfg,
+        dry_run=dry_run,
+        confirm_post=confirm_post,
+    )
+    append_log(state, job.object_id, f"{ch}: {result.reason or result.note or result.ok}")
+    if result.ok and not result.skipped and not dry_run:
+        first_success = not object_has_progress(state, job.object_id)
+        newly_recorded = mark_channel_done(
+            state,
+            job.object_id,
+            ch,
+            post_url=result.post_url,
+            note=result.note,
+            status=result.publication_status,
+            daily_date=_local_day(cfg) if confirm_post else None,
+        )
+        clear_scheduled(state, object_id=job.object_id, channel=ch)
+        _try_write_notion_result(job, ch, result)
+        if first_success and newly_recorded:
+            _maybe_write_published_at(job, cfg)
+        if newly_recorded:
+            _maybe_schedule_delayed_carousel(state, job, ch, cfg)
+    elif confirm_post and not dry_run:
+        clear_channel_inflight(state, job.object_id, ch)
+    return result
+
+
 def run_channels(
     job: PublishJob,
     *,
@@ -729,29 +799,21 @@ def run_channels(
     dry_run: bool = True,
     push_media: bool = False,
     confirm_post: bool = False,
+    sleep_fn=None,
 ) -> list[ChannelResult]:
+    import time
+
     cfg = load_publisher_config()
     android_cfg = load_android_config()
     wanted = list(channels or job.channels_pending or production_channels(cfg))
-    if "fb_marketplace" in wanted:
-        wanted = [c for c in wanted if c != "fb_marketplace"] + ["fb_marketplace"]
-    if _stepwise_live_enabled(cfg, dry_run=dry_run, confirm_post=confirm_post):
-        current = load_state()
-        pending_wanted = [
-            channel
-            for channel in wanted
-            if not is_channel_done(current, job.object_id, channel)
-        ]
-        if pending_wanted:
-            wanted = pending_wanted
-    wanted = _limit_live_channels(
-        wanted,
-        cfg,
-        dry_run=dry_run,
-        confirm_post=confirm_post,
-    )
+    batch_cfg = resolve_facebook_batch_config(cfg)
+    use_batch = facebook_batch_applies(cfg, wanted)
 
-    # UI-прогон (--ui / --live) всегда требует свежий adb push в папку объекта
+    if use_batch and batch_cfg:
+        wanted = _facebook_batch_wanted(channels, job, cfg)
+    elif "fb_marketplace" in wanted:
+        wanted = [c for c in wanted if c != "fb_marketplace"] + ["fb_marketplace"]
+
     need_push = not dry_run and (push_media or confirm_post)
     job = prepare_job(
         job,
@@ -759,6 +821,34 @@ def run_channels(
         android_cfg=android_cfg,
         push_marketplace="fb_marketplace" in wanted,
     )
+
+    if use_batch and batch_cfg:
+        state = load_state()
+
+        def _run(ch: str) -> ChannelResult:
+            return _execute_channel(
+                job,
+                ch,
+                dry_run=dry_run,
+                confirm_post=confirm_post,
+                cfg=cfg,
+                android_cfg=android_cfg,
+                state=load_state(),
+            )
+
+        results = run_facebook_phone_batch(
+            job,
+            channels=wanted,
+            batch_cfg=batch_cfg,
+            dry_run=dry_run,
+            confirm_post=confirm_post,
+            execute_channel=_run,
+            sleep_fn=sleep_fn or time.sleep,
+        )
+        print(
+            f"[facebook_batch] status={summarize_facebook_batch_status(results)}"
+        )
+        return results
 
     results: list[ChannelResult] = []
     state = load_state()
@@ -774,75 +864,17 @@ def run_channels(
                 )
             )
             continue
-        inflight = channel_inflight(state, job.object_id, ch)
-        if inflight:
-            results.append(
-                ChannelResult(
-                    channel=ch,
-                    ok=False,
-                    skipped=True,
-                    reason=(
-                        "manual_verification_required: previous live attempt was "
-                        f"interrupted at {inflight.get('started_at') or 'unknown time'}"
-                    ),
-                    publication_status="submitted_unverified",
-                )
-            )
-            continue
-        if confirm_post and not dry_run:
-            limited = _daily_limit_result(state, ch, cfg)
-            if limited:
-                results.append(limited)
-                append_log(state, job.object_id, f"{ch}: {limited.reason}")
-                continue
-
-        channel = get_channel(ch)
-        if confirm_post and not dry_run:
-            mark_channel_inflight(state, job.object_id, ch)
-        try:
-            result = channel.publish(
+        results.append(
+            _execute_channel(
                 job,
-                dry_run=dry_run,
-                android_cfg=android_cfg,
-                publisher_cfg=cfg,
-                confirm_post=confirm_post,
-            )
-        except Exception as exc:  # noqa: BLE001
-            result = ChannelResult(channel=ch, ok=False, reason=str(exc))
-        if result.post_url and not _is_real_post_url(result.post_url, ch):
-            invalid_url_note = "captured URL did not match the published channel"
-            result.post_url = None
-            result.note = (
-                f"{(result.note or '').rstrip()}; {invalid_url_note}"
-            ).strip("; ")
-        result.publication_status = _result_publication_status(
-            result,
-            ch,
-            cfg,
-            dry_run=dry_run,
-            confirm_post=confirm_post,
-        )
-        results.append(result)
-        append_log(state, job.object_id, f"{ch}: {result.reason or result.note or result.ok}")
-        if result.ok and not result.skipped and not dry_run:
-            first_success = not object_has_progress(state, job.object_id)
-            newly_recorded = mark_channel_done(
-                state,
-                job.object_id,
                 ch,
-                post_url=result.post_url,
-                note=result.note,
-                status=result.publication_status,
-                daily_date=_local_day(cfg) if confirm_post else None,
+                dry_run=dry_run,
+                confirm_post=confirm_post,
+                cfg=cfg,
+                android_cfg=android_cfg,
+                state=state,
             )
-            clear_scheduled(state, object_id=job.object_id, channel=ch)
-            _try_write_notion_result(job, ch, result)
-            if first_success and newly_recorded:
-                _maybe_write_published_at(job, cfg)
-            if newly_recorded:
-                _maybe_schedule_delayed_carousel(state, job, ch, cfg)
-        elif confirm_post and not dry_run:
-            clear_channel_inflight(state, job.object_id, ch)
+        )
     return results
 
 
@@ -896,15 +928,18 @@ def run_channels_with_retry(
         for channel in channels
         if not is_channel_done(state, job.object_id, channel)
     ] or list(channels)
-    channels = _limit_live_channels(
-        channels,
-        cfg,
-        dry_run=dry_run,
-        confirm_post=confirm_post,
-    )
-    if _stepwise_live_enabled(cfg, dry_run=dry_run, confirm_post=confirm_post):
-        if not (cfg.get("orchestration") or {}).get("automatic_live_retries", False):
-            max_attempts = 1
+
+    if facebook_batch_applies(cfg, channels):
+        return run_channels(
+            job,
+            channels=channels,
+            dry_run=dry_run,
+            push_media=push_media,
+            confirm_post=confirm_post,
+        )
+
+    if not (cfg.get("orchestration") or {}).get("automatic_live_retries", False):
+        max_attempts = 1 if confirm_post and not dry_run else max_attempts
 
     if not dry_run and (push_media or confirm_post):
         status = check_adb(android_cfg)
@@ -1035,11 +1070,6 @@ def run_scheduled(
     cfg = load_publisher_config()
     state = load_state()
     results: list[tuple[PublishJob, ChannelResult]] = []
-    one_live_channel = _stepwise_live_enabled(
-        cfg,
-        dry_run=dry_run,
-        confirm_post=confirm_post,
-    )
     for entry in due_scheduled(state):
         if page_id is not None and entry.get("page_id") != page_id:
             continue
@@ -1072,8 +1102,6 @@ def run_scheduled(
                     result,
                 )
             )
-            if one_live_channel:
-                break
             continue
 
         page = notion.get_page(entry["page_id"])
@@ -1093,8 +1121,6 @@ def run_scheduled(
                     channel=channel_name,
                 )
             results.append((job, result))
-            if one_live_channel:
-                break
             continue
 
         channel_results = run_channels(
@@ -1108,8 +1134,6 @@ def run_scheduled(
             results.append((job, result))
             if result.ok and not result.skipped and not dry_run:
                 clear_scheduled(state, object_id=job.object_id, channel=channel_name)
-        if one_live_channel and channel_results:
-            break
     return results
 
 
@@ -1321,12 +1345,7 @@ def run_publish_chain(
             f"[{flag}{skip}] {job.object_id} {result.channel}: "
             f"{result.reason or result.note or ''}{url}"
         )
-    if scheduled_results and _stepwise_live_enabled(
-        cfg,
-        dry_run=dry_run,
-        confirm_post=confirm_post,
-    ):
-        print("Пошаговый live завершён после одного scheduled-канала. Ожидается отчёт/проверка.")
+    if scheduled_results:
         result = scheduled_results[-1][1]
         return 1 if not result.ok and not result.skipped else 0
 
@@ -1337,52 +1356,31 @@ def run_publish_chain(
         cfg,
         requested=list(reset_channels) if reset_channels else None,
     )
-    pending = _limit_live_channels(
-        pending,
-        cfg,
-        dry_run=dry_run,
-        confirm_post=confirm_post,
-    )
     if not pending:
         print("Нет pending-каналов — всё опубликовано или пропущено.")
         return 0
 
     print(summarize_job(job))
     print(f"=== publish-chain: pending {','.join(pending)} ===")
-    for ch in pending:
-        if is_channel_done(load_state(), object_id, ch):
-            print(f"[skip] {ch}: already done")
-            continue
-        print(f"\n--- channel: {ch} ---")
-        results = run_channels_with_retry(
-            job,
-            channels=[ch],
-            dry_run=dry_run,
-            push_media=push_media,
-            confirm_post=confirm_post,
-            max_attempts=max_attempts,
+    results = run_channels_with_retry(
+        job,
+        channels=pending,
+        dry_run=dry_run,
+        push_media=push_media,
+        confirm_post=confirm_post,
+        max_attempts=max_attempts,
+    )
+    for last in results:
+        flag = (
+            "WARN"
+            if last.publication_status == "submitted_unverified"
+            else ("OK" if last.ok and not last.skipped else "FAIL")
         )
-        last = results[-1] if results else None
-        if last:
-            flag = (
-                "WARN"
-                if last.publication_status == "submitted_unverified"
-                else ("OK" if last.ok and not last.skipped else "FAIL")
-            )
-            skip = " skip" if last.skipped else ""
-            url = f" url={last.post_url}" if last.post_url else ""
-            print(f"[{flag}{skip}] {ch}: {last.reason or last.note or ''}{url}")
-            if not last.ok and not last.skipped:
-                exit_code = 1
-        page = notion.get_page(page_id)
-        job = build_job_from_page(page, config=cfg)
-        if _stepwise_live_enabled(
-            cfg,
-            dry_run=dry_run,
-            confirm_post=confirm_post,
-        ):
-            print("Пошаговый live завершён после одного канала. Ожидается отчёт/проверка.")
-            break
+        skip = " skip" if last.skipped else ""
+        url = f" url={last.post_url}" if last.post_url else ""
+        print(f"[{flag}{skip}] {last.channel}: {last.reason or last.note or ''}{url}")
+        if not last.ok and not last.skipped:
+            exit_code = 1
 
     return exit_code
 
