@@ -203,6 +203,23 @@ def _to_listing(page: dict) -> Listing:
     )
 
 
+def fetch_all_pages() -> list[dict]:
+    """Raw Notion pages for publication index building."""
+    db = os.environ["NOTION_DATABASE_ID"]
+    results, cursor = [], None
+    while True:
+        body: dict = {"page_size": 100}
+        if cursor:
+            body["start_cursor"] = cursor
+        r = requests.post(f"{_API}/databases/{db}/query", headers=_headers(), json=body, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        results.extend(data["results"])
+        if not data.get("has_more"):
+            return results
+        cursor = data["next_cursor"]
+
+
 def fetch_all_listings() -> list[Listing]:
     db = os.environ["NOTION_DATABASE_ID"]
     results, cursor = [], None
@@ -217,6 +234,16 @@ def fetch_all_listings() -> list[Listing]:
         if not data.get("has_more"):
             return results
         cursor = data["next_cursor"]
+
+
+def find_by_tg_post(channel: str, message_id: int) -> Listing | None:
+    """Match post_url_telegram against t.me/channel/message_id."""
+    target = f"https://t.me/{channel.lstrip('@')}/{message_id}"
+    for page in fetch_all_pages():
+        url = _plain((page.get("properties") or {}).get(PROP_TG_POST))
+        if url and url.rstrip("/") == target.rstrip("/"):
+            return _to_listing(page)
+    return None
 
 
 def find_by_object_id(object_id: str) -> Listing | None:

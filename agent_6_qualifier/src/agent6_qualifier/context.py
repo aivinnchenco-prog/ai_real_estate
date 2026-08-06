@@ -44,6 +44,15 @@ def build_knowledge(session: Session) -> str:
         lines.append(f"Имя клиента: {lead.name}")
     if lead.preferred_object_id:
         lines.append(f"Объект ID: {lead.preferred_object_id}")
+    if session.source_publication_url:
+        lines.append(
+            f"Клиент пришёл по публикации объекта {lead.preferred_object_id or '—'}."
+        )
+        lines.append(f"Платформа: {session.source_platform or '—'}")
+        lines.append(f"Ссылка: {session.source_publication_url}")
+        lines.append(
+            "Не спрашивай, какой объект его интересует, если он явно не сменил объект."
+        )
     if session.chosen:
         c = session.chosen
         bits = [c.title or c.object_id]

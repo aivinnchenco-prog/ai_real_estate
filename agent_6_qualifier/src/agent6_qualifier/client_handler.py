@@ -106,6 +106,24 @@ async def process_client_message(
 
     await add_to_folder(client, sender, templates.clients_folder)
     ensure_amo_lead(amo, session, sender)
+    if (
+        amo is not None
+        and session.amo_lead_id
+        and session.source_publication_url
+    ):
+        try:
+            amo.note_client(
+                session.amo_lead_id,
+                session.lead.preferred_object_id or "-",
+                f"Источник публикации: {session.source_platform or '-'} "
+                f"{session.source_publication_url}",
+            )
+        except Exception as e:
+            notify_error(
+                "amo.note",
+                str(e),
+                f"источник публикации не записан в сделку #{session.amo_lead_id}",
+            )
     if (amo is not None and session.amo_lead_id
             and any(v is not None for v in update.values())):
         try:

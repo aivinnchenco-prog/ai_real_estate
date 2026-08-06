@@ -49,6 +49,15 @@ legacy import: `agent8.owner_result`).
 - WhatsApp: провайдер с API и синхронизацией с amoCRM (Wazzup / Green-API).
 - Вся переписка зеркалится в amoCRM (синхронизация WA/TG ↔ amo), но поля квалификации агент пишет в сделку **явно**.
 
+### Распознавание публикации (ссылка / forward)
+
+Agent 6 разрешает ссылку на пост или пересланный Telegram-пост в `listing_id` **без LLM**,
+если Agent 4 уже записал mapping в Notion (`post_url_*`, `metricool_post_id`).
+
+Модули: `publication_resolver.py`, `publication_mapping_store.py`, `telegram_publication.py`.
+Agent 5 передаёт inbound context через `agent_5_usher/social_inbound.py` (контракт готов;
+реальный PostMyPost webhook — позже).
+
 ---
 
 ## 3. Мозг (Qualifier)

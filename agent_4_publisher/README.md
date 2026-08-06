@@ -112,6 +112,10 @@ TikTok: `tiktokData.autoAddMusic: true` в `config/publisher.json`.
 
 После публикации ссылки записываются в Notion: `post_url_instagram_carousel`, `post_url_instagram_reel`, `post_url_tiktok`, ...
 
+**Publication mapping для Agent 6:** каждая платформа → колонка `post_url_*` в Notion;
+PostMyPost publication ID → `metricool_post_id`. Agent 6 строит индекс URL/ID → `Объект ID`
+без отдельной БД. Повторная синхронизация не дублирует mapping (ключ: platform + URL/ID).
+
 **Два этапа URL (Metricool):**
 1. Сразу после планирования — ссылка на пост в календаре Metricool (`Copy link` в planner).
 2. Через 5 минут после времени публикации — перезапись на реальную ссылку соцсети.

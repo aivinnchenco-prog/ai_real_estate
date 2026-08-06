@@ -191,9 +191,14 @@ async def main() -> None:
     load_env()
     run_schema_check("--skip-schema-check" in sys.argv)
     client = make_client()
+    from .publication_mapping_store import NotionPublicationMappingStore
+
+    publication_store = NotionPublicationMappingStore(notion_store.fetch_all_pages)
     qualifier = Qualifier(
         find_by_id=notion_store.find_by_object_id,
         fetch_all=notion_store.fetch_all_listings,
+        find_by_tg_post=notion_store.find_by_tg_post,
+        publication_store=publication_store,
     )
     try:
         amo: AmoClient | None = AmoClient()
@@ -221,6 +226,7 @@ async def main() -> None:
                 return
 
             from .client_handler import ClientMessageTemplates, process_client_message
+            from .telegram_publication import handle_publication_reference
             from agent8_notary.booking_doc import generate_booking_doc
             from agent8_notary.service import process_confirmed_booking
             from agent7_envoy.auto import auto_outreach
@@ -240,6 +246,20 @@ async def main() -> None:
                 )
 
             from .alerts import notify_manager
+
+            session = get_session(chat_id)
+            if await handle_publication_reference(
+                event,
+                session,
+                store=publication_store,
+                find_by_id=notion_store.find_by_object_id,
+                respond=humanized_respond,
+                notify_diagnostic=lambda msg: notify_error(
+                    "publication.resolve", msg, f"chat_id={chat_id}"
+                ),
+            ):
+                _store.save(session)
+                return
 
             await process_client_message(
                 event=event,

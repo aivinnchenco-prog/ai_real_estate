@@ -77,6 +77,8 @@ def runtime(monkeypatch):
     monkeypatch.setattr(tg, "Qualifier", lambda *a, **k: harness.qualifier)
     monkeypatch.setattr(tg.notion_store, "find_by_object_id", lambda *_: None)
     monkeypatch.setattr(tg.notion_store, "fetch_all_listings", lambda: [])
+    monkeypatch.setattr(tg.notion_store, "fetch_all_pages", lambda: [])
+    monkeypatch.setattr(tg.notion_store, "find_by_tg_post", lambda *_a, **_k: None)
     monkeypatch.setattr(tg, "handle_owner_message", AsyncMock(return_value=False))
     monkeypatch.setattr(tg.brain, "extract_lead_update", lambda *a, **k: {})
     monkeypatch.setattr(tg.brain, "polish_reply", lambda draft, language, name: draft)

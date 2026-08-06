@@ -31,6 +31,14 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
         "пожалуйста, номер или пришлите ссылку на пост — сразу посмотрю. "
         "Могу также подобрать варианты под ваш запрос."
     ),
+    "client_publication_ambiguous": (
+        "Вы прислали ссылки на разные объекты: {candidates}. "
+        "Подскажите, пожалуйста, какой из них вас интересует?"
+    ),
+    "client_publication_unresolved": (
+        "Ссылку на публикацию вижу, но пока не могу сопоставить её с объектом в базе. "
+        "Пришлите, пожалуйста, код объекта из поста или ссылку ещё раз."
+    ),
     # Единый вопрос-анкета: все критерии одним сообщением, меньше переписки.
     "client_qualify_bullets": (
         "Сообщите, пожалуйста:\n"
@@ -186,6 +194,15 @@ CLIENT_ASK_OBJECT_LINK = _T["client_ask_object_link"]
 
 def client_object_not_found(object_id: str) -> str:
     return _T["client_object_not_found"].format(object_id=object_id)
+
+
+def client_publication_ambiguous(candidates: list[str]) -> str:
+    listed = ", ".join(candidates) if candidates else "несколько объектов"
+    return _T["client_publication_ambiguous"].format(candidates=listed)
+
+
+def client_publication_unresolved() -> str:
+    return _T["client_publication_unresolved"]
 CLIENT_QUALIFY_BULLETS = _T["client_qualify_bullets"]
 CLIENT_ASK_DATES = _T["client_ask_dates"]
 

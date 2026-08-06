@@ -20,6 +20,16 @@
 
 Вызов из Agent 4: `publish_pipeline.spawn_agent5_postmypost_ai_agent()` после успешной PostMyPost-публикации.
 
+## Social inbound → Agent 6
+
+`agent_5_usher/social_inbound.py` — documented payload contract для комментариев/DM из PostMyPost:
+
+- `build_social_inbound_reference(payload)` → `SocialInboundReference`;
+- `resolve_inbound_for_agent6(payload, store=...)` → resolution dict для Qualifier.
+
+Сейчас без webhook: Agent 5 может экспортировать mapping/context для ручной настройки
+PostMyPost AI assistant. Реальный inbound требует PostMyPost webhook/API.
+
 ## Не в scope Agent 5
 
 - Публикация в соцсети (Agent 4 / PostMyPost / телефон FB);

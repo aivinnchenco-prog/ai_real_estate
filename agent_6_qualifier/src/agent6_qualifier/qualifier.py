@@ -53,6 +53,12 @@ class Session:
     history: list = field(default_factory=list)  # [{"role":"user"|"assistant","text":...}]
     amo_lead_id: int | None = None
     language: str = "ru"
+    # Publication reference (Agent 4 mapping → Agent 6 resolver)
+    source_platform: str = ""
+    source_publication_id: str = ""
+    source_publication_url: str = ""
+    source_channel: str = ""
+    resolution_confidence: str = ""
 
 
 # Короткие согласие/отказ распознаём без LLM: у Gemini нет истории диалога,
@@ -128,10 +134,11 @@ class Turn:
 class Qualifier:
     """listing_source — абстракция над Notion, чтобы тестировать без сети."""
 
-    def __init__(self, find_by_id, fetch_all, find_by_tg_post=None):
+    def __init__(self, find_by_id, fetch_all, find_by_tg_post=None, publication_store=None):
         self._find_by_id = find_by_id
         self._fetch_all = fetch_all
         self._find_by_tg_post = find_by_tg_post
+        self._publication_store = publication_store
 
     # ---------- главный вход ----------
 
@@ -402,6 +409,24 @@ class Qualifier:
         return session.lead.preferred_object_id or ""
 
     def _resolve_listing(self, message: str) -> Listing | None:
+        if self._publication_store is not None:
+            from .publication_resolver import resolve_publication_reference
+
+            resolution = resolve_publication_reference(
+                message,
+                None,
+                None,
+                None,
+                None,
+                store=self._publication_store,
+            )
+            if resolution.found and resolution.listing_id:
+                listing = self._find_by_id(resolution.listing_id)
+                if listing is not None:
+                    return listing
+            if resolution.confidence == "object_id_in_text" and resolution.listing_id:
+                return self._find_by_id(resolution.listing_id)
+
         ids = extract_object_ids(message)
         if ids:
             return self._find_by_id(ids[0])
