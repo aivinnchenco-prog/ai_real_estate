@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from ai_extract import AiExtractor
 
@@ -14,11 +14,12 @@ class AiExtractTest(unittest.TestCase):
         self.assertTrue(any('USD' in s for s in snippets))
 
     @patch.object(AiExtractor, 'is_enabled', return_value=True)
-    @patch.object(AiExtractor, '_client')
-    def test_extract_price_parses_claude_json(self, mock_client, _enabled):
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text='{"amount":"5670","display":"5 670 $ USD помесячно","currency":"USD","confidence":"high"}')]
-        mock_client.return_value.messages.create.return_value = mock_response
+    @patch('gemini_llm.generate')
+    def test_extract_price_parses_claude_json(self, mock_generate, _enabled):
+        mock_generate.return_value = (
+            '{"amount":"5670","display":"5 670 $ USD помесячно",'
+            '"currency":"USD","confidence":"high"}'
+        )
 
         extractor = AiExtractor()
         result = extractor.extract_price(
@@ -34,14 +35,15 @@ class AiExtractTest(unittest.TestCase):
         )
         self.assertEqual(result['Цена'], '5670')
         self.assertIn('USD', result['Цена_отображение'])
-        self.assertEqual(result['Цена_источник'], 'claude')
+        self.assertEqual(result['Цена_источник'], 'ai')
+        mock_generate.assert_called_once()
 
     @patch.object(AiExtractor, 'is_enabled', return_value=True)
-    @patch.object(AiExtractor, '_client')
-    def test_extract_price_rejects_rub_display(self, mock_client, _enabled):
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text='{"amount":"539024","display":"539 024 RUB","currency":"USD","confidence":"high"}')]
-        mock_client.return_value.messages.create.return_value = mock_response
+    @patch('gemini_llm.generate')
+    def test_extract_price_rejects_rub_display(self, mock_generate, _enabled):
+        mock_generate.return_value = (
+            '{"amount":"539024","display":"539 024 RUB","currency":"USD","confidence":"high"}'
+        )
 
         result = AiExtractor().extract_price(
             url='https://airbnb.ru/rooms/1?currency=USD',

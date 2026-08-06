@@ -47,6 +47,7 @@ def test_agent5_queues_after_publish(tmp_path, monkeypatch):
     state_file = tmp_path / "state.json"
 
     import agent_5_usher.postmypost_ai_agent as agent5
+    from agent_5_usher.postmypost_ai_agent import STATUS_BLOCKED
 
     monkeypatch.setattr(agent5, "_STATE_FILE", state_file)
 
@@ -69,7 +70,8 @@ def test_agent5_queues_after_publish(tmp_path, monkeypatch):
         post_url="https://www.instagram.com/p/abc/",
     )
     assert out is not None
-    assert out["status"] == "pending_postmypost_ai_agent"
+    assert out["status"] == STATUS_BLOCKED
+    assert out.get("warning") == "PostMyPost AI Agent integration is not configured"
     out2 = spawn_agent5_postmypost_ai_agent(
         "page-1",
         "instagram",
