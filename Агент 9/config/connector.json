@@ -1,0 +1,14 @@
+{
+  "conversation_poll_seconds": 120,
+  "notion_poll_seconds": 300,
+  "new_outreach_delay_seconds": {"min": 20, "max": 60},
+  "max_new_outreach_per_hour": 5,
+  "max_new_outreach_per_day": 30,
+  "confidence": {
+    "auto_action_min": 0.90,
+    "recheck_min": 0.70
+  },
+  "intro_language": "ru",
+  "terminal_outreach_statuses": ["complete", "declined", "manual_review", "failed"],
+  "active_outreach_statuses": ["pending", "opening_listing", "waiting_contact", "waiting_role"]
+}

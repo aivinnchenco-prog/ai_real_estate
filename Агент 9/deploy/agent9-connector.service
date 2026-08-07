@@ -1,0 +1,19 @@
+[Unit]
+Description=Agent 9 Facebook Marketplace Connector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=REPLACE_USER
+WorkingDirectory=REPLACE_AGENT9_DIR
+Environment=PYTHONPATH=src
+EnvironmentFile=-REPLACE_AGENT9_DIR/.env
+ExecStart=REPLACE_AGENT9_DIR/scripts/start_connector.sh
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

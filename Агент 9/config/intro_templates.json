@@ -1,0 +1,18 @@
+{
+  "ru": {
+    "villa": "Здравствуйте! Я представляю агентство Open Home. У нас есть клиент, которого заинтересовала ваша вилла. Подскажите, пожалуйста, ваш WhatsApp для связи?",
+    "apartment": "Здравствуйте! Я представляю агентство Open Home. У нас есть клиент, которого заинтересовала ваша квартира. Подскажите, пожалуйста, ваш WhatsApp для связи?",
+    "house": "Здравствуйте! Я представляю агентство Open Home. У нас есть клиент, которого заинтересовал ваш дом. Подскажите, пожалуйста, ваш WhatsApp для связи?",
+    "default": "Здравствуйте! Я представляю агентство Open Home. У нас есть клиент, которого заинтересовал ваш объект. Подскажите, пожалуйста, ваш WhatsApp для связи?"
+  },
+  "en": {
+    "villa": "Hello! I represent Open Home agency. We have a client interested in your villa. Could you please share your WhatsApp number?",
+    "apartment": "Hello! I represent Open Home agency. We have a client interested in your apartment. Could you please share your WhatsApp number?",
+    "house": "Hello! I represent Open Home agency. We have a client interested in your house. Could you please share your WhatsApp number?",
+    "default": "Hello! I represent Open Home agency. We have a client interested in your property. Could you please share your WhatsApp number?"
+  },
+  "role_question": {
+    "ru": "Спасибо! Подскажите, пожалуйста, вы собственник этого объекта или представляете его как агент?",
+    "en": "Thank you! Are you the owner of this property or representing it as an agent?"
+  }
+}
