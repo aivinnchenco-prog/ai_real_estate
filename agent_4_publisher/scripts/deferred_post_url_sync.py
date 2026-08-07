@@ -147,6 +147,9 @@ def main() -> int:
         if last_result.get("updated"):
             print(json.dumps(last_result, indent=2, ensure_ascii=False))
             return 0
+        if last_result.get("reason") in {"noop_same", "conflict"}:
+            print(json.dumps(last_result, indent=2, ensure_ascii=False))
+            return 0
         if attempt + 1 < attempts:
             time.sleep(max(1, args.retry_interval_minutes) * 60)
 

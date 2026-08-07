@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from postmypost_client import extract_publication_url, postmypost_get_publication  # noqa: E402
+from postmypost_social_url import decide_notion_url_update  # noqa: E402
 from publish_pipeline import (  # noqa: E402
     load_config,
     load_dotenv,
@@ -25,6 +27,15 @@ from publish_pipeline import (  # noqa: E402
 )
 
 
+def _notion_url_from_page(page: dict[str, Any], field_name: str | None) -> str:
+    if not field_name:
+        return ""
+    prop = (page.get("properties") or {}).get(field_name) or {}
+    if prop.get("type") == "url":
+        return (prop.get("url") or "").strip()
+    return ""
+
+
 def sync_postmypost_url_to_notion(
     page_id: str,
     platform: str,
@@ -32,22 +43,28 @@ def sync_postmypost_url_to_notion(
     *,
     publication_id: str,
     post_kind: str | None = None,
+    page: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not publication_id:
         return {"updated": False, "error": "missing_publication_id"}
 
     payload = postmypost_get_publication(publication_id, config)
     network = network_for(platform)
-    url = extract_publication_url(payload, network)
+    url = extract_publication_url(payload, platform, config)
 
     upload_video = post_kind == "reel"
     mode = "video" if post_kind == "reel" else "carousel" if post_kind == "carousel" else None
     url_field = published_url_field(
         platform, config, upload_video=upload_video, mode=mode
     )
+
+    page = page or notion_get_page(page_id)
+    current_url = _notion_url_from_page(page, url_field)
+    should_update, url_to_write, reason = decide_notion_url_update(current_url, url, network)
+
     updated = False
-    if url and url_field:
-        notion_update_fields(page_id, {url_field: notion_url_property(url)})
+    if should_update and url_field and url_to_write:
+        notion_update_fields(page_id, {url_field: notion_url_property(url_to_write)})
         updated = True
 
     return {
@@ -58,6 +75,7 @@ def sync_postmypost_url_to_notion(
         "url": url,
         "url_field": url_field,
         "updated": updated,
+        "reason": reason,
         "publication_status": payload.get("publication_status"),
     }
 
@@ -115,13 +133,14 @@ def main() -> int:
     parser.add_argument("--analytics", action="store_true")
     args = parser.parse_args()
 
-    notion_get_page(args.page_id)
+    page = notion_get_page(args.page_id)
     result = sync_postmypost_url_to_notion(
         args.page_id,
         args.platform,
         config,
         publication_id=args.publication_id,
         post_kind=args.post_kind,
+        page=page,
     )
     if args.analytics:
         result["analytics"] = sync_postmypost_analytics(
@@ -131,7 +150,11 @@ def main() -> int:
             publication_id=args.publication_id,
         )
     print(json.dumps(result, indent=2, ensure_ascii=False))
-    return 0 if result.get("updated") or result.get("url") else 2
+    if result.get("updated"):
+        return 0
+    if result.get("reason") in {"noop_same", "conflict"}:
+        return 0
+    return 2
 
 
 if __name__ == "__main__":

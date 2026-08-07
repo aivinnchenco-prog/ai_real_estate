@@ -86,6 +86,7 @@ FACEBOOK_PLACE_ONLY = re.compile(
     r"^https?://(?:www\.|m\.)?facebook\.com/\d+/?(?:\?.*)?$",
     re.IGNORECASE,
 )
+FACEBOOK_NUMERIC_POST_RE = FACEBOOK_PLACE_ONLY
 
 
 def package_root() -> Path:
@@ -805,8 +806,8 @@ def _looks_like_post_url(value: str, network: str) -> bool:
     if any(part in lowered for part in blocked):
         return False
     if network == "facebook":
-        if FACEBOOK_PLACE_ONLY.match(value):
-            return False
+        if FACEBOOK_PLACE_ONLY.match(value) or FACEBOOK_NUMERIC_POST_RE.match(value):
+            return True
         return any(marker in lowered for marker in FACEBOOK_POST_MARKERS)
     if network == "instagram" and "/explore/locations/" in lowered:
         return False
@@ -1342,7 +1343,7 @@ def publish_one(
 
     try:
         if backend == "postmypost":
-            from postmypost_client import postmypost_planner_url, postmypost_schedule_post
+            from postmypost_client import postmypost_schedule_post
 
             scheduled = postmypost_schedule_post(
                 platform,
@@ -1372,14 +1373,36 @@ def publish_one(
         post_uuid = scheduled.get("uuid")
         network = network_for(platform)
         if backend == "postmypost":
+            from postmypost_client import extract_publication_url, postmypost_planner_url
+            from postmypost_publication_state import register_publication
+            from postmypost_social_url import is_valid_social_post_url
+
             planner_url = postmypost_planner_url(post_id, config)
-            published_url = scheduled.get("published_url") or resolve_published_post_url(
-                post_id, network, scheduled["response"]
+            published_url = scheduled.get("published_url") or extract_publication_url(
+                scheduled["response"], platform, config
             )
+            if published_url and not is_valid_social_post_url(published_url, network):
+                published_url = None
+            post_kind_for_slot = (
+                instagram_post_kind(upload_video=upload_video, mode=mode)
+                if network == "instagram"
+                else None
+            )
+            register_publication(
+                page_id=page_id,
+                object_id=object_id,
+                platform=platform,
+                publication_id=post_id,
+                planner_url=planner_url,
+                scheduled_time=scheduled_time,
+                post_kind=post_kind_for_slot,
+                upload_video=upload_video,
+            )
+            url_to_save = published_url
         else:
             planner_url = metricool_planner_post_url(post_uuid, config, post_id=post_id)
             published_url = resolve_published_post_url(post_id, network, scheduled["response"])
-        url_to_save = published_url or planner_url
+            url_to_save = published_url or planner_url
 
         pg_field = post_id_field_name(fields)
         err_field = fields.get("publish_error", nfc.LAST_ERROR)
@@ -1421,7 +1444,8 @@ def publish_one(
             if network_for(platform) == "instagram"
             else None
         )
-        if not published_url:
+        needs_url_sync = backend == "postmypost" or not published_url
+        if needs_url_sync:
             result["deferred_url_sync"] = spawn_deferred_post_url_sync(
                 page_id,
                 post_id,
@@ -1447,7 +1471,7 @@ def publish_one(
                     platform,
                     config,
                     post_id=post_id,
-                    post_url=published_url or url_to_save,
+                    post_url=published_url or planner_url,
                 )
                 if agent5:
                     result["agent5_postmypost_ai_agent"] = agent5

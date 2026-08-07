@@ -1,0 +1,9 @@
+{
+  "publication_status": 5,
+  "account_ids": [2214120],
+  "details": [{"link": "https://example.com/ignored"}],
+  "posts": [{
+    "account_id": 2214120,
+    "post_status": 5
+  }]
+}

@@ -18,6 +18,8 @@ POSTMYPOST_BASE_DEFAULT = "https://api.postmypost.io/v4.1"
 PUBLICATION_TYPE_POST = 1
 PUBLICATION_TYPE_REELS = 4
 PUBLICATION_STATUS_PENDING = 5
+PUBLICATION_STATUS_PUBLISHED = 1
+POST_STATUS_PUBLISHED = 1
 
 KNOWN_CHANNEL_IDS: dict[int, str] = {
     16: "youtube",
@@ -239,13 +241,43 @@ def postmypost_planner_url(publication_id: str | int, config: dict[str, Any]) ->
     return f"https://app.postmypost.io/publications/{publication_id}"
 
 
-def extract_publication_url(response: dict[str, Any], network: str) -> str | None:
-    for detail in response.get("details") or []:
-        if not isinstance(detail, dict):
+def extract_publication_url(
+    response: dict[str, Any],
+    platform: str,
+    config: dict[str, Any] | None = None,
+) -> str | None:
+    """Live social permalink from posts[].url matched by platform account_id."""
+    from postmypost_social_url import is_valid_social_post_url
+    from publish_pipeline import network_for
+
+    if config is None:
+        config = postmypost_cfg(None)
+        if not config.get("project_id"):
+            from publish_pipeline import load_config
+
+            config = load_config()
+
+    if int(response.get("publication_status") or 0) != PUBLICATION_STATUS_PUBLISHED:
+        return None
+
+    network = network_for(platform)
+    try:
+        wanted_accounts = {int(x) for x in resolve_account_ids(platform, config)}
+    except ValueError:
+        return None
+
+    for post in response.get("posts") or []:
+        if not isinstance(post, dict):
             continue
-        link = detail.get("link")
-        if isinstance(link, str) and link.startswith("http"):
-            return link
+        account_id = post.get("account_id")
+        if account_id is None or int(account_id) not in wanted_accounts:
+            continue
+        post_status = post.get("post_status")
+        if post_status is not None and int(post_status) != POST_STATUS_PUBLISHED:
+            continue
+        url = post.get("url")
+        if isinstance(url, str) and url.startswith("http") and is_valid_social_post_url(url, network):
+            return url
     return None
 
 
@@ -317,7 +349,9 @@ def postmypost_schedule_post(
         "id": str(publication_id),
         "uuid": None,
         "response": result,
-        "published_url": extract_publication_url(result if isinstance(result, dict) else {}, network),
+        "published_url": extract_publication_url(
+            result if isinstance(result, dict) else {}, platform, config
+        ),
     }
 
 
