@@ -94,10 +94,10 @@ AGENT2_ROOT = os.getenv('AGENT2_ROOT', '')
 # Сразу запускать agent2_structurize.py после сборки сессии
 AGENT2_AUTORUN = os.getenv('AGENT2_AUTORUN', 'true').lower() in ('1', 'true', 'yes')
 
-# false = на этом хосте цены не собираем (гибрид: VPS парсит объект, Mac добирает цены)
+# false = на этом хосте цены не собираем (legacy hybrid; основной путь — server background queue)
 PRICE_COLLECT_ENABLED = os.getenv('PRICE_COLLECT_ENABLED', 'true').lower() in ('1', 'true', 'yes')
-# Параллельных браузеров для локального сбора цен (1 = как раньше)
-PRICE_PARALLEL_WORKERS = int(os.getenv('PRICE_PARALLEL_WORKERS', '3'))
+# Параллельных браузеров (legacy Mac worker / ручной добор); background queue = 1 worker
+PRICE_PARALLEL_WORKERS = int(os.getenv('PRICE_PARALLEL_WORKERS', '1'))
 # Сколько месяцев вперёд собирать цены (None = взять из pipeline.json Агента 2, дефолт 12)
 _pma = os.getenv('PRICE_MONTHS_AHEAD', '').strip()
 PRICE_MONTHS_AHEAD = int(_pma) if _pma else None
@@ -119,6 +119,12 @@ PRICE_REFILL_PASS = os.getenv('PRICE_REFILL_PASS', 'true').lower() in ('1', 'tru
 PRICE_CACHE_ENABLED = os.getenv('PRICE_CACHE_ENABLED', 'true').lower() in ('1', 'true', 'yes')
 PRICE_CACHE_TTL_DAYS = int(os.getenv('PRICE_CACHE_TTL_DAYS', '7'))
 PRICE_CACHE_DIR = os.getenv('PRICE_CACHE_DIR', 'data/monthly_price_cache')
+# Background pricing queue (months 2–12)
+PRICE_QUEUE_PATH = os.getenv('PRICE_QUEUE_PATH', 'data/pricing_queue.json')
+PRICE_BACKGROUND_WORKERS = os.getenv('PRICE_BACKGROUND_WORKERS', '').strip()
+PRICE_BACKGROUND_DELAY_MIN = os.getenv('PRICE_BACKGROUND_DELAY_MIN', '').strip()
+PRICE_BACKGROUND_DELAY_MAX = os.getenv('PRICE_BACKGROUND_DELAY_MAX', '').strip()
+PRICE_NOTION_SYNC_ENABLED = os.getenv('PRICE_NOTION_SYNC_ENABLED', 'true').lower() in ('1', 'true', 'yes')
 # Таймаут открытия страницы браузером; при зависании Chrome перезапускается
 PARSER_OPEN_TIMEOUT_SEC = int(os.getenv('PARSER_OPEN_TIMEOUT_SEC', '90'))
 

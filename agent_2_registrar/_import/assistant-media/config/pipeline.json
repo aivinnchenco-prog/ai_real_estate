@@ -14,7 +14,16 @@
     "telegram": "ТГ",
     "description": "Контакты для описаний: whatsapp — номер брони, telegram — как называть ТГ-канал/бота в постах. Меняются здесь, не в коде."
   },
-  "price_months_ahead": 3,
+  "price_months_ahead": 12,
+  "monthly_pricing": {
+    "months_ahead": 12,
+    "background_workers": 1,
+    "background_request_delay_seconds": {"min": 5, "max": 12},
+    "block_cooldown_seconds": [300, 900, 3600],
+    "retry_delay_seconds": [120, 600, 1800],
+    "stale_running_seconds": 300,
+    "max_job_attempts": 3
+  },
   "batch_wait_seconds": 150,
   "min_video_seconds": 15,
   "frame_duration_seconds": 2.5,

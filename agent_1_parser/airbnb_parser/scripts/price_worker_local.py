@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Локальный воркер цен (Mac): добирает monthly_prices для объектов без цен в Notion.
+"""Локальный воркер цен (Mac): **fallback / manual recovery** для monthly_prices.
 
-Эксперимент гибрида:
-  VPS (PRICE_COLLECT_ENABLED=0) — парсинг/фото/Notion без цен;
-  Mac (этот скрипт) — Airbnb цены с домашнего IP → Notion.
+Основной путь — server-side background queue (`pricing_worker.py`).
+Этот скрипт остаётся для ручного добора и диагностики с домашнего IP.
 
 Usage:
   .venv/bin/python scripts/price_worker_local.py --watch

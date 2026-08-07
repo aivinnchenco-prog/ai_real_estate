@@ -46,6 +46,35 @@ def iter_months_ahead(today: date, months_ahead: int) -> list[tuple[int, int]]:
     return out
 
 
+def month_keys_ahead(today: date | None, months_ahead: int) -> list[str]:
+    """Ключи YYYY-MM для months_ahead предстоящих месяцев."""
+    today = today or date.today()
+    return [f"{y:04d}-{m:02d}" for y, m in iter_months_ahead(today, months_ahead)]
+
+
+def primary_month_key(today: date | None, months_ahead: int) -> str | None:
+    keys = month_keys_ahead(today, months_ahead)
+    return keys[0] if keys else None
+
+
+def background_month_keys(today: date | None, months_ahead: int) -> list[str]:
+    keys = month_keys_ahead(today, months_ahead)
+    return keys[1:] if len(keys) > 1 else []
+
+
+def first_upcoming_month_key(monthly: dict, today: date | None = None) -> str | None:
+    """Первый предстоящий месяц с ценой (строго после текущего календарного)."""
+    today = today or date.today()
+    current = f"{today.year:04d}-{today.month:02d}"
+    for month in sorted(monthly):
+        if month <= current:
+            continue
+        entry = monthly.get(month) or {}
+        if entry.get("price"):
+            return month
+    return None
+
+
 def longest_available_segment(
     availability: dict[date, bool], year: int, month: int
 ) -> tuple[date, date] | None:

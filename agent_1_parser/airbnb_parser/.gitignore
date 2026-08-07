@@ -4,6 +4,7 @@ data/cursor_sessions.json
 data/agent_tasks.db
 data/task_instructions/
 data/monthly_price_cache/
+data/pricing_queue.json
 credentials/
 credentials/oauth-client.json
 credentials/drive-oauth-token.json
