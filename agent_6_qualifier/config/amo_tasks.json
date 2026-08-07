@@ -1,0 +1,13 @@
+{
+  "amo_tasks": {
+    "enabled": true,
+    "owner_followup_hours": 2,
+    "client_followup_hours": 24,
+    "need_human_minutes": 15,
+    "max_automatic_client_followups": 1,
+    "task_prefix": "OPENHOME"
+  },
+  "task_type_ids": {
+    "default": 1
+  }
+}

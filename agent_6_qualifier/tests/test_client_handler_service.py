@@ -346,20 +346,19 @@ def test_folder_error_blocks_amo_and_save():
     amo.ensure_pipeline.assert_not_called()
 
 
-def test_notify_manager_error_blocks_outreach_and_save():
+def test_notify_manager_error_does_not_block_outreach_and_save():
     turn = make_turn(handoff_to_human=True, need_owner_check=True, skip_polish=True)
-    kwargs, events, store, inflight, _, _, outreach_tasks, _ = build_process_env(
+    kwargs, events, store, inflight, notify_errors, _, outreach_tasks, _ = build_process_env(
         turn=turn,
         manager_raises=RuntimeError("manager down"),
     )
-    with pytest.raises(RuntimeError, match="manager down"):
-        asyncio.run(process_client_message(**kwargs))
+    asyncio.run(process_client_message(**kwargs))
 
     assert "manager" in events
-    assert "save" not in events
-    assert store.saved == []
-    assert outreach_tasks == []
-    assert kwargs["chat_id"] not in inflight
+    assert any(err[0] == "manager.alert" for err in notify_errors)
+    assert "save" in events
+    assert len(store.saved) == 1
+    assert len(outreach_tasks) == 1
 
 
 def test_create_task_failure_leaves_inflight_and_skips_save():

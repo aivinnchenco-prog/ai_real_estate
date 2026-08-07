@@ -130,6 +130,8 @@ async def auto_outreach(client, session, store, amo) -> None:
                 await asyncio.to_thread(
                     amo.note_owner, session.amo_lead_id, listing.object_id,
                     f"Запрос владельцу (telegram): {plan.first_message[:150]}")
+                from agent6_qualifier.amo_task_service import AmoTaskService
+                AmoTaskService(amo).on_owner_outreach_sent(session)
             return
 
         # --- WA / Airbnb DM / FB DM: авто-отправка не подключена — менеджеру ---

@@ -128,6 +128,7 @@ class Turn:
     need_owner_check: bool = False    # пора отдавать объект Agent 8
     booking_confirmed: bool = False   # клиент подтвердил бронь
     handoff_to_human: bool = False    # передать живому менеджеру
+    awaiting_client_response: bool = False  # исходящее ждёт ответа клиента (SLA)
     skip_polish: bool = False         # не отдавать Gemini — шаблон точный
 
 
@@ -188,7 +189,7 @@ class Qualifier:
             elif _HAS_SPECIFIC_RE.search(message or ""):
                 # Пришёл по конкретному объекту, но ID/ссылки нет — просим прислать.
                 return Turn(reply_draft=CLIENT_ASK_OBJECT_LINK, events=events,
-                            skip_polish=True)
+                            skip_polish=True, awaiting_client_response=True)
 
         if session.awaiting_alt_consent:
             if skips_alternatives(message, session):
@@ -251,15 +252,20 @@ class Qualifier:
                     reply_draft="Подтверждаете бронь на эти даты?",
                     events=events,
                     skip_polish=True,
+                    awaiting_client_response=True,
                 )
             if not lead.guests:
-                return Turn(reply_draft=CLIENT_BOOKING_GUESTS, events=events, skip_polish=True)
+                return Turn(reply_draft=CLIENT_BOOKING_GUESTS, events=events,
+                            skip_polish=True, awaiting_client_response=True)
             if not lead.full_name:
-                return Turn(reply_draft=CLIENT_BOOKING_FIO, events=events, skip_polish=True)
+                return Turn(reply_draft=CLIENT_BOOKING_FIO, events=events,
+                            skip_polish=True, awaiting_client_response=True)
             if not lead.citizenship:
-                return Turn(reply_draft=CLIENT_BOOKING_CITIZENSHIP, events=events, skip_polish=True)
+                return Turn(reply_draft=CLIENT_BOOKING_CITIZENSHIP, events=events,
+                            skip_polish=True, awaiting_client_response=True)
             if not lead.whatsapp:
-                return Turn(reply_draft=CLIENT_BOOKING_WHATSAPP, events=events, skip_polish=True)
+                return Turn(reply_draft=CLIENT_BOOKING_WHATSAPP, events=events,
+                            skip_polish=True, awaiting_client_response=True)
             session.booking_confirmed = True
             session.handoff_to_human = True
             dr = self._date_range(lead)
@@ -298,7 +304,7 @@ class Qualifier:
             session.asked_object_source = True
             events.append("Спросили: конкретный объект или подбор")
             return Turn(reply_draft=CLIENT_ASK_OBJECT_OR_SEARCH, events=events,
-                        skip_polish=True)
+                        skip_polish=True, awaiting_client_response=True)
 
         # Анкета-критерии одним сообщением (+ подтверждение объекта из таблицы).
         # Дата выезда не указана = контракт на год, переспрашивать не нужно.
@@ -309,12 +315,14 @@ class Qualifier:
             if chosen is not None:
                 parts.append(self._confirm_object_line(chosen))
             parts.append(CLIENT_QUALIFY_BULLETS)
-            return Turn(reply_draft="\n\n".join(parts), events=events, skip_polish=True)
+            return Turn(reply_draft="\n\n".join(parts), events=events,
+                        skip_polish=True, awaiting_client_response=True)
 
         # Минимум для проверки доступности и цены — дата заезда.
         if not lead.check_in:
             parts.append(CLIENT_ASK_DATES)
-            return Turn(reply_draft="\n\n".join(parts), events=events, skip_polish=True)
+            return Turn(reply_draft="\n\n".join(parts), events=events,
+                        skip_polish=True, awaiting_client_response=True)
 
         # Ориентировочная цена (один раз): период короче месяца — пропорцией
         # от месячной цены, иначе месячная из monthly_prices.
@@ -344,7 +352,8 @@ class Qualifier:
             session.awaiting_alt_consent = True
             parts.append(client_object_busy(chosen.object_id, busy_until, free_from))
             events.append(f"Объект {chosen.object_id} занят до {busy_until}")
-            return Turn(reply_draft="\n\n".join(parts), events=events)
+            return Turn(reply_draft="\n\n".join(parts), events=events,
+                        awaiting_client_response=True)
 
         # Квалификация собрана, владелец ещё НЕ отвечал -> запрос Agent 8.
         if (chosen is not None and not session.awaiting_alt_consent
@@ -390,7 +399,8 @@ class Qualifier:
                 return Turn(reply_draft=client_no_alternatives(self._oid(session)),
                             events=events, skip_polish=True)
             from .templates import CLIENT_ASK_BUDGET_TOLERANCE
-            return Turn(reply_draft=CLIENT_ASK_BUDGET_TOLERANCE, events=events)
+            return Turn(reply_draft=CLIENT_ASK_BUDGET_TOLERANCE, events=events,
+                        awaiting_client_response=True)
 
         lines = ["Вот что могу предложить:"]
         for l in candidates:

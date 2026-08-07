@@ -100,6 +100,10 @@ async def process_owner_message(
             obj = session.lead.preferred_object_id or "-"
             amo.note_owner(session.amo_lead_id, obj, text)
             amo.note_client(session.amo_lead_id, obj, f"Сообщено клиенту: {reply[:200]}")
+            from agent6_qualifier.amo_task_service import AmoTaskService
+            task_svc = AmoTaskService(amo)
+            task_svc.on_owner_response(session, verdict.status)
+            task_svc.reconcile_stage(session.amo_lead_id, "Согласование условий")
         except Exception as e:
             notify_error("amo.owner_flow", str(e), f"сделка #{session.amo_lead_id}")
     return True

@@ -286,3 +286,63 @@ class AmoClient:
 
     def note_owner(self, lead_id: int, object_id: str, text: str) -> None:
         self.add_note("leads", lead_id, f"[OBJ:{object_id}][OWNER] {text}")
+
+    # ---------- amoCRM tasks (GET/POST/PATCH /api/v4/tasks) ----------
+
+    def list_tasks(
+        self,
+        *,
+        entity_type: str = "leads",
+        entity_id: int | None = None,
+        is_completed: bool | None = False,
+        page: int = 1,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Список задач. По умолчанию — открытые задачи сделки."""
+        params: list[str] = [f"page={page}", f"limit={limit}"]
+        if entity_type:
+            params.append(f"filter[entity_type]={entity_type}")
+        if entity_id is not None:
+            params.append(f"filter[entity_id]={entity_id}")
+        if is_completed is not None:
+            params.append(f"filter[is_completed]={1 if is_completed else 0}")
+        query = "&".join(params)
+        data = self._req("GET", f"/tasks?{query}")
+        return list((data or {}).get("_embedded", {}).get("tasks", []))
+
+    def create_task(
+        self,
+        *,
+        lead_id: int,
+        text: str,
+        complete_till: int,
+        responsible_user_id: int,
+        task_type_id: int | None = None,
+    ) -> int:
+        from .amo_tasks_config import default_task_type_id
+
+        body = [{
+            "entity_type": "leads",
+            "entity_id": int(lead_id),
+            "text": text,
+            "complete_till": int(complete_till),
+            "responsible_user_id": int(responsible_user_id),
+            "task_type_id": int(task_type_id or default_task_type_id()),
+            "is_completed": False,
+        }]
+        data = self._req("POST", "/tasks", json=body)
+        return int(data["_embedded"]["tasks"][0]["id"])
+
+    def update_task(self, task_id: int, **fields) -> None:
+        if not fields:
+            return
+        self._req("PATCH", f"/tasks/{int(task_id)}", json=fields)
+
+    def complete_task(self, task_id: int, result_text: str = "") -> None:
+        payload: dict = {"is_completed": True}
+        if result_text:
+            payload["result"] = {"text": result_text[:4000]}
+        self._req("PATCH", f"/tasks/{int(task_id)}", json=payload)
+
+    def get_lead(self, lead_id: int) -> dict:
+        return self._req("GET", f"/leads/{int(lead_id)}") or {}

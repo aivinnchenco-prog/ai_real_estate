@@ -515,8 +515,8 @@ def test_notify_manager_error_is_swallowed_by_outer_handler(runtime, monkeypatch
 
     asyncio.run(runtime.run(event, sender))
 
-    assert any(err[0] == "agent7.handler" for err in runtime.notify_errors)
-    assert runtime.store.saved == []
+    assert any(err[0] == "manager.alert" for err in runtime.notify_errors)
+    assert len(runtime.store.saved) == 1
 
 
 def test_save_error_after_outreach_task_still_clears_inflight(runtime):

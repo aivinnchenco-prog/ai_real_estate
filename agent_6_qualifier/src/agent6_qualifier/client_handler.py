@@ -10,6 +10,13 @@ from typing import Any, Awaitable, Callable
 from .qualifier import Session, Turn
 
 
+def _amo_tasks(amo, notify_error_fn):
+    if amo is None:
+        return None
+    from .amo_task_service import AmoTaskService
+    return AmoTaskService(amo, notify_error_fn=notify_error_fn)
+
+
 @dataclass(frozen=True)
 class ClientMessageTemplates:
     notary_caption: str
@@ -48,6 +55,10 @@ async def process_client_message(
     text = event.raw_text or ""
     print(f"[in] {chat_id}: {text[:80]}")
 
+    tasks = _amo_tasks(amo, notify_error)
+    if tasks is not None:
+        tasks.on_client_inbound(session)
+
     try:
         update = extract_lead_update(text, session)
     except Exception as e:
@@ -65,6 +76,9 @@ async def process_client_message(
     )
     await send_client_response(event, reply)
     print(f"[out] {chat_id}: {reply[:80]}")
+
+    if tasks is not None and turn.awaiting_client_response:
+        tasks.on_client_outbound_awaiting_response(session, reply)
 
     if turn.booking_confirmed:
         uname = getattr(sender, "username", "") or ""
@@ -160,20 +174,27 @@ async def process_client_message(
                 f"ФИО: {lead.full_name}, гражданство: {lead.citizenship}, "
                 f"WhatsApp: {lead.whatsapp}, гостей: {lead.guests}",
             )
+            if tasks is not None:
+                tasks.reconcile_stage(
+                    session.amo_lead_id, templates.amo_stage_booking_confirmed,
+                )
         except Exception as e:
             notify_error("amo.stage", str(e), "бронь подтверждена")
     if session.handoff_to_human or turn.handoff_to_human:
-        uname = getattr(sender, "username", "") or ""
-        who = f"@{uname}" if uname else f"chat_id={chat_id}"
-        notify_manager(
-            f"Клиент {who} ожидает ответа менеджера.\n"
-            f"Объект: {session.lead.preferred_object_id or '-'}, "
-            f"сделка #{session.amo_lead_id or '-'}\n"
-            f"ФИО: {session.lead.full_name or '-'}, "
-            f"гражданство: {session.lead.citizenship or '-'}\n"
-            f"Сообщение: {text[:200]}",
-            dedup_key=chat_id,
-        )
+        if tasks is not None:
+            tasks.on_need_human(session, text, notify_fn=notify_manager, sender=sender)
+        else:
+            uname = getattr(sender, "username", "") or ""
+            who = f"@{uname}" if uname else f"chat_id={chat_id}"
+            notify_manager(
+                f"Клиент {who} ожидает ответа менеджера.\n"
+                f"Объект: {session.lead.preferred_object_id or '-'}, "
+                f"сделка #{session.amo_lead_id or '-'}\n"
+                f"ФИО: {session.lead.full_name or '-'}, "
+                f"гражданство: {session.lead.citizenship or '-'}\n"
+                f"Сообщение: {text[:200]}",
+                dedup_key=chat_id,
+            )
     if (turn.need_owner_check and not session.owner_verdict
             and chat_id not in outreach_inflight):
         print(f"[agent8] авто-запрос владельцу: {session.lead.preferred_object_id}")
@@ -184,6 +205,10 @@ async def process_client_message(
                     session.amo_lead_id,
                     stages[templates.amo_stage_owner_request],
                 )
+                if tasks is not None:
+                    tasks.reconcile_stage(
+                        session.amo_lead_id, templates.amo_stage_owner_request,
+                    )
             except Exception as e:
                 notify_error("amo.stage", str(e), "не удалось сменить стадию")
         outreach_inflight.add(chat_id)
