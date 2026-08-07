@@ -38,6 +38,7 @@ class ConversationState:
     property_type: str = ""
     screen_state: str = "UNKNOWN"
     whatsapp_candidate_conflict: str | None = None
+    whatsapp_existing: str = ""
     updated_at: str = field(default_factory=_now_iso)
 
     def touch(self) -> None:

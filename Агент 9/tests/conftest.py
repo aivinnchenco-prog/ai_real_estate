@@ -10,6 +10,21 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+
+@pytest.fixture(autouse=True)
+def force_mock_browser(monkeypatch):
+    import agent9_connector.config_loader as cfg
+    cfg.load_connector_config.cache_clear()
+    patched = dict(cfg.load_connector_config())
+    patched["browser_enabled"] = False
+
+    def _load():
+        return patched
+
+    monkeypatch.setattr(cfg, "load_connector_config", _load)
+    monkeypatch.setattr("agent9_connector.main.load_connector_config", _load)
+
+
 @pytest.fixture
 def tmp_store(tmp_path, monkeypatch):
     import agent9_connector.config_loader as cfg

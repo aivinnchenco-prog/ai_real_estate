@@ -9,6 +9,8 @@
     "recheck_min": 0.70
   },
   "intro_language": "ru",
+  "browser_enabled": true,
+  "browser_headless": false,
   "terminal_outreach_statuses": ["complete", "declined", "manual_review", "failed"],
   "active_outreach_statuses": ["pending", "opening_listing", "waiting_contact", "waiting_role"]
 }

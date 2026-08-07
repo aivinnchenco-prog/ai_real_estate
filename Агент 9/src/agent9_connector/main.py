@@ -36,10 +36,14 @@ class ConnectorRuntime:
     @classmethod
     def create(cls) -> "ConnectorRuntime":
         cfg = load_connector_config()
+        browser_enabled = bool(cfg.get("browser_enabled", True))
         return cls(
             store=StateStore(),
             notion=NotionClient(),
-            facebook=FacebookConnector(),
+            facebook=FacebookConnector(
+                mock_mode=not browser_enabled,
+                headless=bool(cfg.get("browser_headless", False)),
+            ),
             gemini=GeminiClient(),
             outreach_hour=[],
             outreach_day=[],
@@ -55,6 +59,7 @@ class ConnectorRuntime:
                 "facebook_url": listing.facebook_url,
                 "listing_id": listing.listing_id,
                 "property_type": listing.property_type,
+                "whatsapp_existing": listing.whatsapp_existing,
             }):
                 enqueued += 1
         return enqueued
@@ -75,6 +80,7 @@ class ConnectorRuntime:
             facebook_url=item.get("facebook_url", ""),
             listing_id=item.get("listing_id", ""),
             property_type=item.get("property_type", ""),
+            whatsapp_existing=item.get("whatsapp_existing", ""),
             state=BusinessState.NEW.value,
             outreach_status="opening_listing",
         )
@@ -157,8 +163,7 @@ class ConnectorRuntime:
         )
 
         if decision.save_whatsapp:
-            listing = self.notion.query_eligible()  # tests inject; runtime uses page props
-            existing = ""
+            existing = getattr(conv, "whatsapp_existing", "") or ""
             allowed, reason = whatsapp_write_allowed(existing, decision.save_whatsapp)
             if not allowed:
                 conv.whatsapp_candidate_conflict = decision.save_whatsapp
@@ -178,7 +183,9 @@ class ConnectorRuntime:
             if self.facebook.thread_contains_sent_text(conv.thread_id, decision.send_message[:30]):
                 pass
             else:
-                self.facebook.send_message(decision.send_message, thread_id=conv.thread_id)
+                self.facebook.send_message(
+                    decision.send_message, thread_id=conv.thread_id, listing_id=conv.listing_id,
+                )
                 conv.role_question_sent_at = conv.updated_at
                 conv.state = next_after_role_asked().value
 
@@ -188,7 +195,9 @@ class ConnectorRuntime:
                 conv.state = BusinessState.MANUAL_REVIEW.value
                 conv.outreach_status = "manual_review"
             else:
-                self.facebook.send_message(text, thread_id=conv.thread_id)
+                self.facebook.send_message(
+                    text, thread_id=conv.thread_id, listing_id=conv.listing_id,
+                )
 
         if decision.save_role:
             self.notion.update_outreach(conv.notion_page_id, owner_agent=decision.save_role, status="complete")
@@ -233,6 +242,9 @@ class ConnectorRuntime:
 
     def run_forever(self) -> None:
         cfg = load_connector_config()
+        if not self.facebook.mock_mode:
+            self.facebook.ensure_browser()
+            log_event("browser_started", profile=str(self.facebook.profile_path()))
         notion_poll = int(cfg.get("notion_poll_seconds", 300))
         conv_poll = int(cfg.get("conversation_poll_seconds", 120))
         last_notion = 0.0

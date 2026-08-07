@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from agent9_connector.gemini import GeminiClient
 from agent9_connector.main import ConnectorRuntime
 from agent9_connector.notion import NotionClient
 from agent9_connector.state_machine import BusinessState
@@ -36,6 +37,7 @@ class TestStateMachine:
         tmp_store.save(conv)
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
+        rt.gemini = GeminiClient(api_key="")
         rt.notion.update_outreach = lambda *a, **k: None
         rt.facebook.push_inbound("t1", "WhatsApp +66812345678")
         rt.poll_active_conversations()
@@ -48,6 +50,7 @@ class TestStateMachine:
         tmp_store.save(conv)
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
+        rt.gemini = GeminiClient(api_key="")
         rt.notion.update_outreach = lambda *a, **k: None
         rt._handle_inbound(conv, "owner")
         assert not any("собственник" in (m or "") for msgs in rt.facebook._sent.values() for m in msgs)
@@ -57,6 +60,7 @@ class TestStateMachine:
         tmp_store.save(conv)
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
+        rt.gemini = GeminiClient(api_key="")
         rt.notion.update_outreach = lambda *a, **k: None
         rt._handle_inbound(conv, "я собственник")
         assert tmp_store.get("F_1").state == BusinessState.COMPLETE.value
@@ -66,6 +70,7 @@ class TestStateMachine:
         tmp_store.save(conv)
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
+        rt.gemini = GeminiClient(api_key="")
         rt.notion.update_outreach = lambda *a, **k: None
         rt._handle_inbound(conv, "I am an agent")
         assert tmp_store.get("F_1").state == BusinessState.COMPLETE.value
@@ -75,6 +80,7 @@ class TestStateMachine:
         tmp_store.save(conv)
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
+        rt.gemini = GeminiClient(api_key="")
         rt.notion.update_outreach = lambda *a, **k: None
         rt._handle_inbound(conv, "don't contact me")
         assert tmp_store.get("F_1").state == BusinessState.DECLINED.value
@@ -84,6 +90,7 @@ class TestStateMachine:
         tmp_store.save(conv)
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
+        rt.gemini = GeminiClient(api_key="")
         rt.notion.update_outreach = lambda *a, **k: None
         rt._handle_inbound(conv, "maybe later")
         assert tmp_store.get("F_1").state == BusinessState.MANUAL_REVIEW.value
