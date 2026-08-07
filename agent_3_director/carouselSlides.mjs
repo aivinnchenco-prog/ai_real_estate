@@ -7,8 +7,8 @@
  *
  * Карусель (carousel/):
  *   слайд 1 — хук-обложка на лучшем «инстаграмном» фото;
- *   слайд 2 — фото + три бейджа;
- *   слайды 3+ — только логотип и контакты.
+ *   слайд 2 — следующее уникальное фото + три бейджа;
+ *   слайды 3+ — остальные уникальные фото (лого + контакты).
  *
  * Brand open home (brand_open_home/):
  *   ВСЕ фото с бренд-шаблоном (лого + контакты);
@@ -28,7 +28,7 @@ const SLIDE_WIDTH = 1080;
 const SLIDE_HEIGHT = 1350;
 const MAX_SLIDES = 9;
 const TG_LABEL = "TG @OpenHome_th";
-const PHONE_LABEL = "+66 62 512 4001";
+const PHONE_LABEL = "+66 62 512 4002";
 
 // «Приватные» типы жилья: своя вилла/дом → Private Pool / Private Parking.
 // Кондо, апартаменты, квартиры → Shared (общие бассейн и парковка).
@@ -151,6 +151,65 @@ function slideName(n) {
   return `slide_${String(n).padStart(2, "0")}.jpg`;
 }
 
+/**
+ * План слайдов карусели: каждый source photo не более одного раза.
+ * @returns {{ plan: object[], names: string[] }}
+ */
+export function planCarouselSlides({ withHook, photoKeys, photoLocals, carouselMeta }) {
+  if (!photoLocals?.length) {
+    throw new Error("Carousel: нет фото для плана");
+  }
+  if (photoKeys.length !== photoLocals.length) {
+    throw new Error("Carousel: photoKeys и photoLocals должны быть одинаковой длины");
+  }
+
+  const plan = [];
+  const names = [];
+  const photoStartIdx = withHook ? 1 : 0;
+
+  if (withHook) {
+    plan.push({
+      kind: "hook",
+      slideNo: 1,
+      sourcePath: photoLocals[0],
+      sourceKey: photoKeys[0],
+      badges: "",
+    });
+    names.push(slideName(1));
+  }
+
+  for (let i = photoStartIdx; i < photoLocals.length; i++) {
+    const slideNo = (withHook ? 2 : 1) + (i - photoStartIdx);
+    if (slideNo > MAX_SLIDES) break;
+    plan.push({
+      kind: "photo",
+      slideNo,
+      sourcePath: photoLocals[i],
+      sourceKey: photoKeys[i],
+      badges: i === photoStartIdx ? slideBadges(carouselMeta) : "",
+    });
+    names.push(slideName(slideNo));
+  }
+
+  assertUniqueCarouselSources(plan);
+  return { plan, names };
+}
+
+/** Защита: один source не может попасть на два слайда одной карусели. */
+export function assertUniqueCarouselSources(plan) {
+  const seen = new Set();
+  for (const item of plan) {
+    const id = item.sourceKey || item.sourcePath;
+    if (!id) continue;
+    if (seen.has(id)) {
+      throw new Error(
+        `Carousel: duplicate source photo "${id}" assigned to more than one slide`
+      );
+    }
+    seen.add(id);
+  }
+}
+
 function galleryIndexHtml(objectId, names, label = "дизайн-карусель") {
   const imgs = names
     .map((n) => `    <a href="${n}"><img src="${n}" alt="${escapeHtml(objectId)}"></a>`)
@@ -204,25 +263,31 @@ export async function buildCarousel({
 
   const tmpDir = mkdtempSync(join(tmpdir(), "carousel-"));
   try {
-    const maxPhotos = withHook ? MAX_SLIDES - 1 : MAX_SLIDES;
+    const maxPhotos = MAX_SLIDES;
     const photoLocals = [];
+    const downloadedKeys = [];
     for (let i = 0; i < photoKeys.length && photoLocals.length < maxPhotos; i++) {
       const local = join(tmpDir, `photo_${i}${photoKeys[i].slice(photoKeys[i].lastIndexOf("."))}`);
       try {
         await downloadFromR2(photoKeys[i], local);
         photoLocals.push(local);
+        downloadedKeys.push(photoKeys[i]);
       } catch (err) {
         console.warn(`Carousel: не скачалось ${photoKeys[i]}: ${err.message}`);
       }
     }
     if (!photoLocals.length) throw new Error("Carousel: не удалось скачать ни одного фото");
 
-    const names = [];
-    let firstPhotoSlideNo = 1;
+    const { plan, names } = planCarouselSlides({
+      withHook,
+      photoKeys: downloadedKeys,
+      photoLocals,
+      carouselMeta,
+    });
 
-    // --- слайд 1 (если есть цена): хук-обложка на лучшем фото ---
-    if (withHook) {
-      const hookLocal = join(tmpDir, slideName(1));
+    const hookItem = plan.find((item) => item.kind === "hook");
+    if (hookItem) {
+      const hookLocal = join(tmpDir, slideName(hookItem.slideNo));
       let hookReady = false;
       try {
         await downloadFromR2(`${objectId}/hook_cover.jpg`, hookLocal);
@@ -233,29 +298,22 @@ export async function buildCarousel({
       if (!hookReady) {
         const overlayCfg = loadTitleOverlayConfig(videoCfg);
         await renderHookCover({
-          photoPath: photoLocals[0],
+          photoPath: hookItem.sourcePath,
           outputPath: hookLocal,
           meta: overlayMeta,
           cfg: overlayCfg,
         });
       }
-      names.push(slideName(1));
-      firstPhotoSlideNo = 2;
     }
 
-    // --- фото-слайды: первый — с тремя бейджами, остальные — только лого + контакты ---
-    const slides = [];
-    photoLocals.forEach((photoPath, idx) => {
-      const n = firstPhotoSlideNo + idx;
-      if (n > MAX_SLIDES) return;
-      slides.push({
-        name: slideName(n).replace(/\.jpg$/, ""),
-        photoPath,
-        badges: idx === 0 ? slideBadges(carouselMeta) : "",
-        outPath: join(tmpDir, slideName(n)),
-      });
-      names.push(slideName(n));
-    });
+    const slides = plan
+      .filter((item) => item.kind === "photo")
+      .map((item) => ({
+        name: slideName(item.slideNo).replace(/\.jpg$/, ""),
+        photoPath: item.sourcePath,
+        badges: item.badges,
+        outPath: join(tmpDir, slideName(item.slideNo)),
+      }));
     await renderSlides(slides, tmpDir);
 
     const indexHtml = galleryIndexHtml(objectId, names, "дизайн-карусель");
