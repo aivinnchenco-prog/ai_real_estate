@@ -20,8 +20,14 @@ FIELD_FB_OUTREACH_STATUS = "FB Outreach Status"
 FIELD_FB_OUTREACH_UPDATED = "FB Outreach Updated At"
 FIELD_FB_THREAD = "FB Messenger Thread"
 FIELD_FB_OUTREACH_ERROR = "FB Outreach Error"
+FIELD_DESCRIPTION = "Описание"
 
 TERMINAL_STATUSES = frozenset({"complete", "declined", "manual_review", "failed"})
+
+_MARKETPLACE_URL_RE = re.compile(
+    r"https?://(?:www\.)?facebook\.com/marketplace/item/\d+",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -46,10 +52,21 @@ class NotionClient:
             "Notion-Version": "2022-06-28",
             "Content-Type": "application/json",
         }
+        self._property_names: set[str] | None = None
 
     @property
     def configured(self) -> bool:
         return bool(self.token and self.database_id)
+
+    def _database_property_names(self) -> set[str]:
+        if self._property_names is None:
+            data = self._req("GET", f"/databases/{self.database_id}")
+            self._property_names = set((data.get("properties") or {}).keys())
+        return self._property_names
+
+    def _filter_existing_props(self, props: dict[str, Any]) -> dict[str, Any]:
+        names = self._database_property_names()
+        return {key: value for key, value in props.items() if key in names}
 
     def _req(self, method: str, path: str, **kwargs) -> dict:
         r = requests.request(method, f"{self.base}{path}", headers=self.headers, timeout=30, **kwargs)
@@ -89,6 +106,7 @@ class NotionClient:
             props[FIELD_WHATSAPP] = {"rich_text": [{"text": {"content": whatsapp}}]}
         if owner_agent is not None:
             props[FIELD_OWNER_AGENT] = {"rich_text": [{"text": {"content": owner_agent}}]}
+        props = self._filter_existing_props(props)
         if props:
             self._req("PATCH", f"/pages/{page_id}", json={"properties": props})
 
@@ -126,11 +144,25 @@ def is_facebook_object(object_id: str, source_url: str) -> bool:
     return "facebook.com" in u and "marketplace" in u
 
 
-def resolve_facebook_url(source_url: str, marketplace_post_url: str) -> str:
+def extract_facebook_marketplace_url(*texts: str) -> str:
+    for text in texts:
+        if not text:
+            continue
+        match = _MARKETPLACE_URL_RE.search(text)
+        if match:
+            return match.group(0)
+    return ""
+
+
+def resolve_facebook_url(
+    source_url: str,
+    marketplace_post_url: str,
+    *fallback_texts: str,
+) -> str:
     for url in (source_url, marketplace_post_url):
         if "facebook.com" in (url or "").lower() and "marketplace" in url.lower():
             return url
-    return ""
+    return extract_facebook_marketplace_url(*fallback_texts)
 
 
 def is_eligible(listing: NotionListing) -> bool:
@@ -150,7 +182,8 @@ def parse_page(page: dict) -> NotionListing | None:
         return None
     source = _url(props.get(FIELD_SOURCE_URL))
     mp_url = _url(props.get(FIELD_FB_MARKETPLACE_URL))
-    fb_url = resolve_facebook_url(source, mp_url)
+    description = _rt(props.get(FIELD_DESCRIPTION))
+    fb_url = resolve_facebook_url(source, mp_url, description)
     return NotionListing(
         page_id=page["id"],
         object_id=object_id,

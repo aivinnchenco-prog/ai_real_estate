@@ -188,9 +188,9 @@ class FacebookConnector(ChannelConnector):
             if not pw.click_message_button(page):
                 self._diag("message_button_missing")
                 return SendResult(False, error="message_button_not_found", screen_state=self._screen)
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(1000)
 
-        if not pw.find_composer(page):
+        if not pw.wait_for_composer(page):
             self._diag("composer_missing")
             return SendResult(False, error="composer_not_found", screen_state=self._screen)
 

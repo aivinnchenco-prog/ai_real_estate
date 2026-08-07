@@ -32,6 +32,20 @@ class TestNotion:
     def test_resolve_url(self):
         assert "marketplace" in resolve_facebook_url("https://facebook.com/marketplace/item/1", "")
 
+    def test_resolve_url_from_description(self, sample_page):
+        sample_page["properties"]["Источник объявления"]["url"] = None
+        sample_page["properties"]["post_url_FB_marketplace"]["url"] = None
+        sample_page["properties"]["Описание"] = {
+            "rich_text": [{
+                "plain_text": "Villa\nhttps://www.facebook.com/marketplace/item/1515735863510\n",
+            }],
+        }
+        listing = parse_page(sample_page)
+        assert listing
+        assert listing.facebook_url.endswith("/1515735863510")
+        assert listing.listing_id == "1515735863510"
+        assert is_eligible(listing)
+
 
 class TestQueue:
     def test_duplicate_poll_one_job(self, tmp_store):

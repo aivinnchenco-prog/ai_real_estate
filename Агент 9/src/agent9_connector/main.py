@@ -102,6 +102,17 @@ class ConnectorRuntime:
         return handled
 
     def _start_outreach(self, conv: ConversationState) -> None:
+        if not conv.facebook_url or not conv.listing_id:
+            conv.state = BusinessState.MANUAL_REVIEW.value
+            conv.outreach_status = "manual_review"
+            conv.last_error = "missing_facebook_url"
+            self.store.save(conv)
+            self.notion.update_outreach(
+                conv.notion_page_id,
+                status="manual_review",
+                error="missing_facebook_url",
+            )
+            return
         screen = self.facebook.open_listing(conv.facebook_url, conv.listing_id)
         conv.screen_state = screen
         if screen in ("LOGIN_REQUIRED", "CHECKPOINT", "ACCOUNT_PAUSED"):
