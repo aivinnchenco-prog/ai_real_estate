@@ -49,6 +49,12 @@ agent_3_director/data/
 # Runtime-логи отложенной синхронизации Агента 4
 agent_4_publisher/data/deferred_sync/
 
+# PostMyPost publication_id per-slot mapping (runtime)
+agent_4_publisher/data/postmypost_publications.json
+
+# Agent 5 Usher runtime state (PostMyPost AI agent idempotency)
+agent_5_usher/data/
+
 # Agent 2 chain runtime (locks, notify state)
 agent_2_registrar/_import/assistant-media/data/montage.lock
 agent_2_registrar/_import/assistant-media/data/error_notify_state.json
