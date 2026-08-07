@@ -21,10 +21,12 @@ from monthly_pricing import (
 )
 from price_cache import load_price_cache, save_price_cache
 from pricing_config import months_ahead
+from pricing_gate import run_pricing
 from pricing_queue import get_queue
 from pricing_state import (
     compute_pricing_status,
     deserialize_calendar,
+    expected_month_keys as build_expected_month_keys,
     pricing_months_collected,
     serialize_calendar,
 )
@@ -103,56 +105,59 @@ def collect_primary_month(
     *,
     today: date | None = None,
 ) -> tuple[dict[str, dict], dict[date, bool]]:
-    """Блокирующий сбор ближайшего месяца + один calendar snapshot."""
+    """Блокирующий сбор ближайшего месяца + один calendar snapshot (global gate)."""
     timings = timings if timings is not None else {}
     target_months = months_ahead()
     today = today or date.today()
 
-    t0 = time.perf_counter()
-    availability = fetch_calendar_days(url)
-    timings["calendar_sec"] = round(time.perf_counter() - t0, 1)
+    def _work() -> tuple[dict[str, dict], dict[date, bool]]:
+        t0 = time.perf_counter()
+        availability = fetch_calendar_days(url)
+        timings["calendar_sec"] = round(time.perf_counter() - t0, 1)
 
-    existing = _merge_existing(url, listing_data)
-    primary = primary_month_key(today, target_months)
-    result = dict(existing)
+        existing = _merge_existing(url, listing_data)
+        primary = primary_month_key(today, target_months)
+        result = dict(existing)
 
-    if not primary:
-        return result, availability
+        if not primary:
+            return result, availability
 
-    if entry_has_price(existing.get(primary)):
-        logger.info(f"primary month {primary} из кэша")
-        entry = dict(existing[primary])
-        entry["queue_status"] = "priority"
+        if entry_has_price(existing.get(primary)):
+            logger.info(f"primary month {primary} из кэша")
+            entry = dict(existing[primary])
+            entry["queue_status"] = "priority"
+            result[primary] = entry
+            return result, availability
+
+        year, month = _parse_month(primary)
+        fetch_state: dict[str, Any] = {}
+        t0 = time.perf_counter()
+        entry = price_for_month(
+            _fetch_once(parser, url, fetch_state),
+            availability,
+            year,
+            month,
+            min_segment_days=config.PRICE_MIN_SEGMENT_DAYS,
+        )
+        timings["primary_price_sec"] = round(time.perf_counter() - t0, 1)
+
+        if fetch_state.get("currency_mismatch"):
+            entry = {
+                "price": None,
+                "status": "currency_mismatch",
+                "raw_currency": fetch_state["currency_mismatch"],
+            }
+        elif fetch_state.get("blocked"):
+            entry["queue_status"] = "priority"
+            entry["blocked"] = True
+        else:
+            entry["queue_status"] = "priority"
+
         result[primary] = entry
+        save_price_cache(url, result)
         return result, availability
 
-    year, month = _parse_month(primary)
-    fetch_state: dict[str, Any] = {}
-    t0 = time.perf_counter()
-    entry = price_for_month(
-        _fetch_once(parser, url, fetch_state),
-        availability,
-        year,
-        month,
-        min_segment_days=config.PRICE_MIN_SEGMENT_DAYS,
-    )
-    timings["primary_price_sec"] = round(time.perf_counter() - t0, 1)
-
-    if fetch_state.get("currency_mismatch"):
-        entry = {
-            "price": None,
-            "status": "currency_mismatch",
-            "raw_currency": fetch_state["currency_mismatch"],
-        }
-    elif fetch_state.get("blocked"):
-        entry["queue_status"] = "priority"
-        entry["blocked"] = True
-    else:
-        entry["queue_status"] = "priority"
-
-    result[primary] = entry
-    save_price_cache(url, result)
-    return result, availability
+    return run_pricing(_work, primary=True)
 
 
 def schedule_background_pricing(
@@ -177,6 +182,7 @@ def schedule_background_pricing(
 
     queue = get_queue()
     obj_seq = queue.next_object_seq()
+    expected = month_keys_ahead(today, target)
     queue.upsert_object(
         object_id,
         listing_url=listing_url,
@@ -186,6 +192,7 @@ def schedule_background_pricing(
         notion_page_id=notion_page_id,
         months_target=target,
         object_seq=obj_seq,
+        expected_month_keys=expected,
     )
     created = queue.enqueue_background_months(
         object_id,
@@ -245,9 +252,13 @@ def object_pricing_summary(object_id: str) -> dict[str, Any]:
     monthly = obj.get("monthly_prices") or {}
     target = int(obj.get("pricing_months_target") or months_ahead())
     active = queue.has_active_jobs(object_id)
+    expected = obj.get("expected_month_keys") or build_expected_month_keys(target)
     return {
         "pricing_status": compute_pricing_status(
-            monthly, months_target=target, has_active_jobs=active
+            monthly,
+            months_target=target,
+            has_active_jobs=active,
+            expected_keys=expected,
         ),
         "pricing_months_target": target,
         "pricing_months_collected": pricing_months_collected(monthly),

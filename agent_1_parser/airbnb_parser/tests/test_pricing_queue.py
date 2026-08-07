@@ -175,7 +175,7 @@ class TestQueue(PricingTestBase):
         q.enqueue_background_months("A_1", self.url, ["2026-09"])
         q.upsert_object("A_1", listing_url=self.url, calendar=serialize_calendar(
             days_range(date(2026, 9, 1), date(2026, 9, 30))
-        ))
+        ), calendar_saved_at=time.time())
         q.save()
         job = q.pick_next_job()
         parser = MockParser({("2026-09-01", "2026-09-30"): 50000.0})
@@ -186,7 +186,12 @@ class TestQueue(PricingTestBase):
     def test_failed_month_retry(self):
         q = self.queue()
         q.enqueue_background_months("A_1", self.url, ["2026-09"])
-        q.upsert_object("A_1", listing_url=self.url, calendar={})
+        q.upsert_object(
+            "A_1",
+            listing_url=self.url,
+            calendar=serialize_calendar(days_range(date(2026, 9, 1), date(2026, 9, 30))),
+            calendar_saved_at=time.time(),
+        )
         q.save()
         job = q.pick_next_job()
         parser = MockParser({})
@@ -263,7 +268,12 @@ class TestRetryBackoff(PricingTestBase):
     def test_blocked_not_immediate_retry(self):
         q = self.queue()
         q.enqueue_background_months("A_1", self.url, ["2026-09"])
-        q.upsert_object("A_1", listing_url=self.url, calendar={})
+        q.upsert_object(
+            "A_1",
+            listing_url=self.url,
+            calendar=serialize_calendar(days_range(date(2026, 9, 1), date(2026, 9, 30))),
+            calendar_saved_at=time.time(),
+        )
         job = q.pick_next_job()
         parser = MockParser(blocked=True)
         process_one_job(job, parser=parser, queue=q)
@@ -290,13 +300,23 @@ class TestPartialState(PricingTestBase):
         self.assertEqual(st, "collecting")
 
     def test_partial_status(self):
+        keys = month_keys_ahead(date(2026, 7, 16), 12)
         monthly = {"2026-08": {"price": 80000, "status": "monthly"}}
-        st = compute_pricing_status(monthly, months_target=12, has_active_jobs=True)
+        st = compute_pricing_status(
+            monthly, months_target=12, has_active_jobs=True, expected_keys=keys
+        )
+        self.assertEqual(st, "collecting")
+        st = compute_pricing_status(
+            monthly, months_target=12, has_active_jobs=False, expected_keys=keys
+        )
         self.assertEqual(st, "partial")
 
     def test_complete_status(self):
-        monthly = {k: {"price": 50000, "status": "monthly"} for k in month_keys_ahead(self.today, 12)}
-        st = compute_pricing_status(monthly, months_target=12, has_active_jobs=False)
+        keys = month_keys_ahead(date(2026, 7, 16), 12)
+        monthly = {k: {"price": 50000, "status": "monthly"} for k in keys}
+        st = compute_pricing_status(
+            monthly, months_target=12, has_active_jobs=False, expected_keys=keys
+        )
         self.assertEqual(st, "complete")
 
     def test_counters(self):

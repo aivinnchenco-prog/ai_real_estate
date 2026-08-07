@@ -18,15 +18,29 @@ def compute_pricing_status(
     *,
     months_target: int,
     has_active_jobs: bool,
+    expected_keys: list[str] | None = None,
 ) -> str:
-    """collecting | partial | complete."""
-    priced = sum(1 for v in (monthly_prices or {}).values() if entry_has_price(v))
-    processed = len(monthly_prices or {})
+    """collecting | partial | complete.
+
+    collecting — есть pending/running/retry/blocked jobs;
+    partial — сбор завершён, но usable price не для всех target months;
+    complete — все target months имеют цену.
+    """
     if has_active_jobs:
-        return "collecting" if priced == 0 else "partial"
-    if processed >= months_target:
+        return "collecting"
+
+    keys = expected_keys or list(monthly_prices.keys())
+    if not keys and months_target:
+        return "collecting"
+
+    priced = sum(
+        1 for k in keys if entry_has_price((monthly_prices or {}).get(k))
+    )
+    if priced >= months_target:
         return "complete"
-    if priced > 0:
+
+    processed = sum(1 for k in keys if k in (monthly_prices or {}))
+    if processed >= months_target or priced > 0:
         return "partial"
     return "collecting"
 

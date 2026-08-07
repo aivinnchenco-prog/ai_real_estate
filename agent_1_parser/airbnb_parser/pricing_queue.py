@@ -87,6 +87,8 @@ class PricingQueue:
         notion_page_id: str = "",
         months_target: int = 12,
         object_seq: int | None = None,
+        calendar_saved_at: float | None = None,
+        expected_month_keys: list[str] | None = None,
     ) -> dict[str, Any]:
         obj = dict(self._data["objects"].get(object_id) or {})
         obj["object_id"] = object_id
@@ -101,6 +103,13 @@ class PricingQueue:
             obj["notion_page_id"] = notion_page_id
         if calendar is not None:
             obj["calendar"] = calendar
+            obj["calendar_saved_at"] = (
+                float(calendar_saved_at)
+                if calendar_saved_at is not None
+                else time.time()
+            )
+        if expected_month_keys is not None:
+            obj["expected_month_keys"] = list(expected_month_keys)
         if monthly_prices is not None:
             merged = dict(obj.get("monthly_prices") or {})
             for key, entry in monthly_prices.items():

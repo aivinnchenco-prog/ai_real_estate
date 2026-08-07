@@ -1,5 +1,25 @@
 # Background monthly pricing (Airbnb)
 
+## Global concurrency
+
+All Airbnb pricing network actions (primary + background) go through `pricing_gate.run_pricing()`:
+
+- **max concurrent = 1**
+- **primary** (priority 0) runs before the next **background** job (priority 1)
+- in-flight request is never interrupted
+
+## Process startup
+
+`deploy/airbnb-bot.service` → `main.py` → `start_bot()` → `bootstrap_background_pricing()`.
+
+On bot restart the background worker resumes `data/pricing_queue.json` (pending/retry/blocked after cooldown).
+
+## Calendar snapshot
+
+- Primary fetch loads ~12 months (Airbnb API); stored once per object with TTL (default 24h).
+- Background jobs reuse the snapshot; refresh only if target month missing or snapshot stale.
+- Missing calendar coverage → `calendar_missing` retry (not `insufficient_data`).
+
 ## Overview
 
 1. **Primary month** — blocking/high priority, collected before Agent 2 handoff  

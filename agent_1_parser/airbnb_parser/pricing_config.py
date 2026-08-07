@@ -70,6 +70,10 @@ def stale_running_seconds() -> float:
     return float(_monthly_section().get("stale_running_seconds", 300))
 
 
+def calendar_snapshot_ttl_seconds() -> float:
+    return float(_monthly_section().get("calendar_snapshot_ttl_seconds", 86400))
+
+
 def queue_path() -> Path:
     raw = getattr(config, "PRICE_QUEUE_PATH", "data/pricing_queue.json")
     path = Path(raw)

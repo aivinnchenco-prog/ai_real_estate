@@ -20,8 +20,21 @@ from pricing_config import (
     request_delay_seconds,
     retry_delay_seconds,
 )
+from pricing_calendar import (
+    apply_calendar_to_object,
+    month_has_calendar_data,
+    needs_calendar_refresh,
+    refresh_calendar_snapshot,
+)
+from pricing_gate import run_pricing
 from pricing_queue import PricingQueue, get_queue
-from pricing_state import compute_pricing_status, deserialize_calendar, pricing_months_collected
+from pricing_state import (
+    compute_pricing_status,
+    deserialize_calendar,
+    expected_month_keys,
+    pricing_months_collected,
+    serialize_calendar,
+)
 
 _WORKER_THREAD: threading.Thread | None = None
 _WORKER_LOCK = threading.Lock()
@@ -46,6 +59,18 @@ def ensure_background_worker() -> None:
             t.start()
             if i == 0:
                 _WORKER_THREAD = t
+
+
+def bootstrap_background_pricing() -> bool:
+    """Process startup: resume/consume pricing queue (airbnb-bot.service → main.py)."""
+    if not getattr(config, "PRICE_COLLECT_ENABLED", True):
+        return False
+    ensure_background_worker()
+    queue = get_queue()
+    queue.load()
+    pending = len(queue._eligible_jobs())
+    logger.info(f"pricing worker bootstrap: pending/retry jobs={pending}")
+    return True
 
 
 def stop_background_worker() -> None:
@@ -120,7 +145,22 @@ def process_one_job(
             fetch_state["blocked"] = True
         return value
 
-    try:
+    def _pricing_work() -> tuple[str, dict | None]:
+        nonlocal availability, obj
+        should_refresh, reason = needs_calendar_refresh(obj, year, mon)
+        if should_refresh:
+            new_cal = refresh_calendar_snapshot(url)
+            if new_cal:
+                apply_calendar_to_object(obj, new_cal)
+                availability = new_cal
+                queue.upsert_object(
+                    object_id,
+                    listing_url=url,
+                    calendar=obj["calendar"],
+                    calendar_saved_at=obj.get("calendar_saved_at"),
+                )
+            if not month_has_calendar_data(availability, year, mon):
+                return "calendar_missing", None
         entry = price_for_month(
             fetch,
             availability,
@@ -128,12 +168,32 @@ def process_one_job(
             mon,
             min_segment_days=config.PRICE_MIN_SEGMENT_DAYS,
         )
+        # insufficient_data при отсутствии calendar coverage — retry, не terminal
+        if (
+            entry.get("status") == "insufficient_data"
+            and not month_has_calendar_data(availability, year, mon)
+        ):
+            return "calendar_missing", None
+        return "ok", entry
+
+    try:
+        outcome, entry = run_pricing(_pricing_work, primary=False)
     finally:
         if owned_parser and parser:
             try:
                 parser.close()
             except Exception:
                 pass
+
+    if outcome == "calendar_missing":
+        attempt = int(job.get("attempt") or 0) + 1
+        queue.mark_retry(
+            job,
+            delay_sec=retry_delay_seconds(attempt),
+            error="calendar_missing",
+        )
+        queue.save()
+        return True
 
     if fetch_state.get("blocked"):
         streak = int(obj.get("block_streak") or 0) + 1
@@ -175,10 +235,12 @@ def process_one_job(
     obj = queue.get_object(object_id) or obj
     monthly = obj.get("monthly_prices") or monthly
     target = int(obj.get("pricing_months_target") or months_ahead())
+    expected = obj.get("expected_month_keys") or expected_month_keys(target)
     obj["pricing_status"] = compute_pricing_status(
         monthly,
         months_target=target,
         has_active_jobs=queue.has_active_jobs(object_id),
+        expected_keys=expected,
     )
     obj["pricing_months_collected"] = pricing_months_collected(monthly)
     queue.upsert_object(

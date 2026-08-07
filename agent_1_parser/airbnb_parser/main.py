@@ -24,6 +24,7 @@ from agent2_handoff import find_agent2_root, resolve_object_id
 from parser_pool import close_parser
 from workflow import finalize_take_work, take_listing_to_work
 from queue_worker import ensure_agent_listener_task, poll_loop, poll_once
+from pricing_worker import bootstrap_background_pricing
 import config
 import asyncio
 
@@ -738,6 +739,9 @@ async def start_bot():
     listener_id = await asyncio.to_thread(ensure_agent_listener_task)
     if listener_id:
         logger.info(f'Cursor listener task: {listener_id}')
+
+    if await asyncio.to_thread(bootstrap_background_pricing):
+        logger.info('Airbnb background pricing worker started')
 
     if config.ENABLE_TASK_QUEUE_POLLER and config.SUPABASE_URL:
         _queue_poll_task = asyncio.create_task(poll_loop(bot, admins))

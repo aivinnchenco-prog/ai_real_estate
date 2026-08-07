@@ -22,7 +22,8 @@
     "block_cooldown_seconds": [300, 900, 3600],
     "retry_delay_seconds": [120, 600, 1800],
     "stale_running_seconds": 300,
-    "max_job_attempts": 3
+    "max_job_attempts": 3,
+    "calendar_snapshot_ttl_seconds": 86400
   },
   "batch_wait_seconds": 150,
   "min_video_seconds": 15,
