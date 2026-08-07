@@ -346,3 +346,15 @@ class AmoClient:
 
     def get_lead(self, lead_id: int) -> dict:
         return self._req("GET", f"/leads/{int(lead_id)}") or {}
+
+    # ---------- read-only diagnostics ----------
+
+    def get_account(self, *, with_params: str = "") -> dict:
+        path = "/account"
+        if with_params:
+            path = f"{path}?with={with_params}"
+        return self._req("GET", path) or {}
+
+    def list_users(self, *, page: int = 1, limit: int = 250) -> list[dict]:
+        data = self._req("GET", f"/users?limit={int(limit)}&page={int(page)}")
+        return list((data or {}).get("_embedded", {}).get("users", []))

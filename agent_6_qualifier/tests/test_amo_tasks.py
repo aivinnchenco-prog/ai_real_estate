@@ -259,5 +259,6 @@ class TestWorker:
         )
         monkeypatch.setattr(w, "amo_tasks_enabled", lambda: True)
         monkeypatch.setenv("AMO_ACCESS_TOKEN", "x")
+        monkeypatch.setenv("AMO_SUBDOMAIN", "test")
         w.run_once()
         assert processed == [1]

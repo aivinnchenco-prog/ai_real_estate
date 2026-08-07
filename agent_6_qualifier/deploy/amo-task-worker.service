@@ -1,0 +1,17 @@
+[Unit]
+Description=amoCRM OPENHOME SLA task reconciliation (one-shot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=REPLACE_USER
+WorkingDirectory=REPLACE_AGENT6_DIR
+Environment=PYTHONPATH=src
+EnvironmentFile=-REPLACE_AGENT6_DIR/.env
+ExecStart=REPLACE_AGENT6_DIR/scripts/run_amo_task_worker.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

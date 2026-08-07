@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from agent6_qualifier.amo import AmoClient  # noqa: E402
 from agent6_qualifier.amo_task_service import AmoTaskService  # noqa: E402
 from agent6_qualifier.amo_tasks_config import amo_tasks_enabled, parse_task_key, task_prefix  # noqa: E402
+from agent6_qualifier.amo_worker_config import validate_worker_startup  # noqa: E402
 
 
 def list_open_openhome_tasks(amo: AmoClient, *, page_limit: int = 50) -> list[dict]:
@@ -43,8 +44,10 @@ def run_once() -> int:
     if not amo_tasks_enabled():
         print("amo tasks disabled")
         return 0
-    if not os.getenv("AMO_ACCESS_TOKEN"):
-        print("AMO_ACCESS_TOKEN not set")
+    errors = validate_worker_startup()
+    if errors:
+        for err in errors:
+            print(f"amo_task_worker config error: {err}")
         return 1
     amo = AmoClient()
     service = AmoTaskService(amo)
