@@ -1,0 +1,14 @@
+[Unit]
+Description=amoCRM Read-Only MCP Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/amocrm-mcp
+EnvironmentFile=/etc/amocrm-mcp.env
+ExecStart=/usr/bin/python3 -m amocrm_mcp
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
