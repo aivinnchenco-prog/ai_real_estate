@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !**/.env.example
+!deploy/.env.production.example
 *.session
 *.session-journal
 credentials/
@@ -31,6 +32,43 @@ __pycache__/
 **/Logs/
 *.zip
 
+# Agent7 source-native owner outreach (Playwright persistent profiles + failure shots)
+runtime/browser_profiles/
+runtime/agent7_browser_failures/
+**/runtime/browser_profiles/
+**/runtime/agent7_browser_failures/
+**/facebook_owner_outreach/
+**/airbnb_owner_outreach/
+**/.agent7_auth_ok
+agent_6_qualifier/data/amo_chat_state.json
+agent_6_qualifier/data/amo_chat_mirrors.json
+**/amo_chat_state.json
+**/amo_chat_mirrors.json
+
+# Local/runtime working dirs (never deploy contents from laptop)
+runtime/local_e2e/
+runtime/prelive_cleanup/
+runtime/prod_like_prep/
+data/contact_role_sync_jobs.json
+agent_4_publisher/data/experiments/
+agent_4_publisher/data/chatplace_jobs/
+
+# Alternate venv naming (dirs or symlinks into other checkouts)
+.venv311
+.venv311/
+**/.venv311
+**/.venv311/
+
+# WhatsApp Web UI sync (manual login profile + outbox — never commit)
+**/whatsapp_ui_profile/
+**/whatsapp_ui_chrome_native/
+**/data/whatsapp_ui_profile/
+**/whatsapp_ui_sync/data/
+**/role_sync_jobs.json
+**/role_sync_jobs.json.tmp
+**/qr.png
+
+
 # macOS
 .DS_Store
 **/.DS_Store
@@ -51,6 +89,14 @@ agent_4_publisher/data/deferred_sync/
 
 # PostMyPost publication_id per-slot mapping (runtime)
 agent_4_publisher/data/postmypost_publications.json
+
+# Canonical Publication Ledger (runtime SQLite — history)
+agent_4_publisher/data/publications.sqlite3
+agent_4_publisher/data/*.sqlite3
+agent_4_publisher/data/*.db
+**/data/publications.sqlite3
+**/*.sqlite3
+!**/.gitkeep
 
 # Agent 5 Usher runtime state (PostMyPost AI agent idempotency)
 agent_5_usher/data/

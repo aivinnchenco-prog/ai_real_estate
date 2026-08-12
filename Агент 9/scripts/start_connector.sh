@@ -8,4 +8,4 @@ if [[ -f .env ]]; then
   set +a
 fi
 export PYTHONPATH="${PYTHONPATH:-src}"
-exec python3 -m agent9_connector.main "$@"
+exec python3 -m agent9_connector "$@"

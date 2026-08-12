@@ -4,8 +4,8 @@ Canonical package: ``agent6_qualifier``.
 
 - Слушает входящие личные сообщения.
 - Прогоняет через Qualifier, отвечает (черновик полирует Gemini).
-- Новый собеседник-клиент добавляется в папку «Клиенты» (собственники,
-  которым пишет Agent 8, — в папку «Собственники»).
+- Новый собеседник-клиент добавляется в папку «Клиент» (владельцы/агенты —
+  в «Owner» или «Agent» по роли из Notion).
 - Создаёт лид в amoCRM при первом сообщении и пишет примечания о событиях.
 
 Первый вход:  python3 scripts/tg_login.py  (спросит телефон и код — один раз)
@@ -25,11 +25,14 @@ from telethon import TelegramClient, events
 from . import brain, notion_store
 from .alerts import notify_error
 from .amo import AmoClient
-from .context import build_knowledge, format_history
 from .human import humanized_respond
 from .qualifier import Qualifier, Session
 from .sessions import SessionStore
-from .telegram_folders import CLIENTS_FOLDER, OWNERS_FOLDER, add_to_folder
+from .telegram_folders import (
+    CLIENT_FOLDER,
+    add_to_folder,
+    assign_role_folder,
+)
 
 _sessions: dict[str, Session] = {}
 _store = SessionStore(Path(__file__).resolve().parents[2] / "data" / "sessions")
@@ -148,9 +151,8 @@ async def handle_owner_message(client, event, sender, amo: AmoClient | None) -> 
         polish_reply=brain.polish_reply,
         send_owner_response=humanized_respond,
         send_client_message=_send_client_message,
-        add_to_folder=add_to_folder,
+        assign_role_folder=assign_role_folder,
         notify_error=notify_error,
-        owners_folder=OWNERS_FOLDER,
         templates=OwnerMessageTemplates(
             ack_free=OWNER_ACK_FREE,
             ack_conditions=OWNER_ACK_CONDITIONS,
@@ -238,11 +240,15 @@ async def main() -> None:
             )
 
             def _extract_lead_update(message: str, session: Session) -> dict:
-                return brain.extract_lead_update(
+                from agent6_qualifier.session_extract import (
+                    extract_lead_update_for_session,
+                )
+
+                return extract_lead_update_for_session(
                     message,
-                    session.lead,
-                    context=build_knowledge(session),
-                    history=format_history(session.history),
+                    session,
+                    notify_error=notify_error,
+                    use_llm=True,
                 )
 
             from .alerts import notify_manager
@@ -284,7 +290,7 @@ async def main() -> None:
                 create_task=asyncio.create_task,
                 templates=ClientMessageTemplates(
                     notary_caption=notary_caption,
-                    clients_folder=CLIENTS_FOLDER,
+                    clients_folder=CLIENT_FOLDER,
                     amo_stage_owner_request="Запрос владельцу",
                     amo_stage_booking_confirmed="Бронь подтверждена",
                 ),

@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from agent6_qualifier.models import Availability
 from agent6_qualifier.qualifier import Session
-from agent6_qualifier.tg_userbot import OWNERS_FOLDER, handle_owner_message
+from agent6_qualifier.tg_userbot import handle_owner_message
 from agent7_envoy.owner_result import OwnerVerdict
 from owner_handler_fixtures import FakeStore, make_event, make_owner_session, make_sender
 
@@ -33,7 +33,7 @@ def handler_env(monkeypatch):
         AsyncMock(),
     )
     monkeypatch.setattr(
-        "agent6_qualifier.tg_userbot.add_to_folder",
+        "agent6_qualifier.tg_userbot.assign_role_folder",
         AsyncMock(),
     )
     notion_updates: list[dict] = []
@@ -79,7 +79,7 @@ def handler_env(monkeypatch):
         "mark_owner": mark_owner,
         "get_owner": get_owner,
         "humanized_respond": sys.modules["agent6_qualifier.tg_userbot"].humanized_respond,
-        "add_to_folder": sys.modules["agent6_qualifier.tg_userbot"].add_to_folder,
+        "assign_role_folder": sys.modules["agent6_qualifier.tg_userbot"].assign_role_folder,
     }
 
 
@@ -129,8 +129,8 @@ def test_owner_free_confirms_availability(handler_env, monkeypatch):
     from agent6_qualifier import tg_userbot
     assert tg_userbot._sessions[session.chat_id] is session
 
-    handler_env["add_to_folder"].assert_awaited_once_with(
-        handler_env["client"], sender, OWNERS_FOLDER,
+    handler_env["assign_role_folder"].assert_awaited_once_with(
+        handler_env["client"], sender, "Владелец",
     )
     handler_env["amo"].ensure_pipeline.assert_called_once()
     handler_env["amo"].update_lead_status.assert_called_once_with(77, 555)
@@ -193,7 +193,7 @@ def test_owner_busy_without_dates_asks_followup_only(handler_env, monkeypatch):
     assert handler_env["notion_updates"] == []
     assert handler_env["store"].saved == []
     handler_env["amo"].ensure_pipeline.assert_not_called()
-    handler_env["add_to_folder"].assert_not_awaited()
+    handler_env["assign_role_folder"].assert_not_awaited()
 
 
 def test_unknown_sender_not_in_registry_returns_false(handler_env, monkeypatch):

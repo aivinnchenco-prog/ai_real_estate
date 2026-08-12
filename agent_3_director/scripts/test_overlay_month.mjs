@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit: хук с ценой — Airbnb (monthly_prices) и FB (годовой контракт).
+ * Unit: хук с ценой — только колонка «Цена за месяц».
  */
 import assert from "assert";
 import {
@@ -11,6 +11,17 @@ import {
   isAirbnbObject,
 } from "../notionCrm.mjs";
 
+const fields = {
+  object_id: "Объект ID",
+  housing_type: "Тип жилья",
+  rooms: "Количество комнат",
+  price_monthly: "Цена за месяц",
+  price_yearly: "Цена за год",
+  monthly_prices: "monthly_prices",
+  district: "Район",
+};
+
+// Airbnb: даже при заполненных monthly_prices берём только «Цена за месяц».
 const airbnbPage = {
   properties: {
     "Объект ID": { rich_text: [{ plain_text: "A_20260720_001" }] },
@@ -37,27 +48,6 @@ assert.strictEqual(
   "2026-08"
 );
 
-const fields = {
-  object_id: "Объект ID",
-  housing_type: "Тип жилья",
-  rooms: "Количество комнат",
-  price_monthly: "Цена за месяц",
-  price_yearly: "Цена за год",
-  monthly_prices: "monthly_prices",
-  district: "Район",
-};
-
-const orig = Date;
-global.Date = class extends orig {
-  constructor(...args) {
-    if (args.length === 0) return new orig("2026-07-16T12:00:00Z");
-    return new orig(...args);
-  }
-  static now() {
-    return new orig("2026-07-16T12:00:00Z").getTime();
-  }
-};
-
 const airbnbMeta = pageVideoOverlayMeta(
   airbnbPage,
   fields,
@@ -71,13 +61,29 @@ const airbnbMeta = pageVideoOverlayMeta(
   },
   "A_20260720_001"
 );
-global.Date = orig;
 
-assert.strictEqual(airbnbMeta.price, "55,000");
-assert.strictEqual(airbnbMeta.period, "в месяц · август");
+assert.strictEqual(airbnbMeta.price, "40,000");
+assert.strictEqual(airbnbMeta.period, "в месяц");
 assert.ok(isAirbnbObject("A_20260720_001"));
 
+// FB: «Цена за месяц» как есть; yearly/12 больше не используем.
 const fbPage = {
+  properties: {
+    "Объект ID": { rich_text: [{ plain_text: "F_20260811_001" }] },
+    "Тип жилья": { select: { name: "Вилла" } },
+    "Количество комнат": { number: 2 },
+    "Цена за месяц": { number: 120000 },
+    "Цена за год": { number: 120000 },
+    Район: { rich_text: [{ plain_text: "Choeng Thale" }] },
+  },
+};
+
+const fbMeta = pageVideoOverlayMeta(fbPage, fields, {}, "F_20260811_001");
+assert.strictEqual(fbMeta.price, "120,000");
+assert.strictEqual(fbMeta.period, "в месяц");
+assert.ok(isFbObject("F_20260811_001"));
+
+const fbNoMonthly = {
   properties: {
     "Объект ID": { rich_text: [{ plain_text: "F_20260720_001" }] },
     "Тип жилья": { select: { name: "Кондоминиум" } },
@@ -85,17 +91,12 @@ const fbPage = {
     "Цена за месяц": { number: null },
     "Цена за год": { number: 600000 },
     Район: { rich_text: [{ plain_text: "Bang Tao" }] },
-    monthly_prices: {
-      type: "multi_select",
-      multi_select: [{ name: "2026-08 · 99 000 ฿" }],
-    },
   },
 };
-
-const fbMeta = pageVideoOverlayMeta(fbPage, fields, {}, "F_20260720_001");
-assert.strictEqual(fbMeta.price, "50,000");
-assert.strictEqual(fbMeta.period, "в месяц · годовой контракт");
-assert.ok(isFbObject("F_20260720_001"));
+const fbEmpty = pageVideoOverlayMeta(fbNoMonthly, fields, {}, "F_20260720_001");
+assert.strictEqual(fbEmpty.price, "");
+assert.strictEqual(fbEmpty.period, "");
 
 console.log("OK Airbnb overlay:", airbnbMeta);
 console.log("OK FB overlay:", fbMeta);
+console.log("OK FB empty without monthly:", fbEmpty);

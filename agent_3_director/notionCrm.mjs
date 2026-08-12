@@ -176,76 +176,24 @@ function monthNameRu(yyyyMm) {
   return MONTHS_RU[month] || "";
 }
 
-/** Объекты Facebook (F_*): годовой контракт, фиксированная цена. */
+/** Объекты Facebook (F_*). */
 export function isFbObject(objectId) {
   return /^F[_-]/i.test(String(objectId || "").trim());
 }
 
-/** Объекты Airbnb (A_*): сезонные monthly_prices. */
+/** Объекты Airbnb (A_*). */
 export function isAirbnbObject(objectId) {
   return /^A[_-]/i.test(String(objectId || "").trim());
 }
 
-function formatOverlayPrice(page, priceField, fallbackField, monthlyField, objectId) {
-  const monthlyMap = monthlyField ? parseMonthlyPrices(page, monthlyField) : {};
-
-  // Airbnb: первый предстоящий месяц из monthly_prices → «в месяц · август»
-  if (isAirbnbObject(objectId)) {
-    const upcoming = firstUpcomingMonthKey(monthlyMap);
-    if (upcoming && monthlyMap[upcoming]?.price) {
-      return {
-        price: Number(monthlyMap[upcoming].price).toLocaleString("en-US"),
-        period: `в месяц · ${monthNameRu(upcoming)}`,
-      };
-    }
-    const monthly = priceField ? readNumber(page, priceField) : null;
-    if (monthly) {
-      return { price: monthly.toLocaleString("en-US"), period: "в месяц" };
-    }
-    const yearly = fallbackField ? readNumber(page, fallbackField) : null;
-    if (yearly) {
-      return { price: yearly.toLocaleString("en-US"), period: "в год" };
-    }
-    return { price: "", period: "" };
-  }
-
-  // Facebook: годовой контракт — показываем помесячный эквивалент
-  if (isFbObject(objectId)) {
-    const yearly = fallbackField ? readNumber(page, fallbackField) : null;
-    const monthly = priceField ? readNumber(page, priceField) : null;
-    if (yearly) {
-      const perMonth = Math.round(yearly / 12);
-      return {
-        price: perMonth.toLocaleString("en-US"),
-        period: "в месяц · годовой контракт",
-      };
-    }
-    if (monthly) {
-      return {
-        price: monthly.toLocaleString("en-US"),
-        period: "в месяц · годовой контракт",
-      };
-    }
-    return { price: "", period: "" };
-  }
-
-  // Прочие источники — прежний фолбэк
-  const upcoming = firstUpcomingMonthKey(monthlyMap);
-  if (upcoming && monthlyMap[upcoming]?.price) {
-    return {
-      price: Number(monthlyMap[upcoming].price).toLocaleString("en-US"),
-      period: `в месяц · ${monthNameRu(upcoming)}`,
-    };
-  }
-
+/**
+ * Цена для хука/оверлея — только колонка «Цена за месяц».
+ * Без monthly_prices, без «Цена за год» и без деления /12.
+ */
+function formatOverlayPrice(page, priceField, _fallbackField, _monthlyField, _objectId) {
   const monthly = priceField ? readNumber(page, priceField) : null;
-  const yearly = fallbackField ? readNumber(page, fallbackField) : null;
-
   if (monthly) {
     return { price: monthly.toLocaleString("en-US"), period: "в месяц" };
-  }
-  if (yearly) {
-    return { price: yearly.toLocaleString("en-US"), period: "в год" };
   }
   return { price: "", period: "" };
 }

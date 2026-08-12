@@ -172,6 +172,22 @@ def try_acquire_process_lock(
     return None
 
 
+def should_keep_process_lock(result: BatchResult) -> bool:
+    """Keep agent6_locked after a successful/idempotent run.
+
+    Status stays ready_to_post by design; the lock is what stops chain-watcher
+    from scheduling the same object again. Release only when nothing was
+    published and the run failed (so a clean retry can acquire the lock).
+    """
+    if result.published:
+        return True
+    if result.status in {"awaiting_phone", "nothing_to_publish", "success"}:
+        return True
+    if result.skipped and not result.failed:
+        return True
+    return False
+
+
 def release_process_lock(
     page_id: str,
     fields: dict[str, str],
@@ -299,7 +315,12 @@ def publish_page_batch(
 
         result.status = finalize_batch_status(result)
     finally:
-        result.lock_released = release_process_lock(page_id, fields, ctx)
+        if should_keep_process_lock(result):
+            # Intentional: leave agent6_locked=true so chain does not re-queue.
+            result.lock_released = False
+            ctx.owns_lock = False
+        else:
+            result.lock_released = release_process_lock(page_id, fields, ctx)
 
     print(json_batch_log(result, extra={"page_id": page_id}))
     return result

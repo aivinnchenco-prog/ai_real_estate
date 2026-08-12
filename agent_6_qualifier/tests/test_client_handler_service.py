@@ -26,7 +26,7 @@ NOTARY_CAPTION = (
 def _templates() -> ClientMessageTemplates:
     return ClientMessageTemplates(
         notary_caption=NOTARY_CAPTION,
-        clients_folder="Клиенты",
+        clients_folder="Клиент",
         amo_stage_owner_request="Запрос владельцу",
         amo_stage_booking_confirmed="Бронь подтверждена",
     )
@@ -332,18 +332,17 @@ def test_client_reply_error_blocks_subsequent_side_effects():
     amo.update_lead_fields.assert_not_called()
 
 
-def test_folder_error_blocks_amo_and_save():
-    kwargs, events, store, _, _, amo, _, _ = build_process_env(
+def test_folder_error_does_not_block_amo_and_save():
+    kwargs, events, store, _, notify_errors, amo, _, _ = build_process_env(
         folder_raises=RuntimeError("folder down"),
     )
-    with pytest.raises(RuntimeError, match="folder down"):
-        asyncio.run(process_client_message(**kwargs))
+    asyncio.run(process_client_message(**kwargs))
 
     assert "folder" in events
-    assert "ensure_amo_lead" not in events
-    assert "save" not in events
-    assert store.saved == []
-    amo.ensure_pipeline.assert_not_called()
+    assert "ensure_amo_lead" in events
+    assert "save" in events
+    assert len(store.saved) == 1
+    assert any(e[0] == "tg.folders" for e in notify_errors)
 
 
 def test_notify_manager_error_does_not_block_outreach_and_save():

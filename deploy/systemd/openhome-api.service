@@ -1,0 +1,32 @@
+[Unit]
+Description=Open Home Multi-Agent API (amoCRM chat webhooks + health)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=REPLACE_USER
+Group=REPLACE_USER
+WorkingDirectory=REPLACE_AGENT6_DIR
+Environment=PYTHONPATH=src
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=OPENHOME_API_PRODUCTION=true
+Environment=AMO_CHAT_WEBHOOK_HOST=127.0.0.1
+Environment=AMO_CHAT_WEBHOOK_PORT=8000
+Environment=AGENT7_BROWSER_PROFILES_DIR=REPLACE_RUNTIME_DIR/browser_profiles
+Environment=AGENT7_BROWSER_FAILURES_DIR=REPLACE_RUNTIME_DIR/agent7_browser_failures
+EnvironmentFile=-REPLACE_ENV_FILE
+ExecStart=REPLACE_VENV_PYTHON REPLACE_AGENT6_DIR/scripts/amo_chat_webhook_serve.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65535
+# Mild hardening — avoid Chromium-breaking sandboxes (NoNewPrivileges/PrivateDevices keep safe)
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openhome-api
+
+[Install]
+WantedBy=multi-user.target

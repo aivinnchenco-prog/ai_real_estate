@@ -47,6 +47,7 @@ class Session:
     only_chosen: bool = False         # клиент хочет только выбранный объект
     awaiting_owner: bool = False      # запрос отправлен владельцу, ждём ответ
     owner_verdict: str = ""           # free | busy | conditions
+    owner_request_id: str = ""        # WA Agent7 request correlation id
     booking_confirmed: bool = False
     booking_intent: bool = False         # клиент согласился на бронь
     handoff_to_human: bool = False    # живой менеджер подключается к диалогу
@@ -146,8 +147,28 @@ class Qualifier:
     def handle_message(self, session: Session, message: str, update: dict) -> Turn:
         """update — факты, извлечённые Gemini (brain.extract_lead_update)."""
         from .brain import apply_update
+
+        before = {
+            "check_in": session.lead.check_in.isoformat() if session.lead.check_in else None,
+            "stay_months": session.lead.stay_months,
+            "budget": session.lead.budget,
+            "guests": session.lead.guests,
+            "bedrooms": session.lead.bedrooms,
+            "preferred_object_id": session.lead.preferred_object_id,
+        }
         apply_update(session.lead, update)
         events: list[str] = []
+        import logging
+
+        logging.getLogger(__name__).info(
+            "agent6_turn chat=%s update=%s before=%s after_check_in=%s stay=%s obj=%s",
+            session.chat_id,
+            sorted((update or {}).keys()),
+            before,
+            session.lead.check_in.isoformat() if session.lead.check_in else None,
+            session.lead.stay_months,
+            session.lead.preferred_object_id,
+        )
 
         # Владелец уже ответил — не держим флаг «ждём владельца».
         if session.owner_verdict:
@@ -323,6 +344,20 @@ class Qualifier:
             parts.append(CLIENT_ASK_DATES)
             return Turn(reply_draft="\n\n".join(parts), events=events,
                         skip_polish=True, awaiting_client_response=True)
+
+        # Facebook Marketplace long-term policy (layered on archive flow).
+        from .rental_policy import evaluate_rental_policy
+
+        policy = evaluate_rental_policy(chosen, lead)
+        if policy.needs_duration_clarification:
+            events.append(f"rental_policy:{policy.reason}")
+            parts.append(policy.prompt)
+            return Turn(
+                reply_draft="\n\n".join(parts),
+                events=events,
+                skip_polish=True,
+                awaiting_client_response=True,
+            )
 
         # Ориентировочная цена (один раз): период короче месяца — пропорцией
         # от месячной цены, иначе месячная из monthly_prices.

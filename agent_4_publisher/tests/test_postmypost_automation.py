@@ -90,3 +90,109 @@ def test_comment_cta_by_platform():
         "youtube", {"properties": {}}, {}, cfg, lambda *a: "", object_id="X"
     )
     assert cta == "YT X"
+
+
+def test_threads_cta_is_tg_only_without_object_code():
+    cfg = {
+        "postmypost": {
+            "comment_cta": {"enabled": True},
+            "reply_agent": {
+                "enabled": True,
+                "manager_telegram": "@OpenHome_th",
+                "by_platform": {"threads": "TG {telegram_channel}"},
+            },
+        },
+    }
+    cta = resolve_comment_cta(
+        "threads", {"properties": {}}, {}, cfg, lambda *a: "", object_id="A_20260810_003"
+    )
+    assert cta == "TG @OpenHome_th"
+    assert "A_20260810_003" not in cta
+
+
+def test_strip_inline_object_tag():
+    from postmypost_seo import strip_inline_object_tag
+
+    raw = (
+        "Вилла в Аренду, Пхукет! Бронь в WhatsApp +66625124002 "
+        "Объект №A_20260810_003"
+    )
+    out = strip_inline_object_tag(raw, "A_20260810_003")
+    assert "Объект №" not in out
+    assert "A_20260810_003" not in out
+    assert "WhatsApp +66625124002" in out
+
+
+def test_threads_caption_bundle_no_triple_object_code():
+    from postmypost_seo import build_postmypost_caption_bundle
+
+    cfg = {
+        "postmypost": {
+            "enabled": True,
+            "auto_geolocation": False,
+            "ai_adapt": {"enabled": True},
+            "comment_cta": {"enabled": True, "append_to_caption": True},
+            "reply_agent": {
+                "enabled": True,
+                "manager_telegram": "@OpenHome_th",
+                "object_code_line_template": "🏷 Код объекта: {object_id}",
+                "by_platform": {"threads": "TG {telegram_channel}"},
+            },
+            "seo": {"enabled": True},
+        },
+        "metricool": {"seo": {"enabled": True, "hashtag_randomize": {"enabled": False}}},
+        "notion": {
+            "fields": {"caption_social": "Описание соц.сети"},
+            "caption_by_platform": {"threads": "caption_social"},
+        },
+        "telegram": {"channel": "@OpenHome_th"},
+    }
+    page = {
+        "properties": {
+            "Описание соц.сети": {
+                "type": "rich_text",
+                "rich_text": [
+                    {
+                        "plain_text": (
+                            "Вилла в Аренду, Пхукет! 3 спальни, бассейн. "
+                            "Бронь в WhatsApp +66625124002 Объект №A_20260810_003"
+                        )
+                    }
+                ],
+            }
+        }
+    }
+
+    def get_prop(pg, name, kind):
+        prop = (pg.get("properties") or {}).get(name) or {}
+        if kind == "rich_text":
+            return "".join(t.get("plain_text", "") for t in prop.get("rich_text") or [])
+        return ""
+
+    with patch("postmypost_seo.build_hashtags", return_value="TripHomePhuket #Phuket #A_20260810_003"):
+        bundle = build_postmypost_caption_bundle(
+            page,
+            cfg["notion"]["fields"],
+            "threads",
+            cfg,
+            get_prop,
+            lambda q: [],
+            object_id="A_20260810_003",
+        )
+    text = bundle["text"]
+    assert "Объект №" not in text
+    assert "🏷 Код объекта: A_20260810_003" in text
+    assert "TG @OpenHome_th" in text
+    assert "Код A_20260810_003 →" not in text
+    assert "WhatsApp +66625124002" in text
+    # Object id only in badge line (and optional hashtag block), never thrice.
+    assert text.count("A_20260810_003") <= 2
+    assert text.split("🏷 Код объекта:")[0].count("A_20260810_003") == 0
+    combined = "\n".join(
+        [
+            text,
+            bundle.get("firstCommentText") or "",
+            bundle.get("hashtags") or "",
+        ]
+    )
+    assert "#A_20260810_003" in combined or "TripHomePhuket" in combined

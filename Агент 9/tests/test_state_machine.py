@@ -15,7 +15,7 @@ class TestStateMachine:
         from agent9_connector.state_machine import BrowserScreenState
         fb.set_screen_state(BrowserScreenState.MESSAGE_INPUT_READY)
         notion = NotionClient()
-        notion.update_outreach = lambda *a, **k: None
+        notion.update_contact_fields = lambda *a, **k: None
         rt = ConnectorRuntime(store=tmp_store, notion=notion, facebook=fb, gemini=__import__("agent9_connector.gemini", fromlist=["GeminiClient"]).GeminiClient(api_key=""), outreach_hour=[], outreach_day=[])
         conv = ConversationState(object_id="F_1", notion_page_id="p", facebook_url="https://facebook.com/marketplace/item/1", listing_id="1")
         tmp_store.save(conv)
@@ -38,7 +38,7 @@ class TestStateMachine:
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
         rt.gemini = GeminiClient(api_key="")
-        rt.notion.update_outreach = lambda *a, **k: None
+        rt.notion.update_contact_fields = lambda *a, **k: None
         rt.facebook.push_inbound("t1", "WhatsApp +66812345678")
         rt.poll_active_conversations()
         saved = tmp_store.get("F_1")
@@ -51,7 +51,7 @@ class TestStateMachine:
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
         rt.gemini = GeminiClient(api_key="")
-        rt.notion.update_outreach = lambda *a, **k: None
+        rt.notion.update_contact_fields = lambda *a, **k: None
         rt._handle_inbound(conv, "owner")
         assert not any("собственник" in (m or "") for msgs in rt.facebook._sent.values() for m in msgs)
 
@@ -61,7 +61,7 @@ class TestStateMachine:
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
         rt.gemini = GeminiClient(api_key="")
-        rt.notion.update_outreach = lambda *a, **k: None
+        rt.notion.update_contact_fields = lambda *a, **k: None
         rt._handle_inbound(conv, "я собственник")
         assert tmp_store.get("F_1").state == BusinessState.COMPLETE.value
 
@@ -71,7 +71,7 @@ class TestStateMachine:
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
         rt.gemini = GeminiClient(api_key="")
-        rt.notion.update_outreach = lambda *a, **k: None
+        rt.notion.update_contact_fields = lambda *a, **k: None
         rt._handle_inbound(conv, "I am an agent")
         assert tmp_store.get("F_1").state == BusinessState.COMPLETE.value
 
@@ -81,7 +81,7 @@ class TestStateMachine:
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
         rt.gemini = GeminiClient(api_key="")
-        rt.notion.update_outreach = lambda *a, **k: None
+        rt.notion.update_contact_fields = lambda *a, **k: None
         rt._handle_inbound(conv, "don't contact me")
         assert tmp_store.get("F_1").state == BusinessState.DECLINED.value
 
@@ -91,7 +91,7 @@ class TestStateMachine:
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
         rt.gemini = GeminiClient(api_key="")
-        rt.notion.update_outreach = lambda *a, **k: None
+        rt.notion.update_contact_fields = lambda *a, **k: None
         rt._handle_inbound(conv, "maybe later")
         assert tmp_store.get("F_1").state == BusinessState.MANUAL_REVIEW.value
 

@@ -37,6 +37,7 @@ _DEFAULT_FIELDS = {
     # URL проверки доступности: Airbnb / календарь УК / «ручной»
     "calendar": "Календарь",
     "owner": "Владелец / Агент",
+    "owner_agent_type": "Агент/Владелец (тип)",
     "owner_wa": "WhatsApp контакт",
     "owner_tg": "Telegram контакт",
     "availability": "availability_status",
@@ -77,6 +78,7 @@ PROP_GMAPS = _F["google_maps"]
 PROP_SOURCE = _F["source"]
 PROP_CALENDAR = _F["calendar"]
 PROP_OWNER = _F["owner"]
+PROP_OWNER_AGENT_TYPE = _F["owner_agent_type"]
 PROP_OWNER_WA = _F["owner_wa"]
 PROP_OWNER_TG = _F["owner_tg"]
 PROP_AVAILABILITY = _F["availability"]
@@ -195,6 +197,7 @@ def _to_listing(page: dict) -> Listing:
         source_url=_plain(p.get(PROP_SOURCE)),
         calendar_url=_plain(p.get(PROP_CALENDAR)),
         owner_name=_plain(p.get(PROP_OWNER)),
+        owner_agent_type=_plain(p.get(PROP_OWNER_AGENT_TYPE)),
         owner_whatsapp=_plain(p.get(PROP_OWNER_WA)),
         owner_telegram=_plain(p.get(PROP_OWNER_TG)),
         availability=availability,

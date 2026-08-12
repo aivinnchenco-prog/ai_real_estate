@@ -327,7 +327,7 @@ def owner_first_message(
     НЕ сообщаем (это наша внутренняя информация для торга).
     Airbnb — НЕ про клиента и без запроса контакта (см. OWNER_AIRBNB_STEP2).
     """
-    if channel == OwnerChannel.AIRBNB:
+    if channel in (OwnerChannel.AIRBNB, OwnerChannel.AIRBNB_MESSAGES):
         return _T["owner_first_airbnb"]
 
     listing_ref = f" {listing_url.strip()}" if listing_url.strip() else ""
@@ -339,7 +339,7 @@ def owner_first_message(
     if guests:
         msg += _T["owner_first_guests"].format(guests=guests)
     msg += _T["owner_first_ask"]
-    if channel == OwnerChannel.FB_MARKETPLACE:
+    if channel in (OwnerChannel.FB_MARKETPLACE, OwnerChannel.FACEBOOK_MESSENGER):
         msg += _T["owner_first_fb_whatsapp"]
     return msg
 

@@ -113,9 +113,13 @@ class AmoClient:
 
     def find_contact(self, query: str) -> dict | None:
         """Поиск контакта по телефону / username для дедупа лидов."""
-        data = self._req("GET", f"/contacts?query={query}")
-        items = data.get("_embedded", {}).get("contacts", []) if data else []
+        items = self.find_contacts(query)
         return items[0] if items else None
+
+    def find_contacts(self, query: str) -> list[dict]:
+        """GET /contacts?query=... — все совпадения (для exact phone resolve)."""
+        data = self._req("GET", f"/contacts?query={query}")
+        return list((data or {}).get("_embedded", {}).get("contacts", []) or [])
 
     def find_open_lead(self, contact_id: int) -> int | None:
         """Открытая сделка контакта в нашей воронке — чтобы не плодить дубли.
@@ -346,6 +350,70 @@ class AmoClient:
 
     def get_lead(self, lead_id: int) -> dict:
         return self._req("GET", f"/leads/{int(lead_id)}") or {}
+
+    # ---------- contacts: custom fields + tags (role schema) ----------
+
+    def list_contact_custom_fields(self) -> list[dict]:
+        """GET /contacts/custom_fields (paginated)."""
+        fields: list[dict] = []
+        page = 1
+        while True:
+            data = self._req("GET", f"/contacts/custom_fields?limit=50&page={page}")
+            fields.extend(
+                list((data or {}).get("_embedded", {}).get("custom_fields", []) or [])
+            )
+            if not (data or {}).get("_links", {}).get("next"):
+                break
+            page += 1
+        return fields
+
+    def create_contact_custom_fields(self, fields: list[dict]) -> list[dict]:
+        """POST /contacts/custom_fields — schema only, not contact data."""
+        if not fields:
+            return []
+        data = self._req("POST", "/contacts/custom_fields", json=fields)
+        return list((data or {}).get("_embedded", {}).get("custom_fields", []) or [])
+
+    def update_contact_custom_fields(self, fields: list[dict]) -> list[dict]:
+        """PATCH /contacts/custom_fields — e.g. add missing select enums."""
+        if not fields:
+            return []
+        data = self._req("PATCH", "/contacts/custom_fields", json=fields)
+        return list((data or {}).get("_embedded", {}).get("custom_fields", []) or [])
+
+    def get_contact(self, contact_id: int, *, with_entities: str = "leads,tags") -> dict:
+        path = f"/contacts/{int(contact_id)}"
+        if with_entities:
+            path = f"{path}?with={with_entities}"
+        return self._req("GET", path) or {}
+
+    def update_contact(self, contact_id: int, payload: dict) -> dict:
+        """PATCH /contacts/{id} — used for role field + managed tags only."""
+        body = dict(payload or {})
+        body["id"] = int(contact_id)
+        data = self._req("PATCH", "/contacts", json=[body])
+        items = list((data or {}).get("_embedded", {}).get("contacts", []) or [])
+        return items[0] if items else {}
+
+    def list_contact_tags(self) -> list[dict]:
+        """GET /contacts/tags (paginated)."""
+        tags: list[dict] = []
+        page = 1
+        while True:
+            data = self._req("GET", f"/contacts/tags?limit=250&page={page}")
+            tags.extend(list((data or {}).get("_embedded", {}).get("tags", []) or []))
+            if not (data or {}).get("_links", {}).get("next"):
+                break
+            page += 1
+        return tags
+
+    def create_contact_tags(self, names: list[str]) -> list[dict]:
+        """POST /contacts/tags — create tag names only (no contact mutation)."""
+        body = [{"name": n} for n in names if (n or "").strip()]
+        if not body:
+            return []
+        data = self._req("POST", "/contacts/tags", json=body)
+        return list((data or {}).get("_embedded", {}).get("tags", []) or [])
 
     # ---------- read-only diagnostics ----------
 

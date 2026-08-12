@@ -1,0 +1,32 @@
+{
+  "reset": "PASS",
+  "contact_id": 45601045,
+  "masked_phone": "+66******001",
+  "old_role": "CLIENT",
+  "old_source": "MANUAL",
+  "old_manual_lock": true,
+  "new_role": "UNKNOWN",
+  "new_source": "UNKNOWN",
+  "new_manual_lock": false,
+  "other_contacts_touched": false,
+  "other_contact_keys": [],
+  "amo_tags_fields_changed_on_reset": false,
+  "store_path": "/Users/lifefmg/Desktop/Агенты/Real Estate Agent - refactor/contact_role/data/contact_roles_live_test.json",
+  "flags_armed": {
+    "CONTACT_ROLE_AUTO_ASSIGN_ENABLED": true,
+    "CONTACT_ROLE_AMO_SYNC_ENABLED": true,
+    "WHATSAPP_UI_SYNC_ENABLED": true,
+    "CONTACT_ROLE_ONE_SHOT_LIVE_TEST": false,
+    "WAZZUP_WEBHOOK_ENABLED": true,
+    "WAZZUP_SEND_ENABLED": false,
+    "WAZZUP_AUTO_REPLY_ENABLED": false,
+    "CONTACT_ROLE_AMO_DRY_RUN": false,
+    "WHATSAPP_UI_DRY_RUN": false
+  },
+  "webhook_local": "http://127.0.0.1:8765/webhooks/wazzup",
+  "webhook_public": "https://tue-boulder-mason-nova.trycloudflare.com/webhooks/wazzup",
+  "wazzup_webhook_patched": true,
+  "tunnel_probe": "PASS",
+  "waiting_for": "user WhatsApp message from +66625124001",
+  "status": "ARMED_WAITING_INBOUND"
+}

@@ -34,8 +34,16 @@ Agent 9:
 ## Notion eligibility
 
 - `Объект ID` prefix `F_` **or** `Источник объявления` is Facebook Marketplace URL
-- Marketplace URL present (`Источник объявления` preferred, fallback `post_url_FB_marketplace`)
-- `FB Outreach Status` not in `complete`, `declined`, `manual_review`, `failed`
+- Marketplace URL in `Источник объявления`
+- WhatsApp and owner/agent type not both already filled in Notion
+
+### Notion writes (existing columns only)
+
+Agent 9 writes **only**:
+- `WhatsApp контакт` — normalized phone number
+- `Агент/Владелец (тип)` — select: `Владелец` or `Агент`
+
+No new Notion columns. Outreach state, thread binding, errors — local `Агент 9/data/`.
 
 ## State machine
 
@@ -47,7 +55,7 @@ Browser (separate): `LOGIN_REQUIRED`, `LISTING`, `MESSAGE_BUTTON_AVAILABLE`, `ME
 
 ## Thread binding
 
-`listing_id` extracted from `/marketplace/item/{id}` → after first send, Messenger `thread_url` captured → `thread_id` parsed from `/messages/t/{id}` → stored in local state + `FB Messenger Thread` in Notion.
+`listing_id` extracted from `/marketplace/item/{id}` → after first send, Messenger `thread_url` captured → `thread_id` parsed from `/messages/t/{id}` → stored in local state.
 
 ## Setup
 

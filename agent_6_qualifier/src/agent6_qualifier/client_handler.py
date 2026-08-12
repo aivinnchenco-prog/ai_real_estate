@@ -51,6 +51,28 @@ async def process_client_message(
     templates: ClientMessageTemplates,
 ) -> None:
     """Orchestrate client message handling after owner gate."""
+    # CLIENT_CONVERSATION_STARTED — confirmed client channel (TG or WA).
+    # Fail-safe: never blocks reply. Dual sync is async when enabled.
+    try:
+        from agent6_qualifier.messaging.contact_role_hook import (
+            on_client_conversation_started,
+        )
+
+        uname = getattr(sender, "username", "") or ""
+        phone = getattr(sender, "phone", "") or ""
+        channel = getattr(sender, "channel", "") or (
+            "whatsapp" if str(chat_id).startswith("wa_") else "telegram"
+        )
+        on_client_conversation_started(
+            phone=phone or None,
+            tg_username=uname or None,
+            tg_chat_id=str(chat_id) if channel == "telegram" else None,
+            source="AGENT6_INBOUND",
+            metadata={"channel": channel, "chat_id": str(chat_id)},
+        )
+    except Exception:
+        pass
+
     session = get_session(chat_id)
     text = event.raw_text or ""
     print(f"[in] {chat_id}: {text[:80]}")
@@ -69,11 +91,41 @@ async def process_client_message(
         )
         update = {}
 
+    # Observability + optional polish hints — knowledge must not alter qualifier.
+    playbook_hints = ""
+    try:
+        from agent6_qualifier.context import build_playbook_hints
+
+        playbook_hints = build_playbook_hints(session, message=text)
+        if playbook_hints.startswith("knowledge_refs:"):
+            # first line already includes refs; also print compact for ops
+            first = playbook_hints.splitlines()[0]
+            print(f"knowledge_selected: {first.replace('knowledge_refs:', '').strip()}")
+        elif "knowledge_refs:" in playbook_hints:
+            for line in playbook_hints.splitlines():
+                if line.startswith("knowledge_refs:"):
+                    print(f"knowledge_selected: {line.split(':', 1)[1].strip()}")
+                    break
+    except Exception:
+        print("KNOWLEDGE_FALLBACK client_handler")
+        playbook_hints = ""
+
     turn = handle_message(session, text, update)
-    reply = (
-        turn.reply_draft if turn.skip_polish
-        else polish_reply(turn.reply_draft, session.language, session.lead.name)
-    )
+    if turn.skip_polish:
+        reply = turn.reply_draft
+    else:
+        try:
+            reply = polish_reply(
+                turn.reply_draft,
+                session.language,
+                session.lead.name,
+                playbook_hints=playbook_hints,
+            )
+        except TypeError:
+            # Test doubles / older callables may not accept playbook_hints.
+            reply = polish_reply(
+                turn.reply_draft, session.language, session.lead.name
+            )
     await send_client_response(event, reply)
     print(f"[out] {chat_id}: {reply[:80]}")
 
@@ -118,7 +170,10 @@ async def process_client_message(
     if len(session.history) > templates.history_max:
         session.history = session.history[-templates.history_max:]
 
-    await add_to_folder(client, sender, templates.clients_folder)
+    try:
+        await add_to_folder(client, sender, templates.clients_folder)
+    except Exception as e:
+        notify_error("tg.folders", str(e), f"папка «{templates.clients_folder}»")
     ensure_amo_lead(amo, session, sender)
     if (
         amo is not None

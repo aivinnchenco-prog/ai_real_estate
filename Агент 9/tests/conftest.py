@@ -42,9 +42,7 @@ def sample_page():
             "Объект ID": {"rich_text": [{"plain_text": "F_20260807_001"}]},
             "Тип жилья": {"select": {"name": "Вилла"}},
             "Источник объявления": {"url": "https://www.facebook.com/marketplace/item/123456789"},
-            "post_url_FB_marketplace": {"url": None},
-            "FB Outreach Status": {"select": {"name": ""}},
             "WhatsApp контакт": {"rich_text": []},
-            "Владелец / Агент": {"rich_text": []},
+            "Агент/Владелец (тип)": {"select": None},
         },
     }

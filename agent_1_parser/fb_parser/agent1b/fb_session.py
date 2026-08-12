@@ -194,6 +194,37 @@ async def is_logged_in(page) -> bool:
     return False
 
 
+async def wait_for_manual_login(page, *, timeout_sec: int | None = None) -> bool:
+    """Poll until Facebook session cookie appears (for 2FA / captcha / odd login walls)."""
+    if timeout_sec is None:
+        timeout_sec = env_int("FB_LOGIN_WAIT_SEC", 300)
+    deadline = time.monotonic() + max(30, timeout_sec)
+    print(
+        f"Complete Facebook login in the opened browser "
+        f"(2FA/checkpoint OK). Waiting up to {timeout_sec}s…"
+    )
+    while time.monotonic() < deadline:
+        try:
+            if await is_logged_in(page):
+                return True
+        except Exception:
+            pass
+        await asyncio.sleep(2.0)
+        try:
+            # Keep session warm / let redirects settle.
+            if "login" in page.url.lower() or "checkpoint" in page.url.lower():
+                pass
+            elif "facebook.com" not in page.url.lower():
+                await page.goto(
+                    "https://www.facebook.com/marketplace/",
+                    wait_until="domcontentloaded",
+                    timeout=60000,
+                )
+        except Exception:
+            pass
+    return False
+
+
 async def perform_login(page, email: str, password: str) -> None:
     await page.goto("https://www.facebook.com/login", wait_until="domcontentloaded", timeout=90000)
     await human_delay()
@@ -201,7 +232,17 @@ async def perform_login(page, email: str, password: str) -> None:
     email_sel = 'input[name="email"], input#email, input[type="email"]'
     pass_sel = 'input[name="pass"], input#pass, input[type="password"]'
 
-    await page.wait_for_selector(email_sel, timeout=30000)
+    try:
+        await page.wait_for_selector(email_sel, timeout=30000)
+    except Exception:
+        # Cookie wall / odd redirect / already partially authenticated UI.
+        if not resolve_headless(for_login=True):
+            print("Login form not found — finish login manually in the browser.")
+            return
+        raise RuntimeError(
+            "AUTH_REQUIRED: Login form not found. Set FB_HEADLESS=false and run login_fb.py."
+        )
+
     await human_delay()
     await page.fill(email_sel, email)
     await human_delay()
@@ -222,10 +263,8 @@ async def perform_login(page, email: str, password: str) -> None:
     await page.wait_for_load_state("domcontentloaded", timeout=90000)
     await human_delay("post-login")
 
-    if "checkpoint" in page.url.lower():
-        raise RuntimeError(
-            "AUTH_REQUIRED: Facebook checkpoint/2FA. Run login_fb.py with FB_HEADLESS=false and finish manually."
-        )
+    if "checkpoint" in page.url.lower() and not resolve_headless(for_login=True):
+        print("Facebook checkpoint/2FA — complete it in the browser.")
 
 
 async def ensure_facebook_session(for_login: bool = False) -> None:
@@ -233,6 +272,7 @@ async def ensure_facebook_session(for_login: bool = False) -> None:
     email = os.getenv("FB_EMAIL", "").strip()
     password = os.getenv("FB_PASSWORD", "").strip()
     profile_path = get_profile_path()
+    headless = resolve_headless(for_login=True)
 
     if has_saved_session(profile_path) and not for_login:
         return
@@ -249,7 +289,7 @@ async def ensure_facebook_session(for_login: bool = False) -> None:
     async with profile_lock():
         async with async_playwright() as p:
             launch_args: dict[str, Any] = {
-                "headless": resolve_headless(for_login=True),
+                "headless": headless,
                 "args": [
                     "--disable-blink-features=AutomationControlled",
                     "--no-first-run",
@@ -284,11 +324,24 @@ async def ensure_facebook_session(for_login: bool = False) -> None:
                 await human_delay()
 
                 if not await is_logged_in(page):
-                    await perform_login(page, email, password)
+                    try:
+                        await perform_login(page, email, password)
+                    except Exception as e:
+                        if headless:
+                            raise
+                        print(f"Auto-login interrupted ({e}); waiting for manual login…")
+
                     if not await is_logged_in(page):
-                        raise RuntimeError(
-                            "AUTH_REQUIRED: Login failed. Check FB_EMAIL/FB_PASSWORD or complete 2FA manually."
-                        )
+                        if headless:
+                            raise RuntimeError(
+                                "AUTH_REQUIRED: Login failed. Check FB_EMAIL/FB_PASSWORD "
+                                "or set FB_HEADLESS=false and complete 2FA manually."
+                            )
+                        ok = await wait_for_manual_login(page)
+                        if not ok:
+                            raise RuntimeError(
+                                "AUTH_REQUIRED: Manual login timed out. Run login_fb.py again."
+                            )
             finally:
                 await context.close()
                 await asyncio.sleep(1.0)

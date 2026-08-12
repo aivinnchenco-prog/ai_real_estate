@@ -1,0 +1,14 @@
+{
+  "verdict": "FAILED_WRONG_INBOUND_TEXT",
+  "real_inbound_received": true,
+  "real_inbound_text": "Здравствуйте интересует объект F_20260809_001",
+  "expected_text_substring": "ищу виллу",
+  "canonical_after_real_inbound": "UNKNOWN (no client keywords)",
+  "diagnose_contamination": "accidentally assigned CLIENT via local simulate; reset back to UNKNOWN",
+  "proposed_reply": true,
+  "real_outbound": false,
+  "masked_phone": "+66******001",
+  "contact_id": 45601045,
+  "status": "REARMED_WAITING_VILLA_MESSAGE",
+  "flags_still_armed": true
+}

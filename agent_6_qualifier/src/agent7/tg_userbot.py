@@ -7,10 +7,13 @@ from __future__ import annotations
 import asyncio
 
 import agent6_qualifier.tg_userbot as _canonical
-from agent6_qualifier.tg_userbot import (
+from agent6_qualifier.telegram_folders import (
     CLIENTS_FOLDER,
     OWNERS_FOLDER,
+)
+from agent6_qualifier.tg_userbot import (
     add_to_folder,
+    assign_role_folder,
     ensure_amo_lead,
     get_session,
     handle_owner_message,
@@ -48,6 +51,8 @@ def __getattr__(name: str):
 __all__ = [
     "CLIENTS_FOLDER",
     "OWNERS_FOLDER",
+    "add_to_folder",
+    "assign_role_folder",
     "AmoClient",
     "Qualifier",
     "Session",

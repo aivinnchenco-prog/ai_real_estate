@@ -1,0 +1,35 @@
+{
+  "updated_at": "2026-08-09T16:14:11+00:00",
+  "field_name": "Тип контакта",
+  "field_id": 937587,
+  "field_type": "select",
+  "enums": {
+    "Клиент": 1231627,
+    "Владелец": 1231629,
+    "Агент": 1231631,
+    "Не определено": 1231633
+  },
+  "tags": {
+    "CLIENT": 481809,
+    "OWNER": 481811,
+    "AGENT": 481813
+  },
+  "mapping": {
+    "CLIENT": {
+      "field": "Клиент",
+      "tag": "CLIENT"
+    },
+    "OWNER": {
+      "field": "Владелец",
+      "tag": "OWNER"
+    },
+    "AGENT": {
+      "field": "Агент",
+      "tag": "AGENT"
+    },
+    "UNKNOWN": {
+      "field": "Не определено",
+      "tag": null
+    }
+  }
+}

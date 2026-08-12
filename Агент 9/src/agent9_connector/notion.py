@@ -9,25 +9,13 @@ from typing import Any
 
 import requests
 
-# Schema field names (verified against schema/notion_schema.json)
+# Existing Notion fields (read + write where noted)
 FIELD_OBJECT_ID = "Объект ID"
 FIELD_HOUSING_TYPE = "Тип жилья"
 FIELD_SOURCE_URL = "Источник объявления"
-FIELD_FB_MARKETPLACE_URL = "post_url_FB_marketplace"
 FIELD_WHATSAPP = "WhatsApp контакт"
-FIELD_OWNER_AGENT = "Владелец / Агент"
-FIELD_FB_OUTREACH_STATUS = "FB Outreach Status"
-FIELD_FB_OUTREACH_UPDATED = "FB Outreach Updated At"
-FIELD_FB_THREAD = "FB Messenger Thread"
-FIELD_FB_OUTREACH_ERROR = "FB Outreach Error"
-FIELD_DESCRIPTION = "Описание"
-
-TERMINAL_STATUSES = frozenset({"complete", "declined", "manual_review", "failed"})
-
-_MARKETPLACE_URL_RE = re.compile(
-    r"https?://(?:www\.)?facebook\.com/marketplace/item/\d+",
-    re.IGNORECASE,
-)
+FIELD_OWNER_AGENT_TYPE = "Агент/Владелец (тип)"
+OWNER_AGENT_TYPE_OPTIONS = frozenset({"Владелец", "Агент"})
 
 
 @dataclass
@@ -37,7 +25,6 @@ class NotionListing:
     property_type: str
     facebook_url: str
     listing_id: str
-    outreach_status: str
     whatsapp_existing: str
     owner_agent_existing: str
 
@@ -84,36 +71,22 @@ class NotionClient:
                 results.append(listing)
         return results
 
-    def update_outreach(
+    def update_contact_fields(
         self,
         page_id: str,
         *,
-        status: str | None = None,
-        thread_ref: str | None = None,
-        error: str | None = None,
         whatsapp: str | None = None,
         owner_agent: str | None = None,
     ) -> None:
+        """Write only WhatsApp and owner/agent type — no new Notion columns."""
         props: dict[str, Any] = {}
-        if status is not None:
-            props[FIELD_FB_OUTREACH_STATUS] = {"select": {"name": status}}
-            props[FIELD_FB_OUTREACH_UPDATED] = {"date": {"start": _iso_now()}}
-        if thread_ref is not None:
-            props[FIELD_FB_THREAD] = {"rich_text": [{"text": {"content": thread_ref[:2000]}}]}
-        if error is not None:
-            props[FIELD_FB_OUTREACH_ERROR] = {"rich_text": [{"text": {"content": error[:2000]}}]}
         if whatsapp is not None:
             props[FIELD_WHATSAPP] = {"rich_text": [{"text": {"content": whatsapp}}]}
         if owner_agent is not None:
-            props[FIELD_OWNER_AGENT] = {"rich_text": [{"text": {"content": owner_agent}}]}
+            props[FIELD_OWNER_AGENT_TYPE] = {"select": {"name": owner_agent}}
         props = self._filter_existing_props(props)
         if props:
             self._req("PATCH", f"/pages/{page_id}", json={"properties": props})
-
-
-def _iso_now() -> str:
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _rt(prop: dict | None) -> str:
@@ -144,25 +117,11 @@ def is_facebook_object(object_id: str, source_url: str) -> bool:
     return "facebook.com" in u and "marketplace" in u
 
 
-def extract_facebook_marketplace_url(*texts: str) -> str:
-    for text in texts:
-        if not text:
-            continue
-        match = _MARKETPLACE_URL_RE.search(text)
-        if match:
-            return match.group(0)
+def resolve_facebook_url(source_url: str) -> str:
+    url = (source_url or "").strip()
+    if "facebook.com" in url.lower() and "marketplace" in url.lower():
+        return url
     return ""
-
-
-def resolve_facebook_url(
-    source_url: str,
-    marketplace_post_url: str,
-    *fallback_texts: str,
-) -> str:
-    for url in (source_url, marketplace_post_url):
-        if "facebook.com" in (url or "").lower() and "marketplace" in url.lower():
-            return url
-    return extract_facebook_marketplace_url(*fallback_texts)
 
 
 def is_eligible(listing: NotionListing) -> bool:
@@ -170,7 +129,7 @@ def is_eligible(listing: NotionListing) -> bool:
         return False
     if not listing.facebook_url:
         return False
-    if listing.outreach_status in TERMINAL_STATUSES:
+    if listing.whatsapp_existing and listing.owner_agent_existing:
         return False
     return True
 
@@ -180,19 +139,15 @@ def parse_page(page: dict) -> NotionListing | None:
     object_id = _rt(props.get(FIELD_OBJECT_ID))
     if not object_id:
         return None
-    source = _url(props.get(FIELD_SOURCE_URL))
-    mp_url = _url(props.get(FIELD_FB_MARKETPLACE_URL))
-    description = _rt(props.get(FIELD_DESCRIPTION))
-    fb_url = resolve_facebook_url(source, mp_url, description)
+    fb_url = resolve_facebook_url(_url(props.get(FIELD_SOURCE_URL)))
     return NotionListing(
         page_id=page["id"],
         object_id=object_id,
         property_type=_select(props.get(FIELD_HOUSING_TYPE)),
         facebook_url=fb_url,
         listing_id=extract_listing_id(fb_url),
-        outreach_status=_select(props.get(FIELD_FB_OUTREACH_STATUS)).lower(),
         whatsapp_existing=_rt(props.get(FIELD_WHATSAPP)),
-        owner_agent_existing=_rt(props.get(FIELD_OWNER_AGENT)),
+        owner_agent_existing=_select(props.get(FIELD_OWNER_AGENT_TYPE)),
     )
 
 

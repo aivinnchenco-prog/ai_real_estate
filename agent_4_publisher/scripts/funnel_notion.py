@@ -85,7 +85,7 @@ def is_live_social_url(url: str | None, platform: str) -> bool:
     if not url or not url.startswith("http"):
         return False
     lowered = url.lower()
-    if "metricool.com" in lowered:
+    if "metricool.com" in lowered or "postmypost.io" in lowered:
         return False
     hints = {
         "instagram": ("instagram.com",),

@@ -1,4 +1,4 @@
-"""Unit tests for agent7.telegram_folders.add_to_folder."""
+"""Unit tests for agent6_qualifier.telegram_folders (offline, mocked Telethon)."""
 from __future__ import annotations
 
 import asyncio
@@ -13,9 +13,13 @@ from telethon import functions, types
 sys.path.insert(0, str(__file__).rsplit("/tests/", 1)[0] + "/src")
 
 from agent6_qualifier.telegram_folders import (
-    CLIENTS_FOLDER,
-    OWNERS_FOLDER,
+    AGENT_FOLDER,
+    CLIENT_FOLDER,
+    OWNER_FOLDER,
     add_to_folder,
+    assign_role_folder,
+    remove_from_folder,
+    role_folder_title,
 )
 
 
@@ -79,105 +83,152 @@ def notify_errors(monkeypatch):
     return errors
 
 
-def test_import_contract_symbols():
-    from agent6_qualifier.telegram_folders import (
-        CLIENTS_FOLDER as clients,
-        OWNERS_FOLDER as owners,
-        add_to_folder as add_fn,
-    )
-
-    assert clients == "Клиенты"
-    assert owners == "Собственники"
-    assert callable(add_fn)
+def test_folder_constants_exact_titles():
+    assert CLIENT_FOLDER == "Клиент"
+    assert OWNER_FOLDER == "Owner"
+    assert AGENT_FOLDER == "Agent"
+    assert CLIENT_FOLDER != "Клиенты"
+    assert OWNER_FOLDER != "Собственники"
 
 
-def test_existing_folder_appends_peer_and_updates(monkeypatch, notify_errors):
+def test_role_folder_title_mapping():
+    assert role_folder_title("Владелец") == OWNER_FOLDER
+    assert role_folder_title("Агент") == AGENT_FOLDER
+    assert role_folder_title("") is None
+    assert role_folder_title("unknown") is None
+
+
+def test_existing_folder_appends_peer_and_updates(notify_errors):
     existing_peer = object()
     new_peer = object()
     folder = _dialog_filter(
         filter_id=7,
-        title=CLIENTS_FOLDER,
+        title=CLIENT_FOLDER,
         include_peers=[existing_peer],
-        exclude_peers=[],
-        pinned_peers=[],
     )
     client, update_calls = _build_client([folder], peer=new_peer)
 
-    asyncio.run(add_to_folder(client, "entity", CLIENTS_FOLDER))
+    asyncio.run(add_to_folder(client, "entity", CLIENT_FOLDER))
 
     assert len(update_calls) == 1
     updated = update_calls[0].filter
-    assert updated.id == 7
     assert updated.include_peers == [existing_peer, new_peer]
-    assert updated.exclude_peers == []
-    assert updated.pinned_peers == []
     assert notify_errors == []
 
 
-def test_existing_peer_skips_update(monkeypatch, notify_errors):
+def test_existing_peer_skips_update(notify_errors):
     peer = object()
-    folder = _dialog_filter(
-        filter_id=3,
-        title=OWNERS_FOLDER,
-        include_peers=[peer],
-    )
+    folder = _dialog_filter(filter_id=3, title=OWNER_FOLDER, include_peers=[peer])
     client, update_calls = _build_client([folder], peer=peer)
 
-    asyncio.run(add_to_folder(client, "entity", OWNERS_FOLDER))
+    asyncio.run(add_to_folder(client, "entity", OWNER_FOLDER))
 
     assert update_calls == []
     assert notify_errors == []
 
 
-def test_missing_folder_creates_filter_with_peer(monkeypatch, notify_errors):
+def test_missing_folder_notifies_without_create(notify_errors):
     peer = object()
     other = _dialog_filter(filter_id=5, title="Другое", include_peers=[])
     client, update_calls = _build_client([other], peer=peer)
 
-    asyncio.run(add_to_folder(client, "entity", CLIENTS_FOLDER))
+    asyncio.run(add_to_folder(client, "entity", CLIENT_FOLDER))
 
-    assert len(update_calls) == 1
-    req = update_calls[0]
-    assert req.id == 6
-    created = req.filter
-    assert getattr(created.title, "text", created.title) == CLIENTS_FOLDER
-    assert created.include_peers == [peer]
-    assert created.exclude_peers == []
-    assert created.pinned_peers == []
-    assert notify_errors == []
+    assert update_calls == []
+    assert len(notify_errors) == 1
+    assert notify_errors[0][0] == "tg.folders"
+    assert "not found" in notify_errors[0][1]
 
 
 def test_get_input_entity_error_notifies_and_swallows(notify_errors):
-    folder = _dialog_filter(filter_id=1, title=CLIENTS_FOLDER, include_peers=[])
+    folder = _dialog_filter(filter_id=1, title=CLIENT_FOLDER, include_peers=[])
     client, update_calls = _build_client(
-        [folder],
-        peer=object(),
-        get_entity_raises=RuntimeError("entity down"),
+        [folder], peer=object(), get_entity_raises=RuntimeError("entity down"),
     )
 
-    asyncio.run(add_to_folder(client, "entity", CLIENTS_FOLDER))
+    asyncio.run(add_to_folder(client, "entity", CLIENT_FOLDER))
 
     assert update_calls == []
-    assert notify_errors == [
-        ("tg.folders", "entity down", f"папка «{CLIENTS_FOLDER}»"),
-    ]
+    assert notify_errors[0][1] == "entity down"
 
 
-def test_update_error_notifies_and_swallows(notify_errors):
+def test_assign_role_owner(notify_errors):
     peer = object()
-    folder = _dialog_filter(filter_id=2, title=CLIENTS_FOLDER, include_peers=[])
-    client, update_calls = _build_client(
-        [folder],
-        peer=peer,
-        update_raises=RuntimeError("tg update down"),
-    )
+    owner_f = _dialog_filter(filter_id=1, title=OWNER_FOLDER, include_peers=[])
+    agent_f = _dialog_filter(filter_id=2, title=AGENT_FOLDER, include_peers=[])
+    client, update_calls = _build_client([owner_f, agent_f], peer=peer)
 
-    asyncio.run(add_to_folder(client, "entity", CLIENTS_FOLDER))
+    asyncio.run(assign_role_folder(client, "entity", "Владелец"))
 
     assert len(update_calls) == 1
-    assert notify_errors == [
-        ("tg.folders", "tg update down", f"папка «{CLIENTS_FOLDER}»"),
-    ]
+    assert update_calls[0].filter.title.text == OWNER_FOLDER
+    assert update_calls[0].filter.include_peers == [peer]
+
+
+def test_assign_role_agent(notify_errors):
+    peer = object()
+    owner_f = _dialog_filter(filter_id=1, title=OWNER_FOLDER, include_peers=[])
+    agent_f = _dialog_filter(filter_id=2, title=AGENT_FOLDER, include_peers=[])
+    client, update_calls = _build_client([owner_f, agent_f], peer=peer)
+
+    asyncio.run(assign_role_folder(client, "entity", "Агент"))
+
+    assert len(update_calls) == 1
+    assert update_calls[0].filter.title.text == AGENT_FOLDER
+
+
+def test_unknown_role_no_folder_assignment(notify_errors):
+    peer = object()
+    owner_f = _dialog_filter(filter_id=1, title=OWNER_FOLDER, include_peers=[])
+    client, update_calls = _build_client([owner_f], peer=peer)
+
+    asyncio.run(assign_role_folder(client, "entity", ""))
+
+    assert update_calls == []
+    assert notify_errors == []
+
+
+def test_role_correction_owner_to_agent(notify_errors):
+    peer = object()
+    owner_f = _dialog_filter(filter_id=1, title=OWNER_FOLDER, include_peers=[peer])
+    agent_f = _dialog_filter(filter_id=2, title=AGENT_FOLDER, include_peers=[])
+    client, update_calls = _build_client([owner_f, agent_f], peer=peer)
+
+    asyncio.run(assign_role_folder(client, "entity", "Агент"))
+
+    assert len(update_calls) == 2
+    titles = [c.filter.title.text for c in update_calls]
+    assert OWNER_FOLDER in titles
+    assert AGENT_FOLDER in titles
+    owner_update = next(c for c in update_calls if c.filter.title.text == OWNER_FOLDER)
+    agent_update = next(c for c in update_calls if c.filter.title.text == AGENT_FOLDER)
+    assert owner_update.filter.include_peers == []
+    assert agent_update.filter.include_peers == [peer]
+
+
+def test_role_correction_agent_to_owner(notify_errors):
+    peer = object()
+    owner_f = _dialog_filter(filter_id=1, title=OWNER_FOLDER, include_peers=[])
+    agent_f = _dialog_filter(filter_id=2, title=AGENT_FOLDER, include_peers=[peer])
+    client, update_calls = _build_client([owner_f, agent_f], peer=peer)
+
+    asyncio.run(assign_role_folder(client, "entity", "Владелец"))
+
+    assert len(update_calls) == 2
+    owner_update = next(c for c in update_calls if c.filter.title.text == OWNER_FOLDER)
+    agent_update = next(c for c in update_calls if c.filter.title.text == AGENT_FOLDER)
+    assert owner_update.filter.include_peers == [peer]
+    assert agent_update.filter.include_peers == []
+
+
+def test_remove_from_folder_idempotent(notify_errors):
+    peer = object()
+    folder = _dialog_filter(filter_id=1, title=OWNER_FOLDER, include_peers=[])
+    client, update_calls = _build_client([folder], peer=peer)
+
+    asyncio.run(remove_from_folder(client, "entity", OWNER_FOLDER))
+
+    assert update_calls == []
 
 
 _TELEGRAM_FOLDERS_IMPORT_SCRIPT = """
@@ -242,10 +293,12 @@ def _import_with_sessionstore_guard(name, globals=None, locals=None, fromlist=()
 
 builtins.__import__ = _import_with_sessionstore_guard
 
-from agent6_qualifier.telegram_folders import CLIENTS_FOLDER, OWNERS_FOLDER, add_to_folder
+from agent6_qualifier.telegram_folders import CLIENT_FOLDER, OWNER_FOLDER, add_to_folder
 
-assert CLIENTS_FOLDER == "Клиенты"
-assert OWNERS_FOLDER == "Собственники"
+assert CLIENT_FOLDER == "Клиент"
+assert OWNER_FOLDER == "Owner"
+assert CLIENT_FOLDER != "Клиенты"
+assert OWNER_FOLDER != "Собственники"
 assert callable(add_to_folder)
 print("OK")
 """

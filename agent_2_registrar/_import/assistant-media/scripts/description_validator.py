@@ -52,30 +52,30 @@ def validate_and_fit_social(generated_text: str, object_id: str) -> str:
 
     В отличие от validate_and_fit() — тут нет переносов строк (это плотный
     текст в 1-3 предложения), поэтому обрезка идёт по словам, а не по строкам.
+
+    Код объекта в тело соц.описания не дописываем: publisher добавляет
+    отдельную строку «🏷 Код объекта: …», иначе код дублируется в посте.
     """
     limit = SOCIAL_LIMIT - SOCIAL_SAFETY_MARGIN
     tag = f"Объект №{object_id}"
 
     generated_text = generated_text.strip()
-
-    if tag not in generated_text:
-        generated_text = generated_text.rstrip(".") + f" {tag}"
+    # Снять legacy-тег, если слабая модель всё же вставила его в конец.
+    if tag in generated_text:
+        generated_text = generated_text.replace(tag, "").strip()
+        generated_text = " ".join(generated_text.split())
 
     if len(generated_text) <= limit:
         return generated_text
 
-    # превышен лимит — обрезаем по словам с конца, тег сохраняем всегда
-    without_tag = generated_text.replace(tag, "").strip()
-    budget = limit - len(tag) - 1
-
-    words = without_tag.split()
+    words = generated_text.split()
     body = ""
     for w in words:
-        if len(body) + len(w) + 1 > budget:
+        if len(body) + len(w) + 1 > limit:
             break
         body = f"{body} {w}".strip()
 
-    return f"{body} {tag}".strip()
+    return body.strip()
 
 
 def validate_and_fit(generated_text: str, object_id: str) -> str:

@@ -1,0 +1,12 @@
+[Unit]
+Description=Run WhatsApp UI list-sync queue every 2 minutes
+Requires=whatsapp-ui-sync.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Persistent=true
+Unit=whatsapp-ui-sync.service
+
+[Install]
+WantedBy=timers.target

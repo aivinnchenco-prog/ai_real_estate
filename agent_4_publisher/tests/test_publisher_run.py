@@ -134,7 +134,7 @@ def test_first_slot_failure_second_still_runs():
 
     with patch("publisher_run.try_acquire_process_lock", return_value=None), patch(
         "publisher_run.release_process_lock", return_value=True
-    ), patch("publisher_run.publish_one", side_effect=fake_publish):
+    ) as rel, patch("publisher_run.publish_one", side_effect=fake_publish):
         batch = publish_page_batch(
             "page-1",
             ["instagram", "tiktok"],
@@ -145,7 +145,9 @@ def test_first_slot_failure_second_still_runs():
     assert "instagram:carousel" in batch.published or "instagram:carousel" in batch.skipped
     assert "instagram:video" in batch.failed
     assert any(c.startswith("tiktok:") for c in calls)
-    assert batch.lock_released is True
+    # Partial success keeps lock to stop chain re-queue duplicates.
+    assert batch.lock_released is False
+    rel.assert_not_called()
     assert batch.status in ("partial_success", "failed")
 
 
@@ -160,6 +162,44 @@ def test_lock_released_after_total_failure():
     rel.assert_called_once()
     assert batch.lock_released is True
     assert batch.status == "failed"
+
+
+def test_lock_kept_after_successful_publish():
+    def ok_publish(page_id, platform, scheduled_time, dry_run, config, **kwargs):
+        return {
+            "page_id": page_id,
+            "platform": platform,
+            "mode": kwargs.get("mode"),
+            "metricool_post_id": "99",
+        }
+
+    with patch("publisher_run.try_acquire_process_lock", return_value=None), patch(
+        "publisher_run.release_process_lock", return_value=True
+    ) as rel, patch("publisher_run.publish_one", side_effect=ok_publish):
+        batch = publish_page_batch("page-1", ["tiktok"], BASE_CFG, dry_run=False)
+    rel.assert_not_called()
+    assert batch.lock_released is False
+    assert batch.published
+    assert batch.status in ("success", "awaiting_phone")
+
+
+def test_lock_kept_when_all_slots_already_published():
+    def skip_publish(page_id, platform, scheduled_time, dry_run, config, **kwargs):
+        return {
+            "page_id": page_id,
+            "platform": platform,
+            "mode": kwargs.get("mode"),
+            "skipped": True,
+            "reason": "already published (post_url_tiktok)",
+        }
+
+    with patch("publisher_run.try_acquire_process_lock", return_value=None), patch(
+        "publisher_run.release_process_lock", return_value=True
+    ) as rel, patch("publisher_run.publish_one", side_effect=skip_publish):
+        batch = publish_page_batch("page-1", ["tiktok"], BASE_CFG, dry_run=False)
+    rel.assert_not_called()
+    assert batch.lock_released is False
+    assert batch.status in ("nothing_to_publish", "awaiting_phone")
 
 
 def test_awaiting_phone_when_only_external_pending():

@@ -329,6 +329,15 @@ def publish_skip_reason(
             platform, config, upload_video=upload_video, mode=mode,
         )
         return f"already published ({url_field})"
+    local = existing_local_publication(
+        str(page.get("id") or ""),
+        platform,
+        upload_video=upload_video,
+        mode=mode,
+    )
+    if local:
+        label = local.get("slot_id") or local.get("publication_id") or "registry"
+        return f"already published (local:{label})"
     if is_agent6_locked(page, fields) and not bypass_lock and not force:
         return "agent6_locked"
     return None
@@ -348,6 +357,89 @@ def platform_slot_published(
         platform, config, upload_video=upload_video, mode=mode,
     )
     return bool(url_field and get_prop(page, url_field, "url"))
+
+
+def existing_local_publication(
+    page_id: str,
+    platform: str,
+    *,
+    upload_video: bool = False,
+    mode: str | None = None,
+) -> dict[str, Any] | None:
+    """Local registry/ledger pointer for this Notion page + slot, if any."""
+    if not page_id:
+        return None
+    post_kind = publication_post_kind(platform, upload_video=upload_video, mode=mode)
+    try:
+        from postmypost_publication_state import lookup_publication, postmypost_slot_id
+
+        entry = lookup_publication(
+            page_id,
+            platform,
+            post_kind=post_kind,
+            upload_video=upload_video,
+        )
+        if entry and entry.get("publication_id"):
+            return entry
+        slot_id = postmypost_slot_id(
+            platform, post_kind=post_kind, upload_video=upload_video
+        )
+    except Exception:
+        return None
+
+    try:
+        from publication_ledger import PublicationLedger
+
+        row = PublicationLedger().get_latest_by_page_slot(page_id, slot_id)
+        if row is None or not row.postmypost_publication_id:
+            return None
+        return {
+            "page_id": page_id,
+            "slot_id": row.slot or slot_id,
+            "publication_id": row.postmypost_publication_id,
+            "planner_url": (
+                f"https://app.postmypost.io/publications/{row.postmypost_publication_id}"
+            ),
+            "source": "ledger",
+        }
+    except Exception:
+        return None
+
+
+def heal_notion_url_from_local_registry(
+    page_id: str,
+    page: dict[str, Any],
+    fields: dict[str, str],
+    platform: str,
+    config: dict[str, Any],
+    *,
+    upload_video: bool,
+    mode: str | None,
+) -> str | None:
+    """If Notion URL empty but local registry knows the slot — write planner URL.
+
+    Prevents chain-watcher re-runs from creating duplicate PostMyPost posts when
+    an earlier schedule succeeded but Notion URL writeback was skipped.
+    """
+    if platform_slot_published(
+        page, fields, platform, config, upload_video=upload_video, mode=mode,
+    ):
+        return None
+    entry = existing_local_publication(
+        page_id, platform, upload_video=upload_video, mode=mode,
+    )
+    if not entry:
+        return None
+    url_field = published_url_field(
+        platform, config, upload_video=upload_video, mode=mode,
+    )
+    planner_url = (entry.get("planner_url") or "").strip()
+    if not url_field or not planner_url:
+        return None
+    notion_update_fields(page_id, {url_field: notion_url_property(planner_url)})
+    props = page.setdefault("properties", {})
+    props[url_field] = {"type": "url", "url": planner_url}
+    return planner_url
 
 
 def utc_today_iso() -> str:
@@ -922,11 +1014,16 @@ def published_url_field(
     mode: str | None = None,
 ) -> str | None:
     mapping = config.get("notion", {}).get("published_url_fields", {})
-    if network_for(platform) == "instagram":
+    network = network_for(platform)
+    if network == "instagram":
         if upload_video or mode == "video":
             return mapping.get("instagram_reel")
         return mapping.get("instagram_carousel")
-    return mapping.get(platform) or mapping.get(network_for(platform))
+    if network == "tiktok":
+        if upload_video or mode == "video":
+            return mapping.get("tiktok")
+        return mapping.get("tiktok_carousel") or mapping.get("tiktok")
+    return mapping.get(platform) or mapping.get(network)
 
 
 def instagram_post_kind(*, upload_video: bool, mode: str | None = None) -> str:
@@ -935,8 +1032,41 @@ def instagram_post_kind(*, upload_video: bool, mode: str | None = None) -> str:
     return "carousel"
 
 
+def publication_post_kind(
+    platform: str,
+    *,
+    upload_video: bool,
+    mode: str | None = None,
+) -> str | None:
+    network = network_for(platform)
+    if network == "instagram":
+        return instagram_post_kind(upload_video=upload_video, mode=mode)
+    if network == "tiktok" and not upload_video and mode != "video":
+        return "carousel"
+    return None
+
+
 def notion_url_property(url: str) -> dict[str, Any]:
     return {"url": url}
+
+
+def resolve_url_to_save_after_schedule(
+    *,
+    published_url: str | None,
+    planner_url: str | None,
+) -> str | None:
+    """URL to write into Notion immediately after scheduling.
+
+    Prefer the live social permalink when already available. Otherwise save the
+    PostMyPost/Metricool planner calendar link so operators see the scheduled
+    post right away. ``deferred_post_url_sync`` later replaces planner URLs with
+    live permalinks via ``decide_notion_url_update`` (``replace_planner``).
+    """
+    if published_url:
+        return published_url
+    if planner_url:
+        return planner_url
+    return None
 
 
 def post_id_field_name(fields: dict[str, str]) -> str:
@@ -1255,6 +1385,16 @@ def publish_one(
     else:
         upload_video = upload_video_for_post(platform, carousel_urls, config)
 
+    heal_notion_url_from_local_registry(
+        page_id,
+        page,
+        fields,
+        platform,
+        config,
+        upload_video=upload_video,
+        mode=mode,
+    )
+
     skip_reason = publish_skip_reason(
         page,
         fields,
@@ -1383,10 +1523,13 @@ def publish_one(
             )
             if published_url and not is_valid_social_post_url(published_url, network):
                 published_url = None
-            post_kind_for_slot = (
-                instagram_post_kind(upload_video=upload_video, mode=mode)
-                if network == "instagram"
-                else None
+            post_kind_for_slot = publication_post_kind(
+                platform, upload_video=upload_video, mode=mode
+            )
+            from postmypost_publication_state import postmypost_slot_id
+
+            slot_id = postmypost_slot_id(
+                platform, post_kind=post_kind_for_slot, upload_video=upload_video
             )
             register_publication(
                 page_id=page_id,
@@ -1398,11 +1541,47 @@ def publish_one(
                 post_kind=post_kind_for_slot,
                 upload_video=upload_video,
             )
-            url_to_save = published_url
+            # Canonical history ledger (append/idempotent). Failure must NOT
+            # delete the external PostMyPost publication — log + surface error.
+            try:
+                from publication_ledger import register_publication_in_ledger
+
+                account_ids = scheduled.get("account_ids") or []
+                ledger_row = register_publication_in_ledger(
+                    object_id=object_id or "",
+                    notion_page_id=page_id,
+                    postmypost_publication_id=post_id,
+                    platform=network_for(platform),
+                    slot=slot_id,
+                    account_id=account_ids[0] if account_ids else None,
+                    scheduled_at=scheduled_time,
+                    post_kind=post_kind_for_slot,
+                    upload_video=upload_video,
+                    publication_type=scheduled.get("publication_type"),
+                    raw_status=scheduled.get("publication_status"),
+                )
+                result["publication_key"] = ledger_row.publication_key
+                result["ledger_registered"] = True
+            except Exception as ledger_exc:
+                print(
+                    f"[publisher] CRITICAL publication ledger write failed "
+                    f"page_id={page_id} publication_id={post_id} "
+                    f"run_id={run_id or '-'}: {ledger_exc}",
+                    file=sys.stderr,
+                )
+                result["ledger_registered"] = False
+                result["ledger_error"] = str(ledger_exc)[:500]
+            url_to_save = resolve_url_to_save_after_schedule(
+                published_url=published_url,
+                planner_url=planner_url,
+            )
         else:
             planner_url = metricool_planner_post_url(post_uuid, config, post_id=post_id)
             published_url = resolve_published_post_url(post_id, network, scheduled["response"])
-            url_to_save = published_url or planner_url
+            url_to_save = resolve_url_to_save_after_schedule(
+                published_url=published_url,
+                planner_url=planner_url,
+            )
 
         pg_field = post_id_field_name(fields)
         err_field = fields.get("publish_error", nfc.LAST_ERROR)
@@ -1439,11 +1618,7 @@ def publish_one(
         result["saved_url"] = url_to_save
         result["published_url_field"] = url_field
         result["notion_status"] = status_scheduled
-        post_kind = (
-            instagram_post_kind(upload_video=upload_video, mode=mode)
-            if network_for(platform) == "instagram"
-            else None
-        )
+        post_kind = publication_post_kind(platform, upload_video=upload_video, mode=mode)
         needs_url_sync = backend == "postmypost" or not published_url
         if needs_url_sync:
             result["deferred_url_sync"] = spawn_deferred_post_url_sync(

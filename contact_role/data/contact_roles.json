@@ -1,0 +1,34 @@
+{
+  "contacts": {
+    "wa:+66625124001": {
+      "contact_key": "wa:+66625124001",
+      "phone": "+66625124001",
+      "canonical_role": "CLIENT",
+      "role_source": "AGENT6_INBOUND",
+      "role_confidence": null,
+      "role_set_at": "2026-08-10T02:23:30+00:00",
+      "role_updated_at": "2026-08-10T02:24:14+00:00",
+      "locked_by_manual_override": false,
+      "metadata": {
+        "event": "CLIENT_CONVERSATION_STARTED",
+        "channel": "whatsapp",
+        "chat_id": "wa_66625124001"
+      }
+    },
+    "tg:vinnchenco_boris": {
+      "contact_key": "tg:vinnchenco_boris",
+      "phone": "",
+      "canonical_role": "CLIENT",
+      "role_source": "AGENT6_INBOUND",
+      "role_confidence": null,
+      "role_set_at": "2026-08-10T02:30:13+00:00",
+      "role_updated_at": "2026-08-10T02:32:01+00:00",
+      "locked_by_manual_override": false,
+      "metadata": {
+        "channel": "telegram",
+        "chat_id": "1185710165",
+        "event": "CLIENT_CONVERSATION_STARTED"
+      }
+    }
+  }
+}

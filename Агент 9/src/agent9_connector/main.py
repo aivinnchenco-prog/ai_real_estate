@@ -107,11 +107,6 @@ class ConnectorRuntime:
             conv.outreach_status = "manual_review"
             conv.last_error = "missing_facebook_url"
             self.store.save(conv)
-            self.notion.update_outreach(
-                conv.notion_page_id,
-                status="manual_review",
-                error="missing_facebook_url",
-            )
             return
         screen = self.facebook.open_listing(conv.facebook_url, conv.listing_id)
         conv.screen_state = screen
@@ -120,7 +115,6 @@ class ConnectorRuntime:
             conv.outreach_status = "manual_review"
             conv.last_error = screen
             self.store.save(conv)
-            self.notion.update_outreach(conv.notion_page_id, status="manual_review", error=screen)
             return
         if conv.intro_sent_at:
             return
@@ -137,9 +131,6 @@ class ConnectorRuntime:
         conv.thread_id = result.thread_id
         conv.thread_url = result.thread_url
         self.store.save(conv)
-        self.notion.update_outreach(
-            conv.notion_page_id, status="waiting_contact", thread_ref=result.thread_url,
-        )
         log_event("intro_sent", object_id=conv.object_id, thread_id=conv.thread_id)
 
     def _handle_inbound(self, conv: ConversationState, message: str) -> None:
@@ -184,7 +175,7 @@ class ConnectorRuntime:
                 return
             conv.whatsapp_raw = decision.whatsapp_candidate
             conv.whatsapp_normalized = decision.save_whatsapp
-            self.notion.update_outreach(conv.notion_page_id, whatsapp=decision.save_whatsapp)
+            self.notion.update_contact_fields(conv.notion_page_id, whatsapp=decision.save_whatsapp)
             conv.state = BusinessState.ROLE_ASKED.value
             if not conv.role_question_sent_at:
                 conv.role_question_sent_at = conv.updated_at
@@ -211,7 +202,7 @@ class ConnectorRuntime:
                 )
 
         if decision.save_role:
-            self.notion.update_outreach(conv.notion_page_id, owner_agent=decision.save_role, status="complete")
+            self.notion.update_contact_fields(conv.notion_page_id, owner_agent=decision.save_role)
             conv.role = decision.save_role
             conv.state = BusinessState.COMPLETE.value
             conv.outreach_status = "complete"
@@ -219,12 +210,10 @@ class ConnectorRuntime:
         if decision.decline:
             conv.state = BusinessState.DECLINED.value
             conv.outreach_status = "declined"
-            self.notion.update_outreach(conv.notion_page_id, status="declined")
 
         if decision.manual_review:
             conv.state = BusinessState.MANUAL_REVIEW.value
             conv.outreach_status = "manual_review"
-            self.notion.update_outreach(conv.notion_page_id, status="manual_review")
 
         if decision.new_state and not decision.manual_review and not decision.complete and not decision.decline:
             if decision.new_state != BusinessState.CONTACT_RECEIVED:

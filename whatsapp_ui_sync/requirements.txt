@@ -1,0 +1,6 @@
+# Optional WhatsApp Business native-list UI sync (Playwright Chromium).
+# Already used by agent_6_qualifier for Airbnb calendar; install once:
+#   pip install -r whatsapp_ui_sync/requirements.txt
+#   playwright install chromium
+playwright>=1.45
+pytest>=8.0

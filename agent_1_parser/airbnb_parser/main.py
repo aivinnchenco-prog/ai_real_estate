@@ -252,11 +252,20 @@ async def cmd_agent4(message: Message):
 
 
 async def send_plain_text(message: Message, text: str):
+    """Send user/listing text without HTML parse mode (FB/Airbnb copy may contain tags)."""
     if len(text) <= MAX_TEXT_LENGTH:
-        await message.answer(text)
+        await message.answer(text, parse_mode=None)
         return
     for i in range(0, len(text), MAX_TEXT_LENGTH):
-        await message.answer(text[i:i + MAX_TEXT_LENGTH])
+        await message.answer(text[i:i + MAX_TEXT_LENGTH], parse_mode=None)
+
+
+def _tg_safe_text(text: str, *, limit: int = 3500) -> str:
+    """Escape for default HTML parse mode; truncate noisy parser dumps."""
+    cleaned = (text or "").strip()
+    if len(cleaned) > limit:
+        cleaned = cleaned[: limit - 20] + "\n…(truncated)"
+    return html.escape(cleaned)
 
 
 @router.message(F.content_type == ContentType.TEXT)
@@ -527,13 +536,15 @@ async def handle_fb_url_message(message: Message, fb_url: str):
         result = await asyncio.to_thread(handoff_fb_to_agent2, fb_url)
 
     if not result.ok:
-        await message.answer(result.note or "Неизвестная ошибка FB-парсера")
+        await message.answer(
+            _tg_safe_text(result.note or "Неизвестная ошибка FB-парсера"),
+        )
         return
 
     object_id = await _resolve_listing_object_id(result)
     await message.answer(
-        f"✅ {object_id or result.session_id} добавлен в CRM\n"
-        f"📷 Фото: {result.photos}\n{result.note}"
+        f"✅ <code>{html.escape(object_id or result.session_id)}</code> добавлен в CRM\n"
+        f"📷 Фото: {result.photos}\n{_tg_safe_text(result.note, limit=1500)}"
     )
 
     if result.message_text:
@@ -573,7 +584,9 @@ async def handle_url_message(message: Message):
             await handle_fb_url_message(message, fb_url)
         except Exception as e:
             logger.error(f'FB URL error: {e}')
-            await message.reply(f'Ошибка обработки FB-ссылки: {e}')
+            await message.reply(
+                f"Ошибка обработки FB-ссылки: {_tg_safe_text(str(e), limit=1500)}"
+            )
         return
 
     await message.reply(f"Обрабатываю URL. Пожалуйста подождите...")

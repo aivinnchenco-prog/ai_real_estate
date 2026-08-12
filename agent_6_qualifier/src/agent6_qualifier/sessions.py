@@ -79,15 +79,57 @@ class SessionStore:
 
         Запасной путь для реестра владельцев: у владельца мог смениться
         или скрыться @username, но объект из реестра известен.
+
+        WARNING: if multiple clients await the same object, returns the first
+        match. WhatsApp resolution must use list_awaiting_owner_by_object +
+        OwnerRequestStore instead of this helper.
         """
+        matches = self.list_awaiting_owner_by_object(object_id)
+        return matches[0] if matches else None
+
+    def list_awaiting_owner_by_object(self, object_id: str) -> list[Session]:
         if not object_id:
-            return None
+            return []
+        out: list[Session] = []
         for path in self.root.glob("*.json"):
             s = self.load(path.stem)
-            if (s is not None and s.awaiting_owner and s.chosen is not None
-                    and s.chosen.object_id == object_id):
-                return s
-        return None
+            if (
+                s is not None
+                and s.awaiting_owner
+                and s.chosen is not None
+                and s.chosen.object_id == object_id
+            ):
+                out.append(s)
+        return out
+
+    def find_awaiting_owner_by_whatsapp(self, phone: str) -> Session | None:
+        """Сессия клиента, ждущая ответа владельца с этим WhatsApp номером."""
+        matches = self.list_awaiting_owner_by_whatsapp(phone)
+        return matches[0] if matches else None
+
+    def list_awaiting_owner_by_whatsapp(self, phone: str) -> list[Session]:
+        want = "".join(c for c in (phone or "") if c.isdigit())
+        if want.startswith("00"):
+            want = want[2:]
+        if want.startswith("0") and len(want) >= 9:
+            want = "66" + want[1:]
+        if not want:
+            return []
+        out: list[Session] = []
+        for path in self.root.glob("*.json"):
+            s = self.load(path.stem)
+            if s is None or not s.awaiting_owner or s.chosen is None:
+                continue
+            owner_wa = "".join(
+                c for c in (s.chosen.owner_whatsapp or "") if c.isdigit()
+            )
+            if owner_wa.startswith("00"):
+                owner_wa = owner_wa[2:]
+            if owner_wa.startswith("0") and len(owner_wa) >= 9:
+                owner_wa = "66" + owner_wa[1:]
+            if owner_wa and owner_wa == want:
+                out.append(s)
+        return out
 
     def load(self, chat_id: str) -> Session | None:
         path = self._path(chat_id)

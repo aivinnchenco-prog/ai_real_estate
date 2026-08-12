@@ -1,0 +1,21 @@
+{
+  "_fixture": "synthetic/mock — real-shaped Wazzup CRM API v3 messages[]",
+  "_note": "Not a live capture. Shape matches documented {messages:[...]} webhook.",
+  "messages": [
+    {
+      "messageId": "fixture-msg-add-001",
+      "channelId": "7ac4092a-cf3c-450f-8518-d7cc7bd3f995",
+      "chatId": "66987654321",
+      "chatType": "whatsapp",
+      "direction": "inbound",
+      "text": "Ищу виллу на Пхукете на месяц",
+      "dateTime": "2026-08-09T12:00:00Z",
+      "status": "inbound",
+      "contact": {
+        "name": "Fixture Client",
+        "username": null,
+        "phone": "66987654321"
+      }
+    }
+  ]
+}

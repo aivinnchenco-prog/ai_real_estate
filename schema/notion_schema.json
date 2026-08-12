@@ -23,7 +23,7 @@
     {"exact_name": "Google Maps", "type": "url", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher", "agent_6_qualifier"]},
     {"exact_name": "Telegram контакт", "type": "rich_text", "writers": ["manual", "agent_7_envoy"], "readers": ["agent_7_envoy"]},
     {"exact_name": "WhatsApp контакт", "type": "rich_text", "writers": ["manual", "agent_7_envoy"], "readers": ["agent_7_envoy"]},
-    {"exact_name": "Владелец / Агент", "type": "rich_text", "writers": ["manual", "agent_7_envoy", "agent_9_connector"], "readers": ["agent_6_qualifier", "agent_7_envoy", "agent_8_notary", "agent_9_connector"]},
+    {"exact_name": "Владелец / Агент", "type": "rich_text", "writers": ["manual", "agent_7_envoy"], "readers": ["agent_6_qualifier", "agent_7_envoy", "agent_8_notary", "agent_9_connector"]},
     {"exact_name": "Вид", "type": "select", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher"]},
     {"exact_name": "Год постройки", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_6_qualifier"]},
     {"exact_name": "Площадь участка (м²)", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher", "agent_6_qualifier"]},
@@ -95,9 +95,6 @@
     {"exact_name": "publisher_video_done", "type": "checkbox", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
     {"exact_name": "publisher_carousel_done", "type": "checkbox", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
 
-    {"exact_name": "FB Outreach Status", "type": "select", "planned": true, "writers": ["agent_9_connector"], "readers": ["agent_9_connector"], "$comment": "Agent 9 Facebook owner outreach lifecycle"},
-    {"exact_name": "FB Outreach Updated At", "type": "date", "planned": true, "writers": ["agent_9_connector"], "readers": ["agent_9_connector"]},
-    {"exact_name": "FB Messenger Thread", "type": "rich_text", "planned": true, "writers": ["agent_9_connector"], "readers": ["agent_9_connector"], "$comment": "Messenger thread URL or id bound to listing"},
-    {"exact_name": "FB Outreach Error", "type": "rich_text", "planned": true, "writers": ["agent_9_connector"], "readers": ["agent_9_connector"]}
+    {"exact_name": "Агент/Владелец (тип)", "type": "select", "options": ["Владелец", "Агент"], "writers": ["agent_9_connector"], "readers": ["agent_6_qualifier", "agent_7_envoy", "agent_8_notary", "agent_9_connector"], "$comment": "Agent 9: owner vs agent classification"}
   ]
 }

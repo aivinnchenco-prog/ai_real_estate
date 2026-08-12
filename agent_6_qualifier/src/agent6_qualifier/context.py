@@ -99,6 +99,38 @@ def build_knowledge(session: Session) -> str:
     return "\n".join(lines)
 
 
+def build_playbook_hints(session: Session, *, message: str = "") -> str:
+    """Compact advisory knowledge for polish/logging — NOT for extract schema.
+
+    Fail-safe: returns "" on any error. Never overrides session/policy truth.
+    """
+    try:
+        from agent6_qualifier.knowledge.strategy import build_conversation_strategy
+
+        strategy = build_conversation_strategy(session, message=message)
+        if strategy.knowledge_refs:
+            import logging
+
+            logging.getLogger(__name__).info(
+                "knowledge_selected: %s", strategy.knowledge_refs
+            )
+        parts: list[str] = []
+        if strategy.knowledge_refs:
+            parts.append("knowledge_refs: " + ", ".join(strategy.knowledge_refs[:6]))
+        if strategy.response_goal:
+            parts.append("response_goal: " + strategy.response_goal)
+        if strategy.do_not_do:
+            parts.append("do_not: " + "; ".join(strategy.do_not_do[:4]))
+        if strategy.knowledge_compact:
+            parts.append(strategy.knowledge_compact[:1200])
+        return "\n".join(parts)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning("KNOWLEDGE_FALLBACK playbook_hints")
+        return ""
+
+
 def format_history(history: list[dict], limit: int = 8) -> str:
     if not history:
         return "(диалог только начинается)"

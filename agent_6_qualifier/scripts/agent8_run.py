@@ -54,12 +54,12 @@ async def send_tg(to, text: str) -> None:
     await client.disconnect()
 
 
-async def send_tg_owner(to: str, text: str) -> str:
-    """Первое сообщение владельцу: отправить + папка «Собственники».
+async def send_tg_owner(to: str, text: str, owner_agent_type: str = "") -> str:
+    """Первое сообщение владельцу: отправить + папка Owner/Agent по роли Notion.
 
     Возвращает chat_id владельца для реестра.
     """
-    from agent6_qualifier.telegram_folders import OWNERS_FOLDER, add_to_folder
+    from agent6_qualifier.telegram_folders import assign_role_folder
 
     client = make_script_client()
     await client.connect()
@@ -67,7 +67,7 @@ async def send_tg_owner(to: str, text: str) -> str:
         raise RuntimeError("TG не авторизован — python3 scripts/tg_login.py")
     entity = await client.get_entity(to)
     await client.send_message(entity, text)
-    await add_to_folder(client, entity, OWNERS_FOLDER)
+    await assign_role_folder(client, entity, owner_agent_type)
     await client.disconnect()
     return str(getattr(entity, "id", "") or "")
 
@@ -151,12 +151,31 @@ def main() -> int:
         print(f"\nВладельцу не пишем: {plan.skip_reason}")
         return 0
 
+    # CONTACT_OUTREACH_STARTED — canonical OWNER/AGENT before first message.
+    try:
+        from agent6_qualifier.messaging.contact_role_hook import (
+            on_contact_outreach_started,
+        )
+
+        on_contact_outreach_started(
+            listing=listing,
+            phone=(
+                listing.owner_whatsapp
+                or (plan.contact if plan.channel == OwnerChannel.WHATSAPP else "")
+            ),
+            channel=plan.channel.value,
+        )
+    except Exception:
+        pass
+
     # --- пишем владельцу ---
     print(f"\nКанал владельца: {plan.channel.value} -> {plan.contact}")
     print(f"Первое сообщение владельцу:\n{plan.first_message}")
     if args.send and plan.channel == OwnerChannel.TELEGRAM:
         to = plan.contact.lstrip("@")
-        owner_chat_id = asyncio.run(send_tg_owner(to, plan.first_message))
+        owner_chat_id = asyncio.run(
+            send_tg_owner(to, plan.first_message, listing.owner_agent_type),
+        )
         # Помечаем контакт как владельца (реестр + папка «Собственники»):
         # его ответы никогда не обрабатываются юзерботом как новый клиент.
         owner_registry.mark_owner(tg_username=to, tg_chat_id=owner_chat_id,

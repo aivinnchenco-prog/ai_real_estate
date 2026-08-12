@@ -1,0 +1,11 @@
+{
+  "publication_status": 1,
+  "account_ids": [2214120],
+  "details": [{"link": "https://example.com/should-not-use", "publication_type": 4}],
+  "posts": [{
+    "account_id": 2214120,
+    "external_id": "18111531301999159",
+    "post_status": 1,
+    "url": "https://www.instagram.com/reel/DreelSlotTest"
+  }]
+}

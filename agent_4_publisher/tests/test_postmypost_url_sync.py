@@ -61,6 +61,7 @@ def pmp_config() -> dict:
                 "instagram_carousel": "post_url_instagram_carousel",
                 "instagram_reel": "post_url_instagram_reel",
                 "tiktok": "post_url_tiktok",
+                "tiktok_carousel": "post_url_tiktok_carousel",
                 "x": "post_url_x",
                 "linkedin": "post_url_linkedin",
                 "facebook": "post_url_facebook",
@@ -129,6 +130,46 @@ def test_facebook_numeric_url_valid() -> None:
 def test_instagram_slots_differ() -> None:
     assert postmypost_slot_id("instagram", post_kind="carousel") == "instagram:carousel"
     assert postmypost_slot_id("instagram", post_kind="reel") == "instagram:reel"
+    assert postmypost_slot_id("tiktok", post_kind="carousel") == "tiktok:carousel"
+    assert postmypost_slot_id("tiktok", upload_video=True) == "tiktok:video"
+
+
+def test_tiktok_carousel_published_url_field(pmp_config) -> None:
+    from publish_pipeline import published_url_field
+
+    assert published_url_field("tiktok", pmp_config, mode="carousel") == "post_url_tiktok_carousel"
+    assert published_url_field("tiktok", pmp_config, upload_video=True) == "post_url_tiktok"
+
+
+def test_tiktok_carousel_sync_writes_correct_field(pmp_config) -> None:
+    page = {
+        "properties": {
+            "post_url_tiktok_carousel": {
+                "type": "url",
+                "url": "https://app.postmypost.io/publications/99",
+            },
+        }
+    }
+    payload = _fixture("tiktok_published.json")
+    updates: dict = {}
+
+    def fake_update(page_id, fields):
+        updates.update(fields)
+
+    with patch("sync_postmypost_urls.postmypost_get_publication", return_value=payload), patch(
+        "sync_postmypost_urls.notion_update_fields", side_effect=fake_update
+    ):
+        result = sync_postmypost_url_to_notion(
+            "page-1",
+            "tiktok",
+            pmp_config,
+            publication_id="31462708",
+            post_kind="carousel",
+            page=page,
+        )
+    assert result["url_field"] == "post_url_tiktok_carousel"
+    assert updates["post_url_tiktok_carousel"]["url"] == _fixture("tiktok_published.json")["posts"][0]["url"]
+    assert "post_url_tiktok" not in updates
 
 
 def test_decide_notion_url_update_cases() -> None:
@@ -141,6 +182,18 @@ def test_decide_notion_url_update_cases() -> None:
     assert decide_notion_url_update(ig, ig, "instagram") == (False, None, "noop_same")
     assert decide_notion_url_update(other, ig, "instagram") == (False, None, "conflict")
     assert decide_notion_url_update("", None, "instagram") == (False, None, "not_ready")
+    # Planner alone is not a valid "new" live URL (deferred sync must wait).
+    assert decide_notion_url_update("", planner, "instagram") == (False, None, "invalid_new")
+
+
+def test_resolve_url_to_save_after_schedule_prefers_live_then_planner() -> None:
+    from publish_pipeline import resolve_url_to_save_after_schedule
+
+    planner = "https://app.postmypost.io/publications/31505558"
+    live = "https://www.instagram.com/p/ABC"
+    assert resolve_url_to_save_after_schedule(published_url=None, planner_url=planner) == planner
+    assert resolve_url_to_save_after_schedule(published_url=live, planner_url=planner) == live
+    assert resolve_url_to_save_after_schedule(published_url=None, planner_url=None) is None
 
 
 def test_publication_state_per_slot(tmp_path) -> None:
@@ -196,7 +249,69 @@ def test_sync_writes_correct_notion_field(pmp_config) -> None:
         )
     assert result["updated"] is True
     assert result["reason"] == "replace_planner"
+    assert result["url_field"] == "post_url_instagram_carousel"
     assert updates["post_url_instagram_carousel"]["url"] == "https://www.instagram.com/p/DbudjpLil5I"
+    assert "post_url_instagram_reel" not in updates
+
+
+def test_instagram_carousel_and_reel_sync_to_separate_notion_fields(pmp_config) -> None:
+    """Different slots (publication IDs) must land in different post_url_* columns."""
+    carousel_pub = "31462701"
+    reel_pub = "31462704"
+    carousel_payload = _fixture("instagram_published.json")
+    reel_payload = _fixture("instagram_reel_published.json")
+
+    page = {
+        "properties": {
+            "post_url_instagram_carousel": {
+                "type": "url",
+                "url": f"https://app.postmypost.io/publications/{carousel_pub}",
+            },
+            "post_url_instagram_reel": {
+                "type": "url",
+                "url": f"https://app.postmypost.io/publications/{reel_pub}",
+            },
+        }
+    }
+    updates: dict = {}
+
+    def fake_update(page_id, fields):
+        updates.update(fields)
+
+    def fake_get_publication(publication_id, config):
+        if str(publication_id) == carousel_pub:
+            return carousel_payload
+        if str(publication_id) == reel_pub:
+            return reel_payload
+        raise AssertionError(f"unexpected publication_id: {publication_id}")
+
+    with patch("sync_postmypost_urls.postmypost_get_publication", side_effect=fake_get_publication), patch(
+        "sync_postmypost_urls.notion_update_fields", side_effect=fake_update
+    ):
+        carousel_result = sync_postmypost_url_to_notion(
+            "page-1",
+            "instagram",
+            pmp_config,
+            publication_id=carousel_pub,
+            post_kind="carousel",
+            page=page,
+        )
+        reel_result = sync_postmypost_url_to_notion(
+            "page-1",
+            "instagram",
+            pmp_config,
+            publication_id=reel_pub,
+            post_kind="reel",
+            page=page,
+        )
+
+    assert carousel_result["url_field"] == "post_url_instagram_carousel"
+    assert reel_result["url_field"] == "post_url_instagram_reel"
+    assert carousel_result["updated"] is True
+    assert reel_result["updated"] is True
+    assert updates["post_url_instagram_carousel"]["url"] == "https://www.instagram.com/p/DbudjpLil5I"
+    assert updates["post_url_instagram_reel"]["url"] == "https://www.instagram.com/reel/DreelSlotTest"
+    assert updates["post_url_instagram_carousel"]["url"] != updates["post_url_instagram_reel"]["url"]
 
 
 def test_agent6_resolver_finds_listing_by_real_social_url() -> None:

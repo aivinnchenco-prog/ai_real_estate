@@ -46,8 +46,42 @@ legacy import: `agent8.owner_result`).
   - WhatsApp: ярлык (label) `клиент` / `собственник` на чате;
   - Telegram: чат добавляется в папку `Клиенты` / `Собственники` (управляется userbot'ом через MTProto).
 - **Telegram — личный аккаунт (userbot, Telethon/MTProto), НЕ бот.** Личный аккаунт вызывает больше доверия.
-- WhatsApp: провайдер с API и синхронизацией с amoCRM (Wazzup / Green-API).
-- Вся переписка зеркалится в amoCRM (синхронизация WA/TG ↔ amo), но поля квалификации агент пишет в сделку **явно**.
+- **WhatsApp transport = Wazzup** (`api.wazzup24.com`). Канал уже подключён внешне к WhatsApp Business и amoCRM.
+- Agent 6 — **дополнительный участник** канала, не владелец. Telegram transport не меняется.
+- Вся переписка WA уже зеркалится в amoCRM через Wazzup; Agent 6 не создаёт дубликаты contact/lead/chat без lookup.
+- Поля квалификации агент пишет в сделку **явно**.
+
+### WhatsApp / Wazzup (текущий этап)
+
+Архитектура:
+
+```
+WhatsApp Business App ↔ Wazzup ↔ amoCRM ↔ Agent 6
+```
+
+Canonical channel: `7ac4092a-cf3c-450f-8518-d7cc7bd3f995`
+(`transport=whatsapp`, `state=active`, `plainId=66625124002`).
+
+Готово локально:
+- API adapter (`WazzupClient`)
+- transport abstraction (`ClientMessagingTransport` / `WazzupWhatsAppTransport`)
+- read-only diagnostic: `PYTHONPATH=src python3 scripts/wazzup_diagnose.py`
+- webhook receiver boundary: `POST /webhooks/wazzup` (off by default)
+- ownership: `BOT_ACTIVE` / `HUMAN_HANDOFF` / `PAUSED` / `CLOSED`
+
+По умолчанию **выключено** (не включать без явного решения):
+- `WAZZUP_SEND_ENABLED=false`
+- `WAZZUP_WEBHOOK_ENABLED=false`
+- `WAZZUP_AUTO_REPLY_ENABLED=false`
+
+**Precondition перед `WAZZUP_AUTO_REPLY_ENABLED=true`:** отключить существующий
+Wazzup/amoCRM autoresponse («Hello! Thank you for contacting us…»).
+
+Секрет: `WAZZUP_API_KEY` только в локальном `.env` (gitignore). Не логировать ключ / Authorization.
+
+Будущий flow (ещё не включён):
+Inbound WhatsApp → Wazzup webhook → Agent 6 qualification → amoCRM state → Wazzup send → client.
+Human outbound (phone / amoCRM / manual Wazzup, не Agent 6 id) → `HUMAN_HANDOFF` → bot stops.
 
 ### Распознавание публикации (ссылка / forward)
 

@@ -345,10 +345,16 @@ def postmypost_schedule_post(
     publication_id = result.get("id") if isinstance(result, dict) else None
     if publication_id is None:
         raise RuntimeError(f"PostMyPost schedule failed: {result}")
+    pub_status = body.get("publication_status")
+    if isinstance(result, dict) and result.get("publication_status") is not None:
+        pub_status = result.get("publication_status")
     return {
         "id": str(publication_id),
         "uuid": None,
         "response": result,
+        "account_ids": list(account_ids),
+        "publication_type": publication_type,
+        "publication_status": pub_status,
         "published_url": extract_publication_url(
             result if isinstance(result, dict) else {}, platform, config
         ),

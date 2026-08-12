@@ -30,13 +30,29 @@ def _save(data: dict) -> None:
     tmp.replace(_PATH)
 
 
-def _keys(tg_username: str = "", tg_chat_id: str = "") -> list[str]:
+def _normalize_wa_digits(phone: str = "") -> str:
+    digits = "".join(c for c in (phone or "") if c.isdigit())
+    if digits.startswith("00"):
+        digits = digits[2:]
+    if digits.startswith("0") and len(digits) >= 9:
+        digits = "66" + digits[1:]
+    return digits
+
+
+def _keys(
+    tg_username: str = "",
+    tg_chat_id: str = "",
+    whatsapp: str = "",
+) -> list[str]:
     out = []
     u = tg_username.strip().lstrip("@").lower()
     if u:
         out.append(f"tg:{u}")
     if tg_chat_id:
         out.append(f"tg_id:{tg_chat_id}")
+    wa = _normalize_wa_digits(whatsapp)
+    if wa:
+        out.append(f"wa:{wa}")
     return out
 
 
@@ -46,10 +62,13 @@ def mark_owner(
     tg_chat_id: str = "",
     object_id: str = "",
     channel: str = "telegram",
+    whatsapp: str = "",
+    owner_request_id: str = "",
+    client_session_chat_id: str = "",
 ) -> None:
     """Помечает контакт как собственника (вызывается при первом исходящем
     сообщении Agent 8 и при первом входящем ответе владельца)."""
-    keys = _keys(tg_username, tg_chat_id)
+    keys = _keys(tg_username, tg_chat_id, whatsapp=whatsapp)
     if not keys:
         return
     data = _load()
@@ -58,6 +77,9 @@ def mark_owner(
         "channel": channel,
         "tg_username": tg_username.strip().lstrip("@"),
         "tg_chat_id": tg_chat_id,
+        "whatsapp": whatsapp.strip(),
+        "owner_request_id": owner_request_id,
+        "client_session_chat_id": client_session_chat_id,
         "marked_at": datetime.now().isoformat(timespec="seconds"),
     }
     for k in keys:
@@ -65,14 +87,27 @@ def mark_owner(
         # не затираем object_id, если новый пустой
         if old.get("object_id") and not object_id:
             entry = {**entry, "object_id": old["object_id"]}
+        if old.get("whatsapp") and not whatsapp:
+            entry = {**entry, "whatsapp": old["whatsapp"]}
+        if old.get("owner_request_id") and not owner_request_id:
+            entry = {**entry, "owner_request_id": old["owner_request_id"]}
+        if old.get("client_session_chat_id") and not client_session_chat_id:
+            entry = {
+                **entry,
+                "client_session_chat_id": old["client_session_chat_id"],
+            }
         data[k] = entry
     _save(data)
 
 
-def get_owner(tg_username: str = "", tg_chat_id: str = "") -> dict | None:
+def get_owner(
+    tg_username: str = "",
+    tg_chat_id: str = "",
+    whatsapp: str = "",
+) -> dict | None:
     """Запись о собственнике, если контакт помечен; иначе None."""
     data = _load()
-    for k in _keys(tg_username, tg_chat_id):
+    for k in _keys(tg_username, tg_chat_id, whatsapp=whatsapp):
         if k in data:
             return data[k]
     return None

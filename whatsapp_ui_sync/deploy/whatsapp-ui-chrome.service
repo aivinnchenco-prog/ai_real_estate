@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenHome WhatsApp UI Chrome (CDP for Lists sync)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=REPLACE_USER
+WorkingDirectory=REPLACE_ROOT
+EnvironmentFile=-REPLACE_ROOT/agent_6_qualifier/.env
+EnvironmentFile=-REPLACE_ROOT/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=WHATSAPP_UI_CDP_URL=http://127.0.0.1:9222
+Environment=WHATSAPP_UI_CDP_PORT=9222
+Environment=WHATSAPP_UI_USE_XVFB=true
+ExecStart=REPLACE_ROOT/scripts/run_whatsapp_ui_chrome.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

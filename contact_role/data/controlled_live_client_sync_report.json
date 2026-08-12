@@ -1,0 +1,50 @@
+{
+  "preflight": "PASS",
+  "contact_id": 45601045,
+  "masked_phone": "+66******001",
+  "name": "Vinchenco",
+  "canonical": {
+    "old_role": "UNKNOWN",
+    "new_role": "CLIENT",
+    "source": "MANUAL",
+    "manual_lock": true,
+    "route": "AGENT_6"
+  },
+  "amocrm": {
+    "pass": true,
+    "write": "PASS",
+    "field_readback": "Клиент",
+    "enum_id": 1231627,
+    "managed_tags_readback": [
+      "CLIENT"
+    ],
+    "all_tags": [
+      "CLIENT"
+    ],
+    "unrelated_preserved": true
+  },
+  "whatsapp": {
+    "write": "PASS",
+    "write_code": "ALREADY_SYNCED",
+    "client_assigned": true,
+    "owner_not_present": true,
+    "current_lists": [
+      "Client"
+    ],
+    "verify_code": "ALREADY_SYNCED"
+  },
+  "idempotency": {
+    "pass": true,
+    "amo_code": "ALREADY_SYNCED",
+    "wa_code": "ALREADY_SYNCED",
+    "canonical_changed": false
+  },
+  "messages_sent": false,
+  "lead_or_contact_created": false,
+  "other_fields_changed": false,
+  "automatic_global_sync_after": "DISABLED",
+  "wazzup": "UNCHANGED",
+  "telegram": "UNCHANGED",
+  "github_push": "NO",
+  "verdict": "FIRST CONTROLLED LIVE CONTACT ROLE SYNC PASSED"
+}

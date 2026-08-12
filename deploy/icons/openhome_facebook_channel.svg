@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Open Home Facebook channel">
+  <rect width="128" height="128" rx="24" fill="#1F3A4D"/>
+  <path d="M36 78 V52 h20 l8-12 h28 v38 H36z" fill="none" stroke="#F4F7FA" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M52 78 V62 h12 v16" fill="none" stroke="#F4F7FA" stroke-width="6" stroke-linecap="round"/>
+  <path d="M78 86 c18 0 30 10 30 10 v14 H54 s8-12 24-24z" fill="#7CB7D9"/>
+  <circle cx="92" cy="98" r="4" fill="#1F3A4D"/>
+</svg>

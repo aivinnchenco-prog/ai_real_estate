@@ -116,7 +116,8 @@
       "montage": "Монтаж",
       "video_engine": "Видео-движок",
       "publish": "Публикация",
-      "tg_post": "post_url_telegram"
+      "tg_post": "post_url_telegram",
+      "agent6_locked": "agent6_locked"
     },
     "statuses": {
       "after_structurize": "ready_for_video",

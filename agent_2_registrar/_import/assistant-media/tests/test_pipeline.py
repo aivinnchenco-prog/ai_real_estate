@@ -83,6 +83,16 @@ class ChainGateTests(unittest.TestCase):
                                  publish_flag="ДА")
         self.assertTrue(agent6_ready(listing3, st)[0])
 
+    def test_agent6_skips_when_locked(self):
+        st = {"video_done": "ready_to_post"}
+        listing = NotionListing(
+            "p1", "id", "ready_to_post", "T", "https://g", "https://seedance", None,
+            publish_flag="ДА", agent6_locked=True,
+        )
+        ok, reason = agent6_ready(listing, st)
+        self.assertFalse(ok)
+        self.assertIn("agent6_locked", reason)
+
     def test_montage_flag_gates_agent3(self):
         """Агент 3 только при явном «Монтаж»=ДА; пусто и НЕТ — пропуск."""
         st = {

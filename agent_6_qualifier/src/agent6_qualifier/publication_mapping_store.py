@@ -14,6 +14,7 @@ PUBLICATION_URL_FIELDS: dict[str, str] = {
     "instagram_reel": "post_url_instagram_reel",
     "instagram": "post_url_instagram_carousel",
     "tiktok": "post_url_tiktok",
+    "tiktok_carousel": "post_url_tiktok_carousel",
     "x": "post_url_x",
     "twitter": "post_url_x",
     "linkedin": "post_url_linkedin",

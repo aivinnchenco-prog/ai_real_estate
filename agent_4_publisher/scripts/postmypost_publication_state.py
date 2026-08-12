@@ -32,7 +32,11 @@ def postmypost_slot_id(
     if network == "instagram":
         kind = post_kind or instagram_post_kind(upload_video=upload_video, mode=None)
         return f"instagram:{kind}"
-    if network in ("tiktok", "youtube"):
+    if network == "tiktok":
+        if upload_video or post_kind == "video":
+            return "tiktok:video"
+        return "tiktok:carousel"
+    if network == "youtube":
         return f"{network}:video"
     return f"{network}:post"
 

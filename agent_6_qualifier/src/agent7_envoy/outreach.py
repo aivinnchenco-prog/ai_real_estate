@@ -33,6 +33,7 @@ class OutreachPlan:
     first_message: str = ""
     skip_reason: str = ""              # например «календарь Airbnb: даты закрыты»
     precheck: CalendarCheck | None = None
+    knowledge_refs: list[str] | None = None  # advisory only; does not change message text
 
 
 def build_outreach_plan(
@@ -55,12 +56,21 @@ def build_outreach_plan(
             plan.skip_reason = "календарь: даты клиента закрыты"
             return plan
 
-    ch = listing.owner_channel()
-    if ch is None:
-        plan.skip_reason = "в Notion нет ни одного контакта владельца"
+    from .channel_resolver import OwnerMessagingChannel, resolve_owner_channel
+
+    decision = resolve_owner_channel(listing, lead)
+    if decision.channel == OwnerMessagingChannel.NONE or decision.owner_channel is None:
+        if decision.policy_blocked:
+            plan.skip_reason = (
+                "facebook: срок меньше 6 месяцев — владельцу не пишем "
+                f"({decision.policy_reason})"
+            )
+        else:
+            plan.skip_reason = "в Notion нет ни одного контакта владельца"
         return plan
 
-    plan.channel, plan.contact = ch
+    plan.channel = decision.owner_channel
+    plan.contact = decision.destination
     plan.first_message = owner_first_message(
         plan.channel,
         check_in=lead.check_in.strftime("%d.%m.%Y") if lead.check_in else "",
@@ -68,6 +78,39 @@ def build_outreach_plan(
         guests=lead.guests,
         listing_url=listing.source_url,
     )
+
+    # Advisory knowledge hints — never mutate first_message / channel / skip.
+    try:
+        from agent6_qualifier.knowledge.models import RetrievalContext
+        from agent6_qualifier.knowledge.retriever import retrieve_for_turn
+        from agent6_qualifier.rental_policy import evaluate_rental_policy, listing_source_kind
+
+        src = listing_source_kind(listing)
+        pol = evaluate_rental_policy(listing, lead)
+        result = retrieve_for_turn(
+            RetrievalContext(
+                agent="AGENT7",
+                intent="owner_first_message",
+                object_source=src,
+                rental_policy=pol.policy,
+                current_object=listing.object_id,
+                long_term=(lead.stay_months is not None and float(lead.stay_months) >= 6),
+                situation="owner_check",
+            )
+        )
+        plan.knowledge_refs = list(result.selected_ids)
+        if plan.knowledge_refs:
+            import logging
+
+            logging.getLogger(__name__).info(
+                "knowledge_selected: %s", plan.knowledge_refs
+            )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning("KNOWLEDGE_FALLBACK outreach_plan")
+        plan.knowledge_refs = []
+
     return plan
 
 

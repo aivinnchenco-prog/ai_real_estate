@@ -19,31 +19,28 @@ class TestNotion:
         listing = parse_page(sample_page)
         assert listing and not is_eligible(listing)
 
-    def test_complete_ignored(self, sample_page):
-        sample_page["properties"]["FB Outreach Status"] = {"select": {"name": "complete"}}
-        listing = parse_page(sample_page)
-        assert listing and not is_eligible(listing)
-
-    def test_declined_ignored(self, sample_page):
-        sample_page["properties"]["FB Outreach Status"] = {"select": {"name": "declined"}}
+    def test_result_already_in_notion_ignored(self, sample_page):
+        sample_page["properties"]["WhatsApp контакт"] = {
+            "rich_text": [{"plain_text": "+66812345678"}],
+        }
+        sample_page["properties"]["Агент/Владелец (тип)"] = {
+            "select": {"name": "Владелец"},
+        }
         listing = parse_page(sample_page)
         assert listing and not is_eligible(listing)
 
     def test_resolve_url(self):
-        assert "marketplace" in resolve_facebook_url("https://facebook.com/marketplace/item/1", "")
+        assert resolve_facebook_url("https://facebook.com/marketplace/item/1") == (
+            "https://facebook.com/marketplace/item/1"
+        )
 
-    def test_resolve_url_from_description(self, sample_page):
-        sample_page["properties"]["Источник объявления"]["url"] = None
-        sample_page["properties"]["post_url_FB_marketplace"]["url"] = None
-        sample_page["properties"]["Описание"] = {
-            "rich_text": [{
-                "plain_text": "Villa\nhttps://www.facebook.com/marketplace/item/1515735863510\n",
-            }],
-        }
+    def test_source_url_only(self, sample_page):
+        sample_page["properties"]["Источник объявления"]["url"] = (
+            "https://www.facebook.com/marketplace/item/1515735863510647"
+        )
         listing = parse_page(sample_page)
         assert listing
-        assert listing.facebook_url.endswith("/1515735863510")
-        assert listing.listing_id == "1515735863510"
+        assert listing.listing_id == "1515735863510647"
         assert is_eligible(listing)
 
 

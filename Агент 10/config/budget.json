@@ -1,0 +1,14 @@
+{
+  "$comment": "Budget defaults and hard caps (THB). Caps override any LLM/agent suggestion.",
+  "currency": "THB",
+  "default_daily_budget": 500,
+  "max_daily_budget": 1500,
+  "default_duration_days": 5,
+  "max_duration_days": 14,
+  "max_total_budget": 2500,
+  "default_objective": "OUTCOME_ENGAGEMENT",
+  "default_strategy": "boost_existing_reel",
+  "default_placements_mode": "advantage_plus",
+  "default_audience_mode": "advantage_plus",
+  "max_budget_change_pct": 20
+}

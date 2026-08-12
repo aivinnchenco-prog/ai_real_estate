@@ -1,0 +1,12 @@
+/var/log/nginx/api.open-home.online.*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    sharedscripts
+    postrotate
+        [ -f /var/run/nginx.pid ] && kill -USR1 "$(cat /var/run/nginx.pid)"
+    endscript
+}

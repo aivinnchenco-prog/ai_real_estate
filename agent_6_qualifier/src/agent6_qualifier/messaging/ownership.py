@@ -1,0 +1,120 @@
+"""Conversation ownership / human handoff gates for WhatsApp via Wazzup."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+from agent6_qualifier.messaging.types import CanonicalInboundMessage, ConversationOwner
+
+OutboundSourceClass = Literal[
+    "OWN_BOT_OUTBOUND",
+    "HUMAN_OUTBOUND",
+    "UNKNOWN_EXTERNAL_OUTBOUND",
+    "NOT_OUTBOUND",
+]
+
+
+def classify_outbound_source(
+    message: CanonicalInboundMessage,
+    *,
+    known_bot_outbound_ids: set[str] | None = None,
+) -> OutboundSourceClass:
+    """Passive classification from webhook metadata (no auto-disable of greetings).
+
+    OWN_BOT_OUTBOUND: Agent6 crmMessageId (agent6-*) / is_from_bot / known ids
+    HUMAN_OUTBOUND: explicit is_from_bot=false
+    UNKNOWN_EXTERNAL_OUTBOUND: outbound without Agent6 id (possible WA/Wazzup/amo greeting)
+    """
+    if message.direction != "outbound":
+        return "NOT_OUTBOUND"
+
+    crm_id = (message.crm_message_id or "").strip()
+    known = known_bot_outbound_ids or set()
+    if message.is_from_bot is True or (
+        crm_id.startswith("agent6-") or crm_id in known
+    ):
+        return "OWN_BOT_OUTBOUND"
+    if message.is_from_bot is False:
+        return "HUMAN_OUTBOUND"
+    return "UNKNOWN_EXTERNAL_OUTBOUND"
+
+
+@dataclass
+class ConversationOwnershipState:
+    chat_id: str
+    owner: ConversationOwner = ConversationOwner.BOT_ACTIVE
+    reason: str = ""
+    manager_takeover: bool = False
+    last_human_message_id: str | None = None
+    known_bot_outbound_ids: set[str] = field(default_factory=set)
+
+    def bot_may_reply(self) -> bool:
+        if self.manager_takeover:
+            return False
+        return self.owner == ConversationOwner.BOT_ACTIVE
+
+    def block_reason(self) -> str | None:
+        if self.bot_may_reply():
+            return None
+        if self.manager_takeover:
+            return "manager_takeover flag"
+        return f"owner={self.owner.value}"
+
+
+def apply_inbound_to_ownership(
+    state: ConversationOwnershipState,
+    message: CanonicalInboundMessage,
+) -> ConversationOwnershipState:
+    """Update ownership conservatively.
+
+    - Known Agent 6 outbound (crmMessageId agent6-* / is_from_bot True): keep BOT_ACTIVE
+    - Outbound from other sources (human / phone / amoCRM via Wazzup): HUMAN_HANDOFF
+    - If source unknown: do not guess; leave owner unchanged unless manager_takeover
+    """
+    kind = classify_outbound_source(
+        message, known_bot_outbound_ids=state.known_bot_outbound_ids
+    )
+    if kind == "NOT_OUTBOUND":
+        return state
+
+    crm_id = (message.crm_message_id or "").strip()
+    if kind == "OWN_BOT_OUTBOUND":
+        state.known_bot_outbound_ids.add(crm_id or message.message_id)
+        return state
+
+    if kind == "HUMAN_OUTBOUND":
+        state.owner = ConversationOwner.HUMAN_HANDOFF
+        state.reason = "outbound not from Agent 6 (explicit is_from_bot=false)"
+        state.last_human_message_id = message.message_id
+        return state
+
+    # UNKNOWN_EXTERNAL_OUTBOUND — do not invent HUMAN_HANDOFF automatically.
+    # Callers may set manager_takeover explicitly.
+    state.reason = (
+        "UNKNOWN_EXTERNAL_OUTBOUND — ownership unchanged "
+        "(possible WA/Wazzup/amo greeting; not Agent6 crmMessageId)"
+    )
+    return state
+
+
+def set_manager_takeover(state: ConversationOwnershipState, *, enabled: bool = True) -> ConversationOwnershipState:
+    state.manager_takeover = enabled
+    if enabled:
+        state.owner = ConversationOwner.HUMAN_HANDOFF
+        state.reason = "explicit manager takeover"
+    return state
+
+
+def resume_bot(state: ConversationOwnershipState) -> ConversationOwnershipState:
+    """Explicit resume: HUMAN_HANDOFF/PAUSED → BOT_ACTIVE (no timer)."""
+    state.manager_takeover = False
+    state.owner = ConversationOwner.BOT_ACTIVE
+    state.reason = "explicit resume to BOT_ACTIVE"
+    return state
+
+
+def assert_bot_may_send(state: ConversationOwnershipState) -> None:
+    reason = state.block_reason()
+    if reason:
+        raise PermissionError(f"bot send blocked: {reason}")

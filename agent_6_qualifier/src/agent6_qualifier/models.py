@@ -18,11 +18,18 @@ class Availability(str, Enum):
 
 
 class OwnerChannel(str, Enum):
-    """Приоритет каналов связи с собственником (по убыванию)."""
+    """Приоритет каналов связи с собственником (по убыванию).
+
+    Source-native messaging uses FACEBOOK_MESSENGER / AIRBNB_MESSAGES.
+    AIRBNB / FB_MARKETPLACE remain as aliases for backward compatibility.
+    """
     WHATSAPP = "whatsapp"
     TELEGRAM = "telegram"
-    AIRBNB = "airbnb"
-    FB_MARKETPLACE = "fb_marketplace"
+    FACEBOOK_MESSENGER = "facebook_messenger"
+    AIRBNB_MESSAGES = "airbnb_messages"
+    # Legacy aliases (same values → Enum alias members)
+    AIRBNB = "airbnb_messages"
+    FB_MARKETPLACE = "facebook_messenger"
 
 
 @dataclass
@@ -45,6 +52,8 @@ class Listing:
     owner_name: str = ""
     owner_whatsapp: str = ""
     owner_telegram: str = ""
+    # Notion «Агент/Владелец (тип)»: «Владелец» | «Агент» | ""
+    owner_agent_type: str = ""
     availability: Availability = Availability.UNKNOWN
     busy_until: Optional[date] = None
     # Цены по месяцам от Агента 1/2 (колонка monthly_prices, JSON):
@@ -137,18 +146,15 @@ class Listing:
     def owner_channel(self) -> Optional[tuple[OwnerChannel, str]]:
         """Первый доступный канал связи с владельцем по приоритету.
 
-        WA → TG → Airbnb DM (ссылка объявления) → FB Marketplace DM.
+        WA → TG → SOURCE_NATIVE (Airbnb Messages / Facebook Messenger).
+        Delegates to Agent7 OwnerChannelResolver (canonical).
         """
-        if self.owner_whatsapp.strip():
-            return OwnerChannel.WHATSAPP, self.owner_whatsapp.strip()
-        if self.owner_telegram.strip():
-            return OwnerChannel.TELEGRAM, self.owner_telegram.strip()
-        src = self.source_url.strip()
-        if self.source_is_airbnb:
-            return OwnerChannel.AIRBNB, src
-        if "facebook." in src.lower() and src:
-            return OwnerChannel.FB_MARKETPLACE, src
-        return None
+        from agent7_envoy.channel_resolver import (
+            decision_to_owner_channel_tuple,
+            resolve_owner_channel,
+        )
+
+        return decision_to_owner_channel_tuple(resolve_owner_channel(self))
 
 
 @dataclass

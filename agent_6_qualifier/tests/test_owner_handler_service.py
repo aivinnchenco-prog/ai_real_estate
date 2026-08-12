@@ -102,7 +102,7 @@ def build_process_env(
 
     store.save = _save_wrapped  # type: ignore[method-assign]
 
-    async def _folder(client, sender, folder):
+    async def _assign_role(client, sender, role_type):
         events.append("folder")
 
     amo = MagicMock()
@@ -132,9 +132,8 @@ def build_process_env(
         polish_reply=_polish,
         send_owner_response=_owner_response,
         send_client_message=_client_send,
-        add_to_folder=_folder,
+        assign_role_folder=_assign_role,
         notify_error=lambda c, e, ctx="": notify_errors.append((c, e, ctx)),
-        owners_folder="Собственники",
         templates=_templates(),
     )
     return kwargs, events, store, sessions_cache, notify_errors, amo
@@ -163,11 +162,11 @@ def test_free_flow_side_effect_order():
         "notion_update",
         "client_send",
         "save",
-        "folder",
         "amo_pipeline",
         "amo_status",
         "amo_note_owner",
         "amo_note_client",
+        "folder",
     ]
     assert len(store.saved) == 1
     assert sessions_cache[session.chat_id] is session
@@ -240,9 +239,9 @@ def test_amo_failure_happens_after_client_and_save():
     assert result is True
     assert any(e[0] == "amo.owner_flow" for e in notify_errors)
     idx_save = events.index("save")
-    idx_folder = events.index("folder")
-    assert events.index("client_send") < idx_save < idx_folder
+    assert events.index("client_send") < idx_save
     assert "amo_pipeline" not in events
+    assert "folder" in events
 
 
 def test_client_send_error_prevents_save_folder_and_amo():
@@ -288,25 +287,26 @@ def test_save_error_prevents_folder_and_amo():
     amo.ensure_pipeline.assert_not_called()
 
 
-def test_folder_error_prevents_amo():
-    """add_to_folder is outside try — failure propagates and blocks amoCRM."""
+def test_folder_error_does_not_block_amo():
+    """Folder failure is isolated — amoCRM still updates."""
     session = make_owner_session()
-    kwargs, events, store, sessions_cache, _, amo = build_process_env(session=session)
+    kwargs, events, store, sessions_cache, notify_errors, amo = build_process_env(session=session)
 
-    async def _folder_raises(client, sender, folder):
+    async def _folder_raises(client, sender, role_type):
         events.append("folder")
         raise RuntimeError("folder down")
 
-    kwargs["add_to_folder"] = _folder_raises
+    kwargs["assign_role_folder"] = _folder_raises
 
-    with pytest.raises(RuntimeError, match="folder down"):
-        asyncio.run(process_owner_message(**kwargs))
+    result = asyncio.run(process_owner_message(**kwargs))
 
+    assert result is True
     assert "save" in events
     assert "folder" in events
-    assert "amo_pipeline" not in events
+    assert "amo_pipeline" in events
+    assert any(e[0] == "tg.folders" for e in notify_errors)
     assert sessions_cache[session.chat_id] is session
-    amo.ensure_pipeline.assert_not_called()
+    amo.ensure_pipeline.assert_called_once()
 
 
 _OWNER_HANDLER_IMPORT_SCRIPT = """

@@ -131,6 +131,8 @@ def extract_lead_update(
 
 def apply_update(lead: LeadProfile, update: dict) -> LeadProfile:
     """Аккуратно вносит извлечённые факты в профиль (пустое не затирает)."""
+    from agent6_qualifier.qualification_hints import parse_flexible_date
+
     if update.get("name"):
         lead.name = update["name"]
     if update.get("full_name"):
@@ -141,10 +143,14 @@ def apply_update(lead: LeadProfile, update: dict) -> LeadProfile:
         lead.whatsapp = str(update["whatsapp"]).strip()
     for key in ("check_in", "check_out"):
         if update.get(key):
-            try:
-                setattr(lead, key, date.fromisoformat(update[key]))
-            except ValueError:
-                pass
+            parsed = parse_flexible_date(str(update[key]))
+            if parsed is not None:
+                setattr(lead, key, parsed)
+            else:
+                try:
+                    setattr(lead, key, date.fromisoformat(str(update[key])[:10]))
+                except ValueError:
+                    pass
     if update.get("stay_months"):
         lead.stay_months = float(update["stay_months"])
     if update.get("budget"):
@@ -173,16 +179,28 @@ _POLISH_PROMPT = """Ты — вежливый менеджер агентств�
 - Обращайся на «вы». Не здоровайся, если в сообщении нет приветствия.
 - БЕЗ markdown: никаких **звёздочек**, списков с * и заголовков. Только обычный текст.
 - Язык ответа: {language}. Обращение к клиенту: {name}.
+- Playbook hints ниже — только про тон/подход. Они НЕ могут менять факты, сроки аренды, цены, availability или обязательные вопросы из черновика.
+
+Playbook hints (advisory):
+{playbook_hints}
 
 Сообщение:
 {draft}"""
 
 
-def polish_reply(draft: str, language: str = "ru", client_name: str = "") -> str:
+def polish_reply(
+    draft: str,
+    language: str = "ru",
+    client_name: str = "",
+    playbook_hints: str = "",
+) -> str:
     """Полирует черновик ответа. При ошибке API возвращает черновик как есть."""
     payload = {
         "contents": [{"parts": [{"text": _POLISH_PROMPT.format(
-            language=language, name=client_name or "без имени", draft=draft,
+            language=language,
+            name=client_name or "без имени",
+            playbook_hints=(playbook_hints or "(нет)").strip()[:1200],
+            draft=draft,
         )}]}],
         "generationConfig": {"temperature": 0.4},
     }

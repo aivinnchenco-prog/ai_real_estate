@@ -63,6 +63,7 @@ def make_owner_session(
         page_id=page_id,
         title="Villa",
         owner_telegram=owner_telegram,
+        owner_agent_type="Владелец",
     )
     return session
 

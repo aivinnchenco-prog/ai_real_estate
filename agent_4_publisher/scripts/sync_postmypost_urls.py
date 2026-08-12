@@ -67,6 +67,31 @@ def sync_postmypost_url_to_notion(
         notion_update_fields(page_id, {url_field: notion_url_property(url_to_write)})
         updated = True
 
+    # Enrich canonical ledger (same PostMyPost id — no duplicate insert).
+    ledger_info: dict[str, Any] = {"enriched": False}
+    try:
+        import publication_ledger as pl
+        from postmypost_social_url import is_valid_social_post_url
+
+        social_permalink = url if url and is_valid_social_post_url(url, network) else None
+        enriched = pl.enrich_publication_in_ledger(
+            publication_id,
+            payload,
+            permalink=social_permalink,
+            platform=network,
+        )
+        if enriched is not None:
+            ledger_info = {
+                "enriched": True,
+                "publication_key": enriched.publication_key,
+                "permalink": enriched.permalink,
+                "external_media_id": enriched.external_media_id,
+                "status": enriched.status,
+                "raw_status": enriched.raw_status,
+            }
+    except Exception as exc:  # noqa: BLE001
+        ledger_info = {"enriched": False, "error": str(exc)[:300]}
+
     return {
         "page_id": page_id,
         "platform": platform,
@@ -77,6 +102,7 @@ def sync_postmypost_url_to_notion(
         "updated": updated,
         "reason": reason,
         "publication_status": payload.get("publication_status"),
+        "ledger": ledger_info,
     }
 
 
