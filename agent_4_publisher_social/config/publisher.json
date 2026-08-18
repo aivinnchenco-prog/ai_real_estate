@@ -1,5 +1,9 @@
 {
-  "$comment": "Publisher social — телефон: только FB Groups + FB Marketplace. Остальные сети — PostMyPost на VPS.",
+  "$comment": "Publisher social — FB Groups + FB Marketplace (Playwright Agent 7 на VPS). Остальные сети — PostMyPost.",
+  "fb_publisher": {
+    "backend": "browser",
+    "backend_env": "PUBLISHER_FB_BACKEND"
+  },
   "channels": [
     "fb_groups",
     "fb_marketplace"
@@ -191,7 +195,7 @@
   },
   "fb_groups": {
     "groups_file": "config/fb_groups_list.txt",
-    "max_groups_per_object": 13,
+    "max_groups_per_object": 11,
     "max_images": 9,
     "post_publish_pause_seconds": 60
   },

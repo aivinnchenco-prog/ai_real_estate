@@ -799,9 +799,10 @@ class FbMarketplaceChannel:
         confirm_post: bool = False,
     ) -> ChannelResult:
         from ..browser.backend import channel_uses_browser
-        from ..browser.publish import publish_fb_marketplace_browser
 
         if channel_uses_browser(self.name, publisher_cfg):
+            from ..browser.publish import publish_fb_marketplace_browser
+
             images = job.local_marketplace_images or job.marketplace_image_urls
             listing = job.listing
             if dry_run:

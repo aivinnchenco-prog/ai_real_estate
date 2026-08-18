@@ -75,6 +75,11 @@ JOIN_SUBMIT_RE = re.compile(
     r"подать заявку|готово|done|ok",
     re.I,
 )
+JOIN_DIALOG_SUBMIT_RE = re.compile(
+    r"надіслати|подати|відправ|submit|send|отправ|подать|готово|done|"
+    r"join group|приєднатися|вступить|join",
+    re.I,
+)
 JOIN_DIALOG_HINT_RE = re.compile(
     r"правил|rules|terms|погодж|question|питан|вступ|join|member|участ|заявк|request",
     re.I,
@@ -391,6 +396,28 @@ def canonical_post_url(href: str) -> str:
     return href.rstrip("/") + "/"
 
 
+def _log_step(message: str) -> None:
+    print(f"[fb_groups] {message}", flush=True)
+
+
+def dismiss_join_dialogs(page: Any, cfg: dict[str, Any]) -> None:
+    """Закрыть зависший диалог вступления и идти к композеру."""
+    for _ in range(4):
+        found = False
+        dialogs = page.locator('div[role="dialog"]')
+        for i in range(dialogs.count()):
+            dialog = dialogs.nth(i)
+            if _join_dialog_candidate(dialog):
+                found = True
+                try:
+                    page.keyboard.press("Escape")
+                    human_delay(cfg, 0.4)
+                except Exception:
+                    pass
+        if not found:
+            return
+
+
 def _join_dialog_candidate(dialog: Any) -> bool:
     """Диалог заявки на вступление (не композер поста)."""
     try:
@@ -486,11 +513,14 @@ def _click_join_dialog_submit(dialog: Any, page: Any, cfg: dict[str, Any]) -> bo
         pass
 
     candidates: list[Any] = []
-    for loc in (
-        dialog.get_by_role("button", name=JOIN_SUBMIT_RE),
-        dialog.locator('[role="button"]').filter(has_text=JOIN_SUBMIT_RE),
-        dialog.locator('[type="submit"]'),
-    ):
+    for pattern in (JOIN_DIALOG_SUBMIT_RE, JOIN_SUBMIT_RE):
+        for loc in (
+            dialog.get_by_role("button", name=pattern),
+            dialog.locator('[role="button"]').filter(has_text=pattern),
+        ):
+            for i in range(loc.count()):
+                candidates.append(loc.nth(i))
+    for loc in (dialog.locator('[type="submit"]'),):
         for i in range(loc.count()):
             candidates.append(loc.nth(i))
 
@@ -519,7 +549,7 @@ def _click_join_dialog_submit(dialog: Any, page: Any, cfg: dict[str, Any]) -> bo
 
 def handle_join_request_dialog(page: Any, cfg: dict[str, Any]) -> bool:
     """Диалог «Запросы на участие»: чекбоксы, вопросы, кнопка «Отправить»."""
-    deadline = time.time() + 35.0
+    deadline = time.time() + 20.0
     submitted = False
     while time.time() < deadline:
         dialogs = page.locator('div[role="dialog"]')
@@ -549,6 +579,7 @@ def handle_join_request_dialog(page: Any, cfg: dict[str, Any]) -> bool:
         time.sleep(0.8)
     if not submitted:
         debug_screenshot(page, "join_dialog_stuck")
+        dismiss_join_dialogs(page, cfg)
     return submitted
 
 
@@ -673,13 +704,15 @@ def maybe_join_group(page: Any, cfg: dict[str, Any]) -> bool:
     except Exception:
         join.click(force=True)
     human_delay(cfg, 3.0)
-    for _ in range(3):
+    for attempt in range(3):
         if handle_join_request_dialog(page, cfg):
             break
+        dismiss_join_dialogs(page, cfg)
         if not page.locator('div[role="dialog"]').count():
             break
-        human_delay(cfg, 1.5)
-    human_delay(cfg, 2.0)
+        human_delay(cfg, 1.0)
+    dismiss_join_dialogs(page, cfg)
+    human_delay(cfg, 1.0)
 
     deadline = time.time() + 20.0
     while time.time() < deadline:
@@ -935,21 +968,21 @@ def wait_post_result(
 def post_to_group(
     page: Any, group_url: str, caption: str, files: list[Path], cfg: dict[str, Any]
 ) -> dict[str, Any]:
+    _log_step(f"open {group_url}")
     nav_timeout = int(cfg.get("browser", {}).get("nav_timeout_ms", 90000))
     page.goto(group_url, wait_until="domcontentloaded", timeout=nav_timeout)
     human_delay(cfg, 2.0)
-    # Полистать ленту группы перед постингом — как живой участник
-    idle_scroll(page, cfg, (10, 30))
+    idle_scroll(page, cfg, (5, 15))
     page.keyboard.press("Home")
     human_delay(cfg)
 
     # Вступаем если можно; даже при ожидании одобрения — пробуем постить (публичные группы)
     maybe_join_group(page, cfg)
 
-    # Приветственные оверлеи новой группы перекрывают композер
     close_blocking_dialogs(page, cfg)
 
     before = collect_post_hrefs(page)
+    _log_step("open composer")
     dialog = open_composer(page, cfg)
     human_delay(cfg)
 
@@ -964,6 +997,7 @@ def post_to_group(
     dialog = advance_after_photos(page, dialog, cfg)
     human_delay(cfg, 1.0)
 
+    _log_step("click post/send")
     click_post(page, dialog, cfg)
     return wait_post_result(page, group_url, before, cfg)
 

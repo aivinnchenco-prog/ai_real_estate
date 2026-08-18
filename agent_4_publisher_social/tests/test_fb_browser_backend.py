@@ -10,10 +10,10 @@ from publisher_social.pipeline import _needs_phone_media_push
 
 
 class FbBrowserBackendTests(unittest.TestCase):
-    def test_default_backend_is_phone(self) -> None:
+    def test_default_backend_is_browser_from_config(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("PUBLISHER_FB_BACKEND", None)
-            self.assertEqual(fb_backend({}), "phone")
+            self.assertEqual(fb_backend({}), "browser")
 
     def test_env_enables_browser(self) -> None:
         with patch.dict(os.environ, {"PUBLISHER_FB_BACKEND": "browser"}):
@@ -43,8 +43,7 @@ class FbBrowserBackendTests(unittest.TestCase):
 
     def test_phone_backend_keeps_push(self) -> None:
         cfg = {}
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("PUBLISHER_FB_BACKEND", None)
+        with patch.dict(os.environ, {"PUBLISHER_FB_BACKEND": "phone"}):
             self.assertTrue(
                 _needs_phone_media_push(
                     ["fb_groups"],

@@ -1,11 +1,12 @@
 {
-  "$comment": "Playwright-публикация FB Groups + Marketplace через профиль Agent 7. Включение: PUBLISHER_FB_BACKEND=browser",
+  "$comment": "Playwright FB Groups + Marketplace через профиль Agent 7. Переключение: PUBLISHER_FB_BACKEND=phone",
+  "backend": "browser",
   "profile": {
     "source": "agent7",
     "profile_dir_env": "AGENT7_FACEBOOK_PROFILE_DIR",
     "default_profile_dir": "/opt/openhome/runtime/browser_profiles/facebook_agent7",
     "headless_env": "AGENT7_FB_HEADLESS",
-    "default_headless": false
+    "default_headless": true
   },
   "browser": {
     "viewport": {
@@ -28,8 +29,8 @@
   },
   "limits": {
     "minutes_between_groups": [
-      2,
-      5
+      1,
+      2
     ]
   }
 }

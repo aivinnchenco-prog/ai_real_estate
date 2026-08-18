@@ -1179,15 +1179,21 @@ def _discussion_add_photos(
     selected = _select_discussion_photos(
         d, android_cfg, max_images=max_images, object_id=object_id
     )
+    clicked_next = False
     for _ in range(15):
-        if d(description="Далее").exists(timeout=0.5):
-            d(description="Далее").click()
-            break
-        if d(text="Далее").exists(timeout=0.3):
-            d(text="Далее").click()
-            break
+        try:
+            if d(description="Далее").exists(timeout=0.5):
+                d(description="Далее").click()
+                clicked_next = True
+                break
+            if d(text="Далее").exists(timeout=0.3):
+                d(text="Далее").click()
+                clicked_next = True
+                break
+        except Exception:
+            pass
         time.sleep(0.3)
-    else:
+    if not clicked_next:
         vf = get_vision_fallback(android_cfg)
         if not vf or not vf.tap_next(d):
             raise RuntimeError("После выбора фото нет «Далее»")
@@ -1393,9 +1399,10 @@ class FbGroupsChannel:
         confirm_post: bool = False,
     ) -> ChannelResult:
         from ..browser.backend import channel_uses_browser
-        from ..browser.publish import publish_fb_groups_browser
 
         if channel_uses_browser(self.name, publisher_cfg):
+            from ..browser.publish import publish_fb_groups_browser
+
             bad = require_designed_carousel(job, self.name)
             if bad:
                 return bad

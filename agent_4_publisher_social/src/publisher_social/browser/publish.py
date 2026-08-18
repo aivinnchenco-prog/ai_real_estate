@@ -108,7 +108,14 @@ def _listing_dict(job: PublishJob, publisher_cfg: dict[str, Any], cfg: dict[str,
 def _pause_between_groups(cfg: dict[str, Any]) -> None:
     lo, hi = cfg.get("limits", {}).get("minutes_between_groups", [2, 5])
     minutes = random.uniform(float(lo), float(hi))
-    time.sleep(minutes * 60)
+    print(f"[fb_groups] pause {minutes:.1f} min before next group", flush=True)
+    end = time.time() + minutes * 60
+    next_log = time.time() + 30
+    while time.time() < end:
+        if time.time() >= next_log:
+            print(f"[fb_groups] pause… {int(end - time.time())}s left", flush=True)
+            next_log += 30
+        time.sleep(5)
 
 
 def post_group_without_submit(
@@ -193,6 +200,10 @@ def publish_fb_groups_browser(
             fgg.idle_scroll(page, cfg, (8, 20))
 
             for index, group_url in enumerate(groups):
+                print(
+                    f"[fb_groups] {index + 1}/{len(groups)}: {group_url}",
+                    flush=True,
+                )
                 if index > 0 and confirm_post:
                     _pause_between_groups(cfg)
                 try:
