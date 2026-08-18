@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Unit: хук с ценой — Airbnb (monthly_prices) и FB (годовой контракт).
+ * Unit: хук с ценой — Airbnb (Цена за месяц + календарный месяц) и FB (годовой контракт).
  */
 import assert from "assert";
 import {
   parseMonthlyPrices,
   firstUpcomingMonthKey,
+  nextCalendarMonthKey,
   pageVideoOverlayMeta,
   isFbObject,
   isAirbnbObject,
@@ -35,6 +36,14 @@ assert.strictEqual(parsed["2026-08"].price, 55000);
 assert.strictEqual(
   firstUpcomingMonthKey(parsed, new Date("2026-07-16T12:00:00")),
   "2026-08"
+);
+assert.strictEqual(
+  nextCalendarMonthKey(new Date("2026-07-16T12:00:00")),
+  "2026-08"
+);
+assert.strictEqual(
+  nextCalendarMonthKey(new Date("2026-12-15T12:00:00")),
+  "2027-01"
 );
 
 const fields = {
@@ -73,7 +82,7 @@ const airbnbMeta = pageVideoOverlayMeta(
 );
 global.Date = orig;
 
-assert.strictEqual(airbnbMeta.price, "55,000");
+assert.strictEqual(airbnbMeta.price, "40,000");
 assert.strictEqual(airbnbMeta.period, "в месяц · август");
 assert.ok(isAirbnbObject("A_20260720_001"));
 

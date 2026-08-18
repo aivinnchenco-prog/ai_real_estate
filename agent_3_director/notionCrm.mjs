@@ -171,6 +171,17 @@ export function firstUpcomingMonthKey(monthly, now = new Date()) {
   return null;
 }
 
+/**
+ * Ключ YYYY-MM первого предстоящего календарного месяца (строго после текущего).
+ * Та же логика, что first_upcoming_month_entry / «Цена за месяц» при structurize.
+ */
+export function nextCalendarMonthKey(now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  if (m === 12) return `${y + 1}-01`;
+  return `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
 function monthNameRu(yyyyMm) {
   const month = Number(String(yyyyMm || "").split("-")[1]);
   return MONTHS_RU[month] || "";
@@ -186,21 +197,16 @@ export function isAirbnbObject(objectId) {
   return /^A[_-]/i.test(String(objectId || "").trim());
 }
 
-function formatOverlayPrice(page, priceField, fallbackField, monthlyField, objectId) {
-  const monthlyMap = monthlyField ? parseMonthlyPrices(page, monthlyField) : {};
-
-  // Airbnb: первый предстоящий месяц из monthly_prices → «в месяц · август»
+function formatOverlayPrice(page, priceField, fallbackField, _monthlyField, objectId, now = new Date()) {
+  // Airbnb: «Цена за месяц» + первый предстоящий календарный месяц (как при парсинге)
   if (isAirbnbObject(objectId)) {
-    const upcoming = firstUpcomingMonthKey(monthlyMap);
-    if (upcoming && monthlyMap[upcoming]?.price) {
-      return {
-        price: Number(monthlyMap[upcoming].price).toLocaleString("en-US"),
-        period: `в месяц · ${monthNameRu(upcoming)}`,
-      };
-    }
     const monthly = priceField ? readNumber(page, priceField) : null;
     if (monthly) {
-      return { price: monthly.toLocaleString("en-US"), period: "в месяц" };
+      const monthKey = nextCalendarMonthKey(now);
+      return {
+        price: monthly.toLocaleString("en-US"),
+        period: `в месяц · ${monthNameRu(monthKey)}`,
+      };
     }
     const yearly = fallbackField ? readNumber(page, fallbackField) : null;
     if (yearly) {
@@ -229,20 +235,16 @@ function formatOverlayPrice(page, priceField, fallbackField, monthlyField, objec
     return { price: "", period: "" };
   }
 
-  // Прочие источники — прежний фолбэк
-  const upcoming = firstUpcomingMonthKey(monthlyMap);
-  if (upcoming && monthlyMap[upcoming]?.price) {
-    return {
-      price: Number(monthlyMap[upcoming].price).toLocaleString("en-US"),
-      period: `в месяц · ${monthNameRu(upcoming)}`,
-    };
-  }
-
+  // Прочие источники — «Цена за месяц» + предстоящий календарный месяц
   const monthly = priceField ? readNumber(page, priceField) : null;
   const yearly = fallbackField ? readNumber(page, fallbackField) : null;
 
   if (monthly) {
-    return { price: monthly.toLocaleString("en-US"), period: "в месяц" };
+    const monthKey = nextCalendarMonthKey(now);
+    return {
+      price: monthly.toLocaleString("en-US"),
+      period: `в месяц · ${monthNameRu(monthKey)}`,
+    };
   }
   if (yearly) {
     return { price: yearly.toLocaleString("en-US"), period: "в год" };
