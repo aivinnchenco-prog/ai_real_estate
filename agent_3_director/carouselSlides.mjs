@@ -221,24 +221,17 @@ export async function buildCarousel({
     let firstPhotoSlideNo = 1;
 
     // --- слайд 1 (если есть цена): хук-обложка на лучшем фото ---
+    // Не reuse {id}/hook_cover.jpg — там обложка для видео/Agent6; может быть без месяца.
+    // Карусель для постинга всегда рендерит slide_01 из overlayMeta.
     if (withHook) {
       const hookLocal = join(tmpDir, slideName(1));
-      let hookReady = false;
-      try {
-        await downloadFromR2(`${objectId}/hook_cover.jpg`, hookLocal);
-        hookReady = true;
-      } catch {
-        /* обложки ещё нет — рендерим ниже */
-      }
-      if (!hookReady) {
-        const overlayCfg = loadTitleOverlayConfig(videoCfg);
-        await renderHookCover({
-          photoPath: photoLocals[0],
-          outputPath: hookLocal,
-          meta: overlayMeta,
-          cfg: overlayCfg,
-        });
-      }
+      const overlayCfg = loadTitleOverlayConfig(videoCfg);
+      await renderHookCover({
+        photoPath: photoLocals[0],
+        outputPath: hookLocal,
+        meta: overlayMeta,
+        cfg: overlayCfg,
+      });
       names.push(slideName(1));
       firstPhotoSlideNo = 2;
     }
