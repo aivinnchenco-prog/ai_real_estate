@@ -741,6 +741,7 @@ def _publish_or_stop(
     confirm_post: bool,
     android_cfg: dict[str, Any],
     channel: str = "fb_marketplace",
+    post_publish_pause_seconds: float | int | None = None,
 ) -> ChannelResult:
     if not confirm_post:
         # безопасный стоп: назад → сохранить черновик, если диалог есть
@@ -775,6 +776,9 @@ def _publish_or_stop(
             reason="publish_button_not_found",
         )
     human_pause(android_cfg, scale=1.5)
+    sec = float(post_publish_pause_seconds or 0)
+    if sec > 0:
+        time.sleep(sec)
     return ChannelResult(
         channel=channel,
         ok=True,
@@ -794,6 +798,29 @@ class FbMarketplaceChannel:
         publisher_cfg: dict[str, Any],
         confirm_post: bool = False,
     ) -> ChannelResult:
+        from ..browser.backend import channel_uses_browser
+        from ..browser.publish import publish_fb_marketplace_browser
+
+        if channel_uses_browser(self.name, publisher_cfg):
+            images = job.local_marketplace_images or job.marketplace_image_urls
+            listing = job.listing
+            if dry_run:
+                return ChannelResult(
+                    channel=self.name,
+                    ok=True,
+                    skipped=True,
+                    reason="dry-run",
+                    note=(
+                        f"FB MP browser (agent7): brand_images={len(images)}; "
+                        f"price={listing.price_monthly}; rooms={listing.rooms}"
+                    ),
+                )
+            return publish_fb_marketplace_browser(
+                job,
+                publisher_cfg=publisher_cfg,
+                confirm_post=confirm_post,
+            )
+
         # Только brand_open_home — не carousel / не колонка «Фото»
         images = (
             job.device_marketplace_images
@@ -867,7 +894,12 @@ class FbMarketplaceChannel:
             note = f"{note}; filled={meta}"
             _go_to_publish_screen(d, android_cfg)
             result = _publish_or_stop(
-                d, confirm_post=confirm_post, android_cfg=android_cfg
+                d,
+                confirm_post=confirm_post,
+                android_cfg=android_cfg,
+                post_publish_pause_seconds=mp_cfg.get(
+                    "post_publish_pause_seconds"
+                ),
             )
             # ссылку на объявление Marketplace не копируем — не нужна
             result.note = f"{(result.note or '')}; {note}".strip("; ")

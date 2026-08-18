@@ -26,10 +26,12 @@ from .media import (
 )
 from .models import CHANNELS, ListingFields, PublishJob
 from .state import (
+    all_fb_groups_published,
     append_log,
     channel_inflight,
     clear_channel_inflight,
     clear_channel_done,
+    clear_fb_groups_published,
     clear_notion_update,
     clear_scheduled,
     daily_count,
@@ -43,10 +45,31 @@ from .state import (
     mark_channel_verified,
     mark_notion_update_failed,
     object_has_progress,
+    pending_fb_group_urls,
     pending_notion_updates,
     save_job_snapshot,
     schedule_channel,
 )
+
+
+def _channel_needs_phone_push(channel: str, config: dict[str, Any]) -> bool:
+    from .browser.backend import channel_uses_browser
+
+    if channel in ("fb_groups", "fb_marketplace") and channel_uses_browser(channel, config):
+        return False
+    return True
+
+
+def _needs_phone_media_push(
+    channels: list[str],
+    config: dict[str, Any],
+    *,
+    push_media: bool,
+    dry_run: bool,
+) -> bool:
+    if not push_media or dry_run:
+        return False
+    return any(_channel_needs_phone_push(ch, config) for ch in channels)
 
 
 def _optional_rich_text(
@@ -56,6 +79,87 @@ def _optional_rich_text(
     if not name:
         return ""
     return notion.get_prop(page, name, "rich_text") or ""
+
+
+_PHONE_DONE_CHANNEL_KEYS = {
+    "fb_groups": "fb_groups_done",
+    "fb_marketplace": "fb_marketplace_done",
+}
+
+
+def _phone_done_field(channel: str, config: dict[str, Any]) -> str | None:
+    lock = (config.get("notion") or {}).get("phone_lock_fields") or {}
+    key = _PHONE_DONE_CHANNEL_KEYS.get(channel)
+    if not key:
+        return None
+    name = lock.get(key)
+    return name if name else None
+
+
+def _phone_done_checked(page: dict[str, Any], field_name: str) -> bool | None:
+    """True/False if checkbox column exists; None if column missing on database."""
+    prop = (page.get("properties") or {}).get(field_name) or {}
+    if prop.get("type") != "checkbox":
+        return None
+    return bool(prop.get("checkbox"))
+
+
+def _apply_phone_done_gate(
+    page: dict[str, Any],
+    *,
+    object_id: str,
+    channel: str,
+    config: dict[str, Any],
+    state: dict[str, Any],
+) -> str:
+    """
+    Notion phone_*_done gate for FB channels.
+    Returns 'skip' (channel complete) or 'continue' (eligible for posting).
+    """
+    field = _phone_done_field(channel, config)
+    if not field:
+        return "continue"
+    checked = _phone_done_checked(page, field)
+    if checked is None:
+        return "continue"
+    if checked:
+        if not is_channel_done(state, object_id, channel):
+            mark_channel_done(
+                state,
+                object_id,
+                channel,
+                status="notion_done",
+                note=f"notion {field}=true",
+            )
+        return "skip"
+    if is_channel_done(state, object_id, channel):
+        clear_channel_done(state, object_id, channel)
+        if channel == "fb_groups":
+            clear_fb_groups_published(state, object_id)
+        append_log(
+            state,
+            object_id,
+            f"republish: cleared local {channel} ({field}=false)",
+        )
+    return "continue"
+
+
+def _try_write_phone_done(job: PublishJob, channel: str, *, done: bool) -> None:
+    cfg = load_publisher_config()
+    field = _phone_done_field(channel, cfg)
+    if not field:
+        return
+    state = load_state()
+    key = f"{job.page_id}:{channel}:phone_done"
+    enqueue_notion_update(
+        state,
+        key=key,
+        page_id=job.page_id,
+        object_id=job.object_id,
+        channel=channel,
+        properties={field: notion.checkbox_prop(done)},
+    )
+    retry_pending_notion_updates(only_keys={key})
 
 
 def _channel_url_field(channel: str, fields: dict[str, str]) -> str | None:
@@ -352,6 +456,17 @@ def reconcile_local_completed_from_notion(
     for channel in config.get("channels") or CHANNELS:
         if is_channel_done(state, job.object_id, channel):
             continue
+        done_field = _phone_done_field(channel, config)
+        if done_field and _phone_done_checked(page, done_field) is True:
+            mark_channel_done(
+                state,
+                job.object_id,
+                channel,
+                status="notion_done",
+                note=f"reconciled {done_field}=true",
+            )
+            reconciled.append(channel)
+            continue
         url = _post_url_in_notion(page, channel, fields)
         if not url:
             continue
@@ -385,8 +500,27 @@ def pending_channels_for_page(
         wanted = [c for c in wanted if c != "fb_marketplace"] + ["fb_marketplace"]
     pending: list[str] = []
     for ch in wanted:
+        if _apply_phone_done_gate(
+            page,
+            object_id=object_id,
+            channel=ch,
+            config=config,
+            state=state,
+        ) == "skip":
+            continue
         if is_channel_done(state, object_id, ch):
             continue
+        if ch == "fb_groups":
+            configured = load_fb_groups(config)
+            if configured and all_fb_groups_published(state, object_id, configured):
+                mark_channel_done(
+                    state,
+                    object_id,
+                    ch,
+                    status="accepted",
+                    note="all FB groups published (local state)",
+                )
+                continue
         if _already_published_in_notion(page, ch, fields):
             continue
         pending.append(ch)
@@ -444,6 +578,12 @@ def build_job_from_page(
         page, object_id=object_id, config=cfg, channels=channels
     )
 
+    state = load_state()
+    all_groups = load_fb_groups(cfg)
+    fb_groups_for_job = pending_fb_group_urls(state, object_id, all_groups)
+    if "fb_groups" in pending and not fb_groups_for_job:
+        pending = [ch for ch in pending if ch != "fb_groups"]
+
     listing = ListingFields(
         title=title,
         housing_type=notion.get_prop(page, fields["housing_type"], "select"),
@@ -469,7 +609,7 @@ def build_job_from_page(
         images_source=images_source,
         marketplace_image_urls=marketplace_images,
         listing=listing,
-        fb_groups=load_fb_groups(),
+        fb_groups=fb_groups_for_job,
         channels_pending=pending,
     )
 
@@ -752,8 +892,13 @@ def run_channels(
         confirm_post=confirm_post,
     )
 
-    # UI-прогон (--ui / --live) тоже требует медиа на телефоне
-    need_push = push_media and not dry_run
+    # UI-прогон (--ui / --live) тоже требует медиа на телефоне (кроме browser backend)
+    need_push = _needs_phone_media_push(
+        wanted,
+        cfg,
+        push_media=push_media,
+        dry_run=dry_run,
+    )
     job = prepare_job(
         job,
         push_to_device=need_push,
@@ -827,17 +972,32 @@ def run_channels(
         append_log(state, job.object_id, f"{ch}: {result.reason or result.note or result.ok}")
         if result.ok and not result.skipped and not dry_run:
             first_success = not object_has_progress(state, job.object_id)
-            newly_recorded = mark_channel_done(
-                state,
-                job.object_id,
-                ch,
-                post_url=result.post_url,
-                note=result.note,
-                status=result.publication_status,
-                daily_date=_local_day(cfg) if confirm_post else None,
-            )
+            mark_channel = True
+            if ch == "fb_groups":
+                configured = load_fb_groups(cfg)
+                mark_channel = all_fb_groups_published(state, job.object_id, configured)
+            newly_recorded = False
+            if mark_channel:
+                newly_recorded = mark_channel_done(
+                    state,
+                    job.object_id,
+                    ch,
+                    post_url=result.post_url,
+                    note=result.note,
+                    status=result.publication_status,
+                    daily_date=_local_day(cfg) if confirm_post else None,
+                )
+            elif ch == "fb_groups":
+                append_log(
+                    state,
+                    job.object_id,
+                    f"{ch}: partial group progress, channel stays pending",
+                )
             clear_scheduled(state, object_id=job.object_id, channel=ch)
             _try_write_notion_result(job, ch, result)
+            if ch in _PHONE_DONE_CHANNEL_KEYS:
+                if ch != "fb_groups" or mark_channel:
+                    _try_write_phone_done(job, ch, done=True)
             if first_success and newly_recorded:
                 _maybe_write_published_at(job, cfg)
             if newly_recorded:
@@ -908,15 +1068,18 @@ def run_channels_with_retry(
             max_attempts = 1
 
     if push_media and confirm_post and not dry_run:
-        status = check_adb(android_cfg)
-        if not status.get("ok"):
-            raise RuntimeError(status.get("error") or "adb not ready")
-        need_mp = any(ch == "fb_marketplace" for ch in channels)
-        job = prepare_job(
-            job, push_to_device=True, android_cfg=android_cfg, push_marketplace=need_mp
-        )
+        if _needs_phone_media_push(channels, cfg, push_media=True, dry_run=False):
+            status = check_adb(android_cfg)
+            if not status.get("ok"):
+                raise RuntimeError(status.get("error") or "adb not ready")
+            need_mp = any(ch == "fb_marketplace" for ch in channels)
+            job = prepare_job(
+                job, push_to_device=True, android_cfg=android_cfg, push_marketplace=need_mp
+            )
 
-    if not dry_run:
+    if not dry_run and _needs_phone_media_push(
+        channels, cfg, push_media=push_media, dry_run=False
+    ):
         from .android.ui import connect_device, ensure_unlocked
 
         try:
@@ -952,22 +1115,23 @@ def run_channels_with_retry(
 
         last: ChannelResult | None = None
         for attempt in range(1, max_attempts + 1):
-            reset_uiautomator(android_cfg)
-            status = check_adb(android_cfg)
-            if not status.get("ok"):
-                last = ChannelResult(
-                    channel=ch,
-                    ok=False,
-                    reason=status.get("error") or "adb not ready",
-                )
-                all_results.append(last)
-                append_log(
-                    state,
-                    job.object_id,
-                    f"retry {ch} attempt {attempt}/{max_attempts}: {last.reason}",
-                )
-                time.sleep(15)
-                continue
+            if _needs_phone_media_push([ch], cfg, push_media=True, dry_run=False):
+                reset_uiautomator(android_cfg)
+                status = check_adb(android_cfg)
+                if not status.get("ok"):
+                    last = ChannelResult(
+                        channel=ch,
+                        ok=False,
+                        reason=status.get("error") or "adb not ready",
+                    )
+                    all_results.append(last)
+                    append_log(
+                        state,
+                        job.object_id,
+                        f"retry {ch} attempt {attempt}/{max_attempts}: {last.reason}",
+                    )
+                    time.sleep(15)
+                    continue
 
             batch = run_channels(
                 job,
@@ -1331,7 +1495,12 @@ def run_publish_chain(
         if recovered:
             print(f"Recovered due scheduled: {','.join(recovered)}")
 
-    if confirm_post and not dry_run:
+    if confirm_post and not dry_run and _needs_phone_media_push(
+        immediate_channels_for_queue(initial_job, cfg),
+        cfg,
+        push_media=push_media,
+        dry_run=False,
+    ):
         from .android.ui import connect_device, ensure_unlocked
 
         d = connect_device(load_android_config())

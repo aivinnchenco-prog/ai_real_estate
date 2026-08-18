@@ -1,13 +1,6 @@
 {
-  "$comment": "Publisher social — Notion + R2 → Android phone → TikTok / Instagram / FB Marketplace / FB Groups. Без Metricool и без Playwright.",
+  "$comment": "Publisher social — телефон: только FB Groups + FB Marketplace. Остальные сети — PostMyPost на VPS.",
   "channels": [
-    "tiktok",
-    "tiktok_carousel",
-    "instagram_reel",
-    "instagram_carousel",
-    "youtube_shorts",
-    "linkedin",
-    "twitter",
     "fb_groups",
     "fb_marketplace"
   ],
@@ -17,21 +10,14 @@
     "min_minutes_between_posts": 120,
     "$comment_gap": "Пауза между НОВЫМИ объектами: читаем Notion «Дата и время публикации» у последнего объекта. Если прошло >= 120 мин — публикуем сразу. Уже начатый объект (колонка заполнена / есть прогресс) добивается без паузы.",
     "per_channel_daily_max": {
-      "tiktok": 3,
-      "tiktok_carousel": 2,
-      "instagram_reel": 2,
-      "instagram_carousel": 1,
       "fb_marketplace": 5,
-      "fb_groups": 5,
-      "linkedin": 2,
-      "twitter": 3,
-      "youtube_shorts": 2
+      "fb_groups": 5
     }
   },
   "media": {
     "max_carousel_images": 10,
     "max_marketplace_images": 20,
-    "max_groups_images": 10,
+    "max_groups_images": 9,
     "hook_cover_first": true,
     "allow_raw_gallery_fallback": false,
     "$comment_raw_fallback": "false = карусели только из Notion carousel_url (слайды с шаблоном). Сырая колонка «Фото» не используется.",
@@ -78,7 +64,7 @@
       "ready": "ready_to_post"
     },
     "phone_lock_fields": {
-      "$comment": "Опциональные колонки для межхостовой координации. На одном хосте используется data/publisher.lock; эти Notion-поля пока не задействованы.",
+      "$comment": "phone_fb_*_done: Termux читает/пишет после live FB. Галочка = канал сделан; снять галочку = повторная публикация.",
       "locked": "phone_publisher_locked",
       "taken_at": "phone_publisher_taken_at",
       "log": "phone_publisher_log",
@@ -96,26 +82,20 @@
   "orchestration": {
     "one_channel_per_live_run": true,
     "automatic_live_retries": false,
-    "video_channels": ["tiktok", "instagram_reel", "youtube_shorts"],
-    "carousel_channels": ["linkedin", "twitter", "fb_groups"],
-    "final_channels": ["fb_marketplace"],
-    "delayed_carousel": {
-      "tiktok_carousel": {"after": "tiktok", "delay_minutes": 60},
-      "instagram_carousel": {"after": "instagram_reel", "delay_minutes": 60}
-    },
-    "$comment_order": "Live: ровно один канал за запуск, затем процесс завершается для отчёта/ручной проверки. Порядок: video → carousel → final; fb_marketplace всегда последний."
+    "video_channels": [],
+    "carousel_channels": [
+      "fb_groups"
+    ],
+    "final_channels": [
+      "fb_marketplace"
+    ],
+    "delayed_carousel": {},
+    "$comment_order": "Телефон: fb_groups → fb_marketplace. Один канал за live-запуск."
   },
   "verification": {
     "post_url_source": "api",
     "capture_post_url_on_android": false,
     "url_optional_channels": [
-      "tiktok",
-      "tiktok_carousel",
-      "instagram_reel",
-      "instagram_carousel",
-      "youtube_shorts",
-      "linkedin",
-      "twitter",
       "fb_groups",
       "fb_marketplace"
     ],
@@ -126,7 +106,12 @@
     "max_title_chars": 100,
     "max_description_chars": 5000,
     "location": "Phuket",
-    "location_aliases": ["Phuket, Thailand", "Phuket", "Amphoe Thalang", "Пхукет"],
+    "location_aliases": [
+      "Phuket, Thailand",
+      "Phuket",
+      "Amphoe Thalang",
+      "Пхукет"
+    ],
     "audience": "not_for_kids",
     "title_formula": "Аренда {вилла|квартира} {N}BR Phuket {Район}",
     "set_related_video": false,
@@ -158,7 +143,10 @@
   },
   "tiktok": {
     "location": "Пхукет",
-    "location_aliases": ["Пхукет", "Phuket"],
+    "location_aliases": [
+      "Пхукет",
+      "Phuket"
+    ],
     "video_album": "Видео",
     "carousel_album": "publisher_social",
     "carousel": {
@@ -198,17 +186,20 @@
     "album": "brand_open_home",
     "device_media_dir": "/sdcard/Download/brand_open_home",
     "max_images": 8,
+    "post_publish_pause_seconds": 60,
     "notes": "Фото ТОЛЬКО из Notion brand_open_home_url → альбом brand_open_home. Ссылку на объявление не копируем."
   },
   "fb_groups": {
     "groups_file": "config/fb_groups_list.txt",
-    "max_groups_per_object": 2
+    "max_groups_per_object": 13,
+    "max_images": 9,
+    "post_publish_pause_seconds": 60
   },
   "android": {
     "config_file": "config/android.json"
   },
   "chatplace": {
-    "enabled": true,
-    "$comment": "После post_url_instagram_reel вызывается agent_4_publisher/scripts/spawn_chatplace_for_reel.py"
+    "enabled": false,
+    "$comment": "ChatPlace — на VPS после IG Reel (PostMyPost), не на телефоне."
   }
 }

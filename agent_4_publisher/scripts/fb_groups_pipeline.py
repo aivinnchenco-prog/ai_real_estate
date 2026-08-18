@@ -45,12 +45,43 @@ COMPOSER_RE = re.compile(
     r"поделитесь|поділіться|discuss",
     re.I,
 )
-POST_BUTTON_RE = re.compile(r"^(post|опубликовать|опублікувати|publish)$", re.I)
+POST_BUTTON_RE = re.compile(
+    r"post|publish|опублик|отправ|send|надісл|відправ",
+    re.I,
+)
+POST_BUTTON_EXCLUDE_RE = re.compile(
+    r"cancel|отмен|скас|photo|фото|закры|close|назад|back|далее|next|далі",
+    re.I,
+)
+NEXT_BUTTON_RE = re.compile(r"^(далі|next|далее|done|готово|ok)$", re.I)
 PHOTO_BUTTON_RE = re.compile(r"photo|фото|зображення|image", re.I)
-JOIN_BUTTON_RE = re.compile(r"^(join group|вступить в группу|приєднатися до групи)$", re.I)
+JOIN_BUTTON_RE = re.compile(
+    r"^(join(\s+group)?|вступить(\s+в\s+группу)?|приєднатися(\s+до\s+групи)?|"
+    r"присоединиться(\s+к\s+группе)?|become a member)$",
+    re.I,
+)
+MEMBER_BUTTON_RE = re.compile(
+    r"^(в группе|joined|приєднались|member|участник|joined group)$",
+    re.I,
+)
+PENDING_JOIN_RE = re.compile(
+    r"cancel request|отменить запрос|скасувати запит|заявка отправлена|"
+    r"request sent|запрос отправлен|на рассмотрении|очікує|pending approval",
+    re.I,
+)
 # Кнопка отправки в диалоге заявки на вступление (правила группы / вопросы)
 JOIN_SUBMIT_RE = re.compile(
-    r"надіслати|подати запит|submit|send request|отправить|приєднатися|join", re.I
+    r"надіслати|подати запит|відправити|submit|send request|отправить|подать запит|"
+    r"подать заявку|готово|done|ok",
+    re.I,
+)
+JOIN_DIALOG_HINT_RE = re.compile(
+    r"правил|rules|terms|погодж|question|питан|вступ|join|member|участ|заявк|request",
+    re.I,
+)
+JOIN_RULES_LABEL_RE = re.compile(
+    r"правил|rules|terms|погодж|accept|приймаю|згоден|agree",
+    re.I,
 )
 PENDING_MARKERS = (
     "pending",
@@ -360,38 +391,165 @@ def canonical_post_url(href: str) -> str:
     return href.rstrip("/") + "/"
 
 
-def handle_join_request_dialog(page: Any, cfg: dict[str, Any]) -> bool:
-    """Диалог «Запросы на участие»: принять правила (чекбокс) и отправить заявку.
-
-    Появляется у групп с правилами/вопросами. Чекбоксы отмечаем все,
-    текстовые вопросы не заполняем (необязательные), жмём «Отправить».
-    """
-    dialogs = page.locator('div[role="dialog"]')
-    if not dialogs.count():
+def _join_dialog_candidate(dialog: Any) -> bool:
+    """Диалог заявки на вступление (не композер поста)."""
+    try:
+        if not dialog.is_visible():
+            return False
+        if dialog.locator('div[role="textbox"][contenteditable="true"]').count():
+            return False
+        body = dialog.inner_text(timeout=2000) or ""
+    except Exception:
         return False
-    dialog = dialogs.last
+    if not body.strip():
+        return False
+    if JOIN_DIALOG_HINT_RE.search(body):
+        return True
+    return bool(
+        dialog.locator('[role="checkbox"]').count()
+        or dialog.locator('input[type="checkbox"]').count()
+    )
 
-    # «Я принимаю правила группы» и подобные согласия
-    boxes = dialog.locator('[role="checkbox"][aria-checked="false"], input[type="checkbox"]')
-    for i in range(boxes.count()):
+
+def _accept_join_dialog_checkboxes(dialog: Any, cfg: dict[str, Any]) -> int:
+    clicked = 0
+    for selector in (
+        '[role="checkbox"][aria-checked="false"]',
+        '[role="checkbox"][aria-checked="mixed"]',
+        'input[type="checkbox"]:not(:checked)',
+    ):
+        boxes = dialog.locator(selector)
+        for i in range(boxes.count()):
+            box = boxes.nth(i)
+            try:
+                box.click(timeout=2000)
+                clicked += 1
+                human_delay(cfg, 0.4)
+            except Exception:
+                try:
+                    box.click(force=True, timeout=2000)
+                    clicked += 1
+                    human_delay(cfg, 0.4)
+                except Exception:
+                    continue
+
+    labels = dialog.locator("label").filter(has_text=JOIN_RULES_LABEL_RE)
+    for i in range(labels.count()):
+        label = labels.nth(i)
         try:
-            boxes.nth(i).click()
-            human_delay(cfg, 0.5)
+            label.click(timeout=1500)
+            clicked += 1
+            human_delay(cfg, 0.35)
         except Exception:
             continue
+    return clicked
 
-    submit = dialog.get_by_role("button", name=JOIN_SUBMIT_RE)
-    deadline = time.time() + 15.0
-    while time.time() < deadline:
-        if submit.count():
-            btn = submit.first
-            if btn.get_attribute("aria-disabled") not in ("true", "1"):
-                btn.click()
-                human_delay(cfg, 2.0)
+
+def _fill_join_dialog_inputs(dialog: Any, cfg: dict[str, Any]) -> int:
+    """Заполнить обязательные поля вопросов (короткий нейтральный ответ)."""
+    filled = 0
+    filler = "Phuket, Thailand"
+    fields = dialog.locator(
+        "textarea:visible, input[type='text']:visible, "
+        "input[type='search']:visible, div[role='textbox'][contenteditable='true']:visible"
+    )
+    for i in range(fields.count()):
+        field = fields.nth(i)
+        try:
+            if not field.is_visible():
+                continue
+            tag = (field.evaluate("el => el.tagName") or "").lower()
+            existing = ""
+            if tag == "div":
+                existing = (field.inner_text(timeout=1000) or "").strip()
+            else:
+                existing = (field.input_value(timeout=1000) or "").strip()
+            if existing:
+                continue
+            field.click(timeout=1500)
+            human_delay(cfg, 0.3)
+            if tag == "div":
+                field.type(filler, delay=30)
+            else:
+                field.fill(filler)
+            filled += 1
+            human_delay(cfg, 0.4)
+        except Exception:
+            continue
+    return filled
+
+
+def _click_join_dialog_submit(dialog: Any, page: Any, cfg: dict[str, Any]) -> bool:
+    try:
+        dialog.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+    except Exception:
+        pass
+
+    candidates: list[Any] = []
+    for loc in (
+        dialog.get_by_role("button", name=JOIN_SUBMIT_RE),
+        dialog.locator('[role="button"]').filter(has_text=JOIN_SUBMIT_RE),
+        dialog.locator('[type="submit"]'),
+    ):
+        for i in range(loc.count()):
+            candidates.append(loc.nth(i))
+
+    seen: set[str] = set()
+    for btn in candidates:
+        try:
+            label = (btn.inner_text(timeout=800) or btn.get_attribute("aria-label") or "").strip()
+            key = label.lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            if btn.get_attribute("aria-disabled") in ("true", "1"):
+                continue
+            btn.scroll_into_view_if_needed(timeout=2000)
+            human_delay(cfg, 0.3)
+            btn.click(timeout=3000)
+            return True
+        except Exception:
+            try:
+                btn.click(force=True, timeout=2000)
                 return True
-        time.sleep(1.0)
-    debug_screenshot(page, "join_dialog_stuck")
+            except Exception:
+                continue
     return False
+
+
+def handle_join_request_dialog(page: Any, cfg: dict[str, Any]) -> bool:
+    """Диалог «Запросы на участие»: чекбоксы, вопросы, кнопка «Отправить»."""
+    deadline = time.time() + 35.0
+    submitted = False
+    while time.time() < deadline:
+        dialogs = page.locator('div[role="dialog"]')
+        acted = False
+        for i in range(dialogs.count()):
+            dialog = dialogs.nth(i)
+            if not _join_dialog_candidate(dialog):
+                continue
+            _accept_join_dialog_checkboxes(dialog, cfg)
+            _fill_join_dialog_inputs(dialog, cfg)
+            if _click_join_dialog_submit(dialog, page, cfg):
+                submitted = True
+                acted = True
+                human_delay(cfg, 2.0)
+                break
+            acted = True
+        if submitted:
+            remaining = [
+                d
+                for j in range(page.locator('div[role="dialog"]').count())
+                if _join_dialog_candidate(page.locator('div[role="dialog"]').nth(j))
+            ]
+            if not remaining:
+                return True
+        if not acted:
+            return submitted
+        time.sleep(0.8)
+    if not submitted:
+        debug_screenshot(page, "join_dialog_stuck")
+    return submitted
 
 
 CLOSE_BUTTON_RE = re.compile(r"^(закрити|close|закрыть)$", re.I)
@@ -429,17 +587,116 @@ def close_blocking_dialogs(page: Any, cfg: dict[str, Any]) -> None:
         human_delay(cfg)
 
 
-def maybe_join_group(page: Any, cfg: dict[str, Any]) -> bool:
-    """Если аккаунт не в группе — жмём «Вступить». Возвращает True, если жали."""
-    join = page.locator('[role="main"]').get_by_role("button", name=JOIN_BUTTON_RE)
-    if not join.count():
+def _join_request_pending(page: Any) -> bool:
+    try:
+        body = page.locator("body").inner_text(timeout=3000) or ""
+    except Exception:
+        body = ""
+    if PENDING_JOIN_RE.search(body):
+        return True
+    cancel = page.get_by_role(
+        "button", name=re.compile(r"cancel request|отменить запрос|скасувати", re.I)
+    )
+    return cancel.count() > 0
+
+
+def _find_join_button(page: Any) -> Any | None:
+    """Кнопка/ссылка «Вступить» в шапке или в main (не «В группе»)."""
+    scopes = (
+        page.locator('[data-pagelet="GroupCover"]'),
+        page.locator('[role="banner"]'),
+        page.locator('[role="main"]'),
+        page,
+    )
+    for scope in scopes:
+        for role in ("button", "link"):
+            loc = scope.get_by_role(role, name=JOIN_BUTTON_RE)
+            for i in range(loc.count()):
+                candidate = loc.nth(i)
+                try:
+                    label = (candidate.inner_text(timeout=500) or "").strip()
+                    if label and MEMBER_BUTTON_RE.match(label):
+                        continue
+                except Exception:
+                    pass
+                return candidate
+    return None
+
+
+def _is_group_member(page: Any) -> bool:
+    if _join_request_pending(page):
         return False
-    join.first.click()
+    if _find_join_button(page):
+        return False
+    composer = page.locator('[role="main"] [role="button"]', has_text=COMPOSER_RE)
+    if composer.count():
+        return True
+    joined = page.get_by_role("button", name=MEMBER_BUTTON_RE)
+    if joined.count():
+        return True
+    try:
+        body = (page.locator("body").inner_text(timeout=3000) or "").lower()
+    except Exception:
+        body = ""
+    return any(
+        marker in body
+        for marker in (
+            "в группе",
+            "joined group",
+            "участник группы",
+            "you're a member",
+            "ви учасник",
+        )
+    )
+
+
+def maybe_join_group(page: Any, cfg: dict[str, Any]) -> bool:
+    """Если аккаунт не в группе — жмём «Вступить» и отправляем заявку при необходимости."""
+    if _is_group_member(page):
+        return False
+    if _join_request_pending(page):
+        return True
+
+    join = _find_join_button(page)
+    if not join:
+        try:
+            page.evaluate("window.scrollTo(0, 0)")
+            human_delay(cfg, 1.0)
+        except Exception:
+            pass
+        join = _find_join_button(page)
+    if not join:
+        return False
+
+    try:
+        join.click()
+    except Exception:
+        join.click(force=True)
     human_delay(cfg, 3.0)
-    # Группа может показать диалог с правилами/вопросами — принимаем и отправляем
-    handle_join_request_dialog(page, cfg)
+    for _ in range(3):
+        if handle_join_request_dialog(page, cfg):
+            break
+        if not page.locator('div[role="dialog"]').count():
+            break
+        human_delay(cfg, 1.5)
+    human_delay(cfg, 2.0)
+
+    deadline = time.time() + 20.0
+    while time.time() < deadline:
+        if _is_group_member(page):
+            page.reload(wait_until="domcontentloaded")
+            human_delay(cfg, 2.0)
+            return True
+        if _join_request_pending(page):
+            return True
+        if not _find_join_button(page):
+            page.reload(wait_until="domcontentloaded")
+            human_delay(cfg, 2.0)
+            return True
+        time.sleep(1.0)
+
     page.reload(wait_until="domcontentloaded")
-    human_delay(cfg, 3.0)
+    human_delay(cfg, 2.0)
     return True
 
 
@@ -527,18 +784,108 @@ def attach_photos(page: Any, dialog: Any, files: list[Path], cfg: dict[str, Any]
     )
 
 
+def advance_after_photos(page: Any, dialog: Any, cfg: dict[str, Any]) -> Any:
+    """После загрузки фото FB может показать «Далее» перед финальным экраном поста."""
+    current_dialog = dialog
+    for _ in range(4):
+        clicked = False
+        for scope in (current_dialog, page):
+            btn = scope.get_by_role("button", name=NEXT_BUTTON_RE)
+            if not btn.count():
+                btn = scope.locator('[role="button"]').filter(has_text=NEXT_BUTTON_RE)
+            if btn.count():
+                candidate = btn.first
+                if candidate.get_attribute("aria-disabled") not in ("true", "1"):
+                    try:
+                        candidate.scroll_into_view_if_needed(timeout=2000)
+                        candidate.click(timeout=3000)
+                        clicked = True
+                        human_delay(cfg, 1.5)
+                        break
+                    except Exception:
+                        try:
+                            candidate.click(force=True, timeout=2000)
+                            clicked = True
+                            human_delay(cfg, 1.5)
+                            break
+                        except Exception:
+                            pass
+        if not clicked:
+            break
+        refreshed = page.locator(
+            'div[role="dialog"]',
+            has=page.locator('div[role="textbox"][contenteditable="true"]'),
+        )
+        if refreshed.count():
+            current_dialog = refreshed.last
+    return current_dialog
+
+
+def _iter_post_button_candidates(dialog: Any, page: Any) -> list[Any]:
+    candidates: list[Any] = []
+    seen: set[str] = set()
+    scopes = (dialog, page.locator('div[role="dialog"]').last, page)
+    for scope in scopes:
+        try:
+            if hasattr(scope, "count") and scope.count() == 0:
+                continue
+        except Exception:
+            pass
+        locators = (
+            scope.get_by_role("button", name=POST_BUTTON_RE),
+            scope.locator('[role="button"]').filter(has_text=POST_BUTTON_RE),
+        )
+        for loc in locators:
+            for i in range(loc.count()):
+                btn = loc.nth(i)
+                try:
+                    label = (
+                        btn.inner_text(timeout=500)
+                        or btn.get_attribute("aria-label")
+                        or ""
+                    ).strip()
+                except Exception:
+                    label = ""
+                key = label.lower()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                candidates.append(btn)
+    return candidates
+
+
 def click_post(page: Any, dialog: Any, cfg: dict[str, Any]) -> None:
-    post_btn = dialog.get_by_role("button", name=POST_BUTTON_RE)
     deadline = time.time() + int(cfg.get("browser", {}).get("upload_wait_ms", 60000)) / 1000.0
     while time.time() < deadline:
-        if post_btn.count():
-            btn = post_btn.first
-            if btn.get_attribute("aria-disabled") not in ("true", "1"):
-                human_delay(cfg)
-                btn.click()
+        for btn in _iter_post_button_candidates(dialog, page):
+            try:
+                label = (
+                    btn.inner_text(timeout=500) or btn.get_attribute("aria-label") or ""
+                ).strip()
+            except Exception:
+                label = ""
+            if label and POST_BUTTON_EXCLUDE_RE.search(label):
+                continue
+            if label and not POST_BUTTON_RE.search(label):
+                continue
+            if btn.get_attribute("aria-disabled") in ("true", "1"):
+                continue
+            try:
+                btn.scroll_into_view_if_needed(timeout=2000)
+                human_delay(cfg, 0.5)
+                btn.click(timeout=3000)
                 return
+            except Exception:
+                try:
+                    btn.click(force=True, timeout=2000)
+                    return
+                except Exception:
+                    continue
         time.sleep(1.0)
-    raise RuntimeError("POST_BUTTON_DISABLED: кнопка «Опубликовать» не активировалась")
+    raise RuntimeError(
+        "POST_BUTTON_DISABLED: кнопка «Опубликовать/Отправить» не активировалась. "
+        "Скриншот: " + debug_screenshot(page, "post_button_disabled")
+    )
 
 
 def wait_post_result(
@@ -596,14 +943,8 @@ def post_to_group(
     page.keyboard.press("Home")
     human_delay(cfg)
 
-    # Если аккаунт не в группе — подписываемся до постинга
-    if maybe_join_group(page, cfg):
-        still_join = page.locator('[role="main"]').get_by_role("button", name=JOIN_BUTTON_RE)
-        if still_join.count():
-            raise RuntimeError(
-                "JOIN_PENDING: отправлена заявка на вступление, членство ещё не одобрено "
-                "— эту группу пропускаем. Скриншот: " + debug_screenshot(page, "join_pending")
-            )
+    # Вступаем если можно; даже при ожидании одобрения — пробуем постить (публичные группы)
+    maybe_join_group(page, cfg)
 
     # Приветственные оверлеи новой группы перекрывают композер
     close_blocking_dialogs(page, cfg)
@@ -620,6 +961,8 @@ def post_to_group(
 
     attach_photos(page, dialog, files, cfg)
     human_delay(cfg, 1.5)
+    dialog = advance_after_photos(page, dialog, cfg)
+    human_delay(cfg, 1.0)
 
     click_post(page, dialog, cfg)
     return wait_post_result(page, group_url, before, cfg)

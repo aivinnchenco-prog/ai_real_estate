@@ -7,6 +7,7 @@
 *.session-journal
 credentials/
 **/credentials/
+agent_6_qualifier/deploy/amo_chat_fb_credentials.txt
 
 # Виртуальные окружения и зависимости
 .venv*/
@@ -78,3 +79,6 @@ agent_4_publisher/.fb_groups_profile/
 agent_4_publisher/.fb_marketplace_profile/
 Монтаж локал/
 HANDOFF_*.md
+
+# Availability Service local SQLite / runtime
+availability_service/data/

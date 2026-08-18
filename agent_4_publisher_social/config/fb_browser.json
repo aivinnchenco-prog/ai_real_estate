@@ -1,0 +1,35 @@
+{
+  "$comment": "Playwright-публикация FB Groups + Marketplace через профиль Agent 7. Включение: PUBLISHER_FB_BACKEND=browser",
+  "profile": {
+    "source": "agent7",
+    "profile_dir_env": "AGENT7_FACEBOOK_PROFILE_DIR",
+    "default_profile_dir": "/opt/openhome/runtime/browser_profiles/facebook_agent7",
+    "headless_env": "AGENT7_FB_HEADLESS",
+    "default_headless": false
+  },
+  "browser": {
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    },
+    "nav_timeout_ms": 90000,
+    "action_timeout_ms": 30000,
+    "upload_wait_ms": 90000,
+    "post_confirm_wait_ms": 45000,
+    "human_delay_ms": {
+      "min": 900,
+      "max": 2400
+    },
+    "locale": "ru-RU"
+  },
+  "marketplace": {
+    "create_url": "https://www.facebook.com/marketplace/create/rental",
+    "selling_url": "https://www.facebook.com/marketplace/you/selling"
+  },
+  "limits": {
+    "minutes_between_groups": [
+      2,
+      5
+    ]
+  }
+}

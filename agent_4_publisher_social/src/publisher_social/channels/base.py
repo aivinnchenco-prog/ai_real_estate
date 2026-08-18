@@ -27,6 +27,8 @@ class ChannelResult:
     post_url: str | None = None
     extra_urls: dict[str, str] | None = None
     note: str | None = None
+    # FB Groups: URLs successfully published in this run (for per-group Notion matrix).
+    published_group_urls: list[str] | None = None
     # verified | accepted | submitted_unverified | failed | skipped | preview
     publication_status: str | None = None
 
@@ -129,9 +131,15 @@ def select_carousel_photos_toggle_safe(
 def gallery_selection_state(desc: str) -> str | None:
     """Parse Android gallery content-desc into unselected/selected."""
     low = (desc or "").lower()
-    if "не выбрано" in low or "not selected" in low:
+    if "не выбрано" in low or "not selected" in low or "не выбран" in low:
         return "unselected"
-    if "выбрано" in low or "selected" in low:
+    if (
+        "выбрано" in low
+        or " selected" in low
+        or low.endswith("selected")
+        or "отмечено" in low
+        or "checked" in low
+    ):
         return "selected"
     return None
 

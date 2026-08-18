@@ -1,8 +1,4 @@
-# По одной ссылке на группу Facebook на строку.
-# Строки с # игнорируются.
-
-https://www.facebook.com/groups/738660971365804/
-https://www.facebook.com/groups/162340677526329/
+# Продолжение A_20260817_001 — первые 2 группы уже опубликованы 2026-08-18
 https://www.facebook.com/groups/rentinphuket/
 https://www.facebook.com/groups/114081158935102/
 https://www.facebook.com/groups/307921563057104/
