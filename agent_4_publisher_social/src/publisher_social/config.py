@@ -7,6 +7,22 @@ from typing import Any
 
 from .dotenv_util import package_root
 
+PRODUCTION_CHANNELS = ("fb_groups", "fb_marketplace")
+
+
+def validate_production_channels(channels: list[str]) -> None:
+    """Reject legacy phone-only channels removed from production config."""
+    allowed = set(PRODUCTION_CHANNELS)
+    bad = [ch for ch in channels if ch not in allowed]
+    if bad:
+        raise ValueError(
+            "Каналы "
+            + ", ".join(bad)
+            + " недоступны в production. Разрешены только: "
+            + ", ".join(PRODUCTION_CHANNELS)
+            + "."
+        )
+
 
 def load_publisher_config() -> dict[str, Any]:
     path = package_root() / "config" / "publisher.json"

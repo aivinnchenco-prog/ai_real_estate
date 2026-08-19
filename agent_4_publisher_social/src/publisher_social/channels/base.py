@@ -17,6 +17,26 @@ CAROUSEL_PUBLISH_CHANNELS = (
     "fb_groups",
 )
 
+# Android album folder names — one directory per object (see tests/test_media_selection.py).
+CAROUSEL_FOLDER_PREFIX = "Carousel"
+MARKETPLACE_FOLDER_PREFIX = "Open Home"
+
+
+def carousel_folder_name(object_id: str) -> str:
+    """Folder under publisher_social media_dir for carousel slides of one object."""
+    oid = (object_id or "").strip()
+    if not oid:
+        raise ValueError("object_id required for carousel folder name")
+    return f"{CAROUSEL_FOLDER_PREFIX} {oid}"
+
+
+def marketplace_folder_name(object_id: str) -> str:
+    """Folder under brand_open_home device dir for Marketplace photos of one object."""
+    oid = (object_id or "").strip()
+    if not oid:
+        raise ValueError("object_id required for marketplace folder name")
+    return f"{MARKETPLACE_FOLDER_PREFIX} {oid}"
+
 
 @dataclass
 class ChannelResult:
