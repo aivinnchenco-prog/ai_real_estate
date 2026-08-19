@@ -239,6 +239,7 @@
       "instagram_carousel": "post_url_instagram_carousel",
       "instagram_reel": "post_url_instagram_reel",
       "tiktok": "post_url_tiktok",
+      "tiktok_carousel": "post_url_tiktok_carousel",
       "x": "post_url_x",
       "twitter": "post_url_x",
       "linkedin": "post_url_linkedin",
@@ -313,6 +314,7 @@
       "agent6_log",
       "video_url_vertical",
       "post_url_tiktok",
+      "post_url_tiktok_carousel",
       "Владелец / Агент",
       "metricool_post_id",
       "Тип жилья",
@@ -372,6 +374,7 @@
     ],
     "image_only_when_carousel": [
       "instagram",
+      "tiktok",
       "twitter",
       "x",
       "linkedin",
@@ -608,5 +611,8 @@
   },
   "instagram": {
     "reel_delay_hours": 4
+  },
+  "tiktok": {
+    "video_delay_hours": 4
   }
 }

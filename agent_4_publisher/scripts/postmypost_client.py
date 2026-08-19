@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -201,22 +203,23 @@ def resolve_rubric_id(object_id: str, config: dict[str, Any]) -> int | None:
     return int(default) if default else None
 
 
-def upload_file_by_url(project_id: int, media_url: str, config: dict[str, Any]) -> int:
-    cached = _file_id_cache.get(media_url)
-    if cached is not None:
-        return cached
+def _media_filename(media_url: str) -> str:
+    path = urllib.parse.urlparse(media_url).path
+    name = urllib.parse.unquote(path.rsplit("/", 1)[-1]).strip()
+    return name or "media.bin"
 
-    _rate_limit_pause(config)
-    init = postmypost_request(
-        "POST",
-        "/upload/init",
-        {"project_id": project_id, "url": media_url},
-        config=config,
-    )
-    upload_id = init.get("id")
-    if upload_id is None:
-        raise RuntimeError(f"PostMyPost upload/init failed: {init}")
 
+def _download_media(media_url: str) -> tuple[bytes, str]:
+    request = urllib.request.Request(media_url, method="GET")
+    request.add_header("User-Agent", "real-estate-agent6-publisher/1.0")
+    with urllib.request.urlopen(request, timeout=180) as resp:
+        data = resp.read()
+    if not data:
+        raise RuntimeError(f"Empty media download: {media_url}")
+    return data, _media_filename(media_url)
+
+
+def _poll_upload_file_id(upload_id: int, media_url: str, config: dict[str, Any]) -> int:
     poll_seconds = float(postmypost_cfg(config).get("upload_poll_seconds", 2))
     poll_attempts = int(postmypost_cfg(config).get("upload_poll_attempts", 45))
     for _ in range(poll_attempts):
@@ -227,19 +230,123 @@ def upload_file_by_url(project_id: int, media_url: str, config: dict[str, Any]) 
         )
         state = int(status.get("status") or 0)
         if state == 1 and status.get("file_id") is not None:
-            file_id = int(status["file_id"])
-            _file_id_cache[media_url] = file_id
-            return file_id
+            return int(status["file_id"])
         if state == 2:
             raise RuntimeError(f"PostMyPost upload failed for {media_url}: {status}")
         time.sleep(poll_seconds)
     raise RuntimeError(f"PostMyPost upload timeout for {media_url} (id={upload_id})")
 
 
+def _upload_multipart_to_s3(
+    action: str,
+    fields: dict[str, str],
+    data: bytes,
+    filename: str,
+) -> None:
+    boundary = f"----PostMyPost{uuid.uuid4().hex}"
+    parts: list[bytes] = []
+    for key, value in fields.items():
+        parts.append(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode(
+                "utf-8"
+            )
+        )
+    parts.append(
+        f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: application/octet-stream\r\n\r\n".encode("utf-8")
+    )
+    parts.append(data)
+    parts.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
+    body = b"".join(parts)
+    request = urllib.request.Request(
+        action,
+        data=body,
+        method="POST",
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=300) as resp:
+            if resp.status not in (200, 201, 204, 302):
+                raise RuntimeError(f"S3 upload HTTP {resp.status} for {filename}")
+    except urllib.error.HTTPError as exc:
+        err_body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"S3 upload HTTP {exc.code} for {filename}: {err_body}") from exc
+
+
+def upload_file_direct(project_id: int, media_url: str, config: dict[str, Any]) -> int:
+    """Скачиваем медиа с R2 на VPS и грузим в PostMyPost напрямую (S3)."""
+    data, filename = _download_media(media_url)
+    _rate_limit_pause(config)
+    init = postmypost_request(
+        "POST",
+        "/upload/init",
+        {"project_id": project_id, "name": filename, "size": len(data)},
+        config=config,
+    )
+    upload_id = init.get("id")
+    action = init.get("action")
+    raw_fields = init.get("fields") or []
+    if upload_id is None or not action:
+        raise RuntimeError(f"PostMyPost direct upload/init failed: {init}")
+
+    form_fields = {
+        str(item.get("key")): str(item.get("value"))
+        for item in raw_fields
+        if isinstance(item, dict) and item.get("key") is not None
+    }
+    _upload_multipart_to_s3(action, form_fields, data, filename)
+    postmypost_request("POST", f"/upload/complete?id={upload_id}", config=config)
+    file_id = _poll_upload_file_id(int(upload_id), media_url, config)
+    _file_id_cache[media_url] = file_id
+    return file_id
+
+
+def upload_file_by_url_remote(project_id: int, media_url: str, config: dict[str, Any]) -> int:
+    """Legacy: PostMyPost сам скачивает URL (часто не работает с R2)."""
+    _rate_limit_pause(config)
+    init = postmypost_request(
+        "POST",
+        "/upload/init",
+        {"project_id": project_id, "url": media_url},
+        config=config,
+    )
+    upload_id = init.get("id")
+    if upload_id is None:
+        raise RuntimeError(f"PostMyPost upload/init failed: {init}")
+    file_id = _poll_upload_file_id(int(upload_id), media_url, config)
+    _file_id_cache[media_url] = file_id
+    return file_id
+
+
+def upload_file_by_url(project_id: int, media_url: str, config: dict[str, Any]) -> int:
+    cached = _file_id_cache.get(media_url)
+    if cached is not None:
+        return cached
+
+    mode = str(postmypost_cfg(config).get("upload_mode") or "direct").strip().lower()
+    if mode == "url":
+        try:
+            return upload_file_by_url_remote(project_id, media_url, config)
+        except RuntimeError as exc:
+            if "422" not in str(exc):
+                raise
+            print(f"[postmypost] URL upload failed ({exc}) — retry direct", file=sys.stderr)
+    return upload_file_direct(project_id, media_url, config)
+
+
 def postmypost_planner_url(publication_id: str | int, config: dict[str, Any]) -> str:
-    template = postmypost_cfg(config).get("planner_url_template")
+    cfg = postmypost_cfg(config)
+    template = cfg.get("planner_url_template")
+    locale = cfg.get("planner_locale") or "uk"
+    project_code = cfg.get("project_code") or ""
     if template:
-        return str(template).format(publication_id=publication_id)
+        return str(template).format(
+            publication_id=publication_id,
+            locale=locale,
+            project_code=project_code,
+        )
+    if project_code:
+        return f"https://app.postmypost.io/{locale}/p/{project_code}#share={publication_id}"
     return f"https://app.postmypost.io/publications/{publication_id}"
 
 

@@ -921,17 +921,50 @@ def published_url_field(
     mode: str | None = None,
 ) -> str | None:
     mapping = config.get("notion", {}).get("published_url_fields", {})
-    if network_for(platform) == "instagram":
+    network = network_for(platform)
+    if network == "instagram":
         if upload_video or mode == "video":
             return mapping.get("instagram_reel")
         return mapping.get("instagram_carousel")
-    return mapping.get(platform) or mapping.get(network_for(platform))
+    if network == "tiktok":
+        if upload_video or mode == "video":
+            return mapping.get("tiktok")
+        if mode == "carousel" or not upload_video:
+            return mapping.get("tiktok_carousel")
+        return mapping.get("tiktok")
+    return mapping.get(platform) or mapping.get(network)
 
 
 def instagram_post_kind(*, upload_video: bool, mode: str | None = None) -> str:
     if upload_video or mode == "video":
         return "reel"
     return "carousel"
+
+
+def social_post_kind(
+    platform: str,
+    *,
+    upload_video: bool,
+    mode: str | None = None,
+) -> str | None:
+    """Слот для deferred URL sync: carousel | reel (IG) | video (TikTok)."""
+    network = network_for(platform)
+    if network == "instagram":
+        return instagram_post_kind(upload_video=upload_video, mode=mode)
+    if network == "tiktok":
+        if upload_video or mode == "video":
+            return "video"
+        if mode == "carousel" or not upload_video:
+            return "carousel"
+    return None
+
+
+def post_kind_slot_flags(post_kind: str | None) -> tuple[bool, str | None]:
+    if post_kind in {"reel", "video"}:
+        return True, "video"
+    if post_kind == "carousel":
+        return False, "carousel"
+    return False, None
 
 
 def notion_url_property(url: str) -> dict[str, Any]:
@@ -957,12 +990,20 @@ def platform_jobs(
     не может выложить их одним постом, а вместе в один момент их постить
     не стоит (алгоритм IG режет охват одновременных публикаций).
     """
-    if network_for(platform) == "instagram" and mode is None:
-        delay_hours = float((config.get("instagram") or {}).get("reel_delay_hours", 4))
-        return [
-            ("carousel", scheduled_time),
-            ("video", shift_schedule(scheduled_time, delay_hours)),
-        ]
+    if mode is None:
+        network = network_for(platform)
+        if network == "instagram":
+            delay_hours = float((config.get("instagram") or {}).get("reel_delay_hours", 4))
+            return [
+                ("carousel", scheduled_time),
+                ("video", shift_schedule(scheduled_time, delay_hours)),
+            ]
+        if network == "tiktok":
+            delay_hours = float((config.get("tiktok") or {}).get("video_delay_hours", 4))
+            return [
+                ("carousel", scheduled_time),
+                ("video", shift_schedule(scheduled_time, delay_hours)),
+            ]
     return [(mode, scheduled_time)]
 
 
@@ -1492,10 +1533,8 @@ def publish_one(
         result["saved_url"] = url_to_save
         result["published_url_field"] = url_field
         result["notion_status"] = status_scheduled
-        post_kind = (
-            instagram_post_kind(upload_video=upload_video, mode=mode)
-            if network_for(platform) == "instagram"
-            else None
+        post_kind = social_post_kind(
+            platform, upload_video=upload_video, mode=mode
         )
         if not published_url:
             try:
