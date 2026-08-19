@@ -189,14 +189,21 @@ def clear_tag_if_was_failing() -> bool:
     return True
 
 
+def social_api_enabled(pub_cfg: dict) -> bool:
+    """API-публикация в соцсети: PostMyPost (основной) или Metricool (legacy, выключен)."""
+    if pub_cfg.get("postmypost", {}).get("enabled"):
+        return True
+    return bool(pub_cfg.get("metricool", {}).get("enabled", False))
+
+
 def resolve_publish_platforms(chain: dict) -> list[str]:
-    """Список Metricool-платформ: приоритет у agent_4_publisher/config/publisher.json."""
+    """Платформы для Agent 4 API (PostMyPost): agent_4_publisher/config/publisher.json."""
     estate_root = ROOT.parents[2]
     pub_path = estate_root / "agent_4_publisher" / "config" / "publisher.json"
     try:
         with pub_path.open(encoding="utf-8") as f:
             pub_cfg = json.load(f)
-        if not pub_cfg.get("metricool", {}).get("enabled", True):
+        if not social_api_enabled(pub_cfg):
             return []
         plats = pub_cfg.get("publish_platforms")
         if plats:
@@ -284,7 +291,13 @@ def run_phone_publisher(
     venv_python = project / ".venv" / "bin" / "python"
     python_bin = str(venv_python) if venv_python.exists() else sys.executable
     runner = str(pp.get("runner") or "termux").strip().lower()
-    if browser_mode or runner == "chain":
+    if browser_mode:
+        # У браузерного бэкенда вход только один — publish-chain (сам проходит
+        # scheduled + pending за запуск). Ключ command в publisher.json описывает
+        # телефонную ветку, и его «publish» уводил бы в ADB-пайплайн: на VPS это
+        # падало с «adb not found in PATH».
+        cmd_name = "publish-chain"
+    elif runner == "chain":
         cmd_name = pp.get("command") or "publish-chain"
     else:
         cmd_name = pp.get("command", "publish-all")
@@ -374,7 +387,7 @@ def spawn_chatplace_for_reel(page_id: str) -> int:
 
 def run_agent6(page_id: str, platform: str, publisher_script: Path,
                mode: str | None = None) -> int:
-    """Один вызов publish_pipeline: --platform all публикует во все сети Metricool."""
+    """Один вызов publish_pipeline: --platform all → PostMyPost (или Metricool legacy)."""
     print(f"\n[chain] Agent 6 → {page_id} ({platform}"
           + (f", mode={mode}" if mode else "") + ")")
     if not publisher_script.exists():
@@ -600,9 +613,10 @@ def continue_chain(
     phone_on = bool(pub_cfg.get("phone_publisher", {}).get("enabled"))
     phone_mode_cfg = str((pub_cfg.get("phone_publisher") or {}).get("mode") or "").strip().lower()
     phone_fb_only = phone_on and phone_mode_cfg in ("fb_only", "facebook_only")
-    metricool_on = bool(pub_cfg.get("metricool", {}).get("enabled", True))
     postmypost_on = bool(pub_cfg.get("postmypost", {}).get("enabled"))
-    phone_mode = phone_on and not metricool_on and not postmypost_on
+    metricool_on = bool(pub_cfg.get("metricool", {}).get("enabled", False))
+    api_mode = postmypost_on or metricool_on
+    phone_mode = phone_on and not api_mode
     if chain.get("publish_fb_groups") and not phone_mode and not phone_fb_only:
         fb_branches.append("fb_groups_pipeline.py")
     if chain.get("publish_fb_marketplace") and not phone_mode and not phone_fb_only:
@@ -618,9 +632,7 @@ def continue_chain(
         else:
             listings6 = fetch_by_status(crm, statuses["video_done"], nf)
 
-        # Телефон вместо API: не блокируем и не спамим из‑за старого error_count
-        api_mode = postmypost_on or metricool_on
-        phone_mode = phone_on and not api_mode
+        # PostMyPost/Metricool: не блокируем из‑за старого error_count от legacy Metricool
         for listing in listings6:
             ready6, reason6 = agent6_ready(
                 listing,
