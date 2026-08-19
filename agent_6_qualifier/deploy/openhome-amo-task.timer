@@ -1,0 +1,18 @@
+[Unit]
+Description=Run Open Home amoCRM SLA worker every 10 minutes
+
+[Timer]
+# OnCalendar, а не OnUnitActiveSec: монотонный таймер привязывается к последнему
+# запуску сервиса, и если сервис ни разу не отработал после старта таймера
+# (а OnBootSec к тому моменту давно прошёл), systemd помечает таймер elapsed
+# с Trigger: n/a — он молчит до следующей перезагрузки. Так он и простоял с 12.08.
+OnCalendar=*:0/10
+OnBootSec=2min
+AccuracySec=1min
+RandomizedDelaySec=30
+# Работает только с OnCalendar: догоняет пропущенные запуски после простоя.
+Persistent=true
+Unit=openhome-amo-task.service
+
+[Install]
+WantedBy=timers.target

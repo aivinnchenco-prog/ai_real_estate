@@ -135,17 +135,15 @@ class Listing:
         return ""
 
     def owner_channel(self) -> Optional[tuple[OwnerChannel, str]]:
-        """Первый доступный канал связи с владельцем по приоритету.
+        """Первый канал для Agent 7/8: WhatsApp или FB Marketplace Messenger.
 
-        WA → TG → Airbnb DM (ссылка объявления) → FB Marketplace DM.
+        Telegram и Airbnb DM не используются для outreach владельцу.
         """
         if self.owner_whatsapp.strip():
             return OwnerChannel.WHATSAPP, self.owner_whatsapp.strip()
-        if self.owner_telegram.strip():
-            return OwnerChannel.TELEGRAM, self.owner_telegram.strip()
         src = self.source_url.strip()
-        if self.source_is_airbnb:
-            return OwnerChannel.AIRBNB, src
+        if "facebook." in src.lower() and "marketplace" in src.lower():
+            return OwnerChannel.FB_MARKETPLACE, src
         if "facebook." in src.lower() and src:
             return OwnerChannel.FB_MARKETPLACE, src
         return None

@@ -134,7 +134,8 @@
 | **metricool_post_id** | Rich Text | ID поста в Metricool после публикации (Agent 6) | Заполняется `publish_pipeline.py` |
 | **post_url_instagram_carousel** | URL | Ссылка на карусель в Instagram | Agent 6 после публикации |
 | **post_url_instagram_reel** | URL | Ссылка на Reel в Instagram | Agent 6 после публикации |
-| **post_url_tiktok** | URL | Ссылка на пост в TikTok | Agent 6 после публикации |
+| **post_url_tiktok** | URL | Ссылка на видео в TikTok (`/@handle/video/…`) | Agent 6 после публикации |
+| **post_url_tiktok_carousel** | URL | Ссылка на фото-карусель в TikTok (`/@handle/photo/…`) | Agent 6 после публикации |
 | **post_url_x** | URL | Ссылка на пост в X.com | Agent 6 после публикации |
 | **post_url_linkedin** | URL | Ссылка на пост в LinkedIn | Agent 6 после публикации |
 | **post_url_facebook** | URL | Ссылка на пост в Facebook | Agent 6 после публикации |
@@ -171,7 +172,8 @@
 | **metricool_post_id** | Rich Text | ID поста в Metricool (Agent 6 Publisher) |
 | **post_url_instagram_carousel** | URL | Ссылка на карусель в Instagram |
 | **post_url_instagram_reel** | URL | Ссылка на Reel в Instagram |
-| **post_url_tiktok** | URL | Ссылка на опубликованный пост в TikTok |
+| **post_url_tiktok** | URL | Ссылка на опубликованное видео в TikTok |
+| **post_url_tiktok_carousel** | URL | Ссылка на опубликованную фото-карусель в TikTok |
 | **post_url_x** | URL | Ссылка на опубликованный пост в X.com |
 | **post_url_linkedin** | URL | Ссылка на опубликованный пост в LinkedIn |
 | **post_url_facebook** | URL | Ссылка на опубликованный пост в Facebook |

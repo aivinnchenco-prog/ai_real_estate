@@ -144,26 +144,88 @@ MARKETPLACE_JS_EXTRACT = r"""
     if (!u) return;
     if (u.startsWith("data:")) return;
     if (!/^https?:/i.test(u)) return;
-    if (/emoji|static\.xx\.fbcdn|rsrc\.php|profile_pic|s60x60|s100x100|s261x260|p261x260/i.test(u)) return;
+    // Tiny feed / profile / related thumbs (incl. 225×225 ad tiles).
+    if (/emoji|static\.xx\.fbcdn|rsrc\.php|profile_pic|safe_image\.php/i.test(u)) return;
+    if (/[sp]\d{2,3}x\d{2,3}|ctp=s\d+x\d+|stp=.*(?:p|s)\d+x\d+/i.test(u)) {
+      const m = u.match(/[sp](\d{2,3})x(\d{2,3})/i);
+      if (m && (parseInt(m[1], 10) < 400 || parseInt(m[2], 10) < 400)) return;
+    }
     imgs.push(u);
   };
 
-  // Main listing gallery (left) + current slide — avoid related cards.
-  document.querySelectorAll(
-    '[role="main"] img[src*="scontent"], ' +
-    '[role="main"] img[src*="fbcdn"], ' +
-    '[data-pagelet="MediaViewerPhoto"] img, ' +
-    'img[alt*="Product"], img[alt*="photo"], img[alt*="Photo"]'
-  ).forEach((img) => {
+  const currentItemId = (location.pathname.match(/marketplace\/item\/(\d+)/) || [])[1] || "";
+
+  const isOtherListingCard = (img) => {
+    let el = img;
+    for (let i = 0; i < 14 && el; i++) {
+      if (el.tagName === "A") {
+        const href = el.getAttribute("href") || "";
+        const m = href.match(/marketplace\/item\/(\d+)/);
+        if (m && currentItemId && m[1] !== currentItemId) return true;
+      }
+      const aria = (el.getAttribute && el.getAttribute("aria-label")) || "";
+      if (/similar|related|more from|you may also|sponsored|suggested|похож|ещё от|แนะนำ|สินค้าที่คล้าย/i.test(aria)) {
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  };
+
+  const inExcludedSection = (img) => {
+    let el = img;
+    for (let i = 0; i < 16 && el; i++) {
+      const txt = ((el.innerText || "") + " " + ((el.getAttribute && el.getAttribute("aria-label")) || "")).slice(0, 240);
+      if (/similar listings|related listings|more from this seller|you may also like|sponsored|suggested for you|похожие|ещё от продавца/i.test(txt)
+          && (el.querySelectorAll && el.querySelectorAll("img").length >= 2)) {
+        // Only treat as related rail when the node looks like a multi-card shelf,
+        // not the main listing description which may mention those words.
+        const links = el.querySelectorAll ? el.querySelectorAll('a[href*="/marketplace/item/"]') : [];
+        if (links.length >= 2) return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  };
+
+  const collectFromImg = (img) => {
+    if (!img || isOtherListingCard(img) || inExcludedSection(img)) return;
+    const w = img.naturalWidth || img.width || 0;
+    const h = img.naturalHeight || img.height || 0;
+    // Keep unknown sizes (lazy); drop clearly tiny on-page thumbs.
+    if ((w > 0 && w < 350) || (h > 0 && h < 350)) return;
     pushImg(img.currentSrc || img.src);
     const srcset = img.getAttribute("srcset") || "";
     srcset.split(",").forEach((part) => {
       const u = part.trim().split(" ")[0];
       pushImg(u);
     });
+  };
+
+  // Prefer listing media viewer / left gallery — NOT every img under role=main
+  // (that pulls similar-item cards and Marketplace promo creatives).
+  const galleryRoots = [
+    document.querySelector('[data-pagelet="MediaViewerPhoto"]'),
+    document.querySelector('[data-pagelet="MarketplacePDPHero"]'),
+    document.querySelector('[aria-label*="Gallery"]'),
+    document.querySelector('[aria-label*="Photo"]'),
+  ].filter(Boolean);
+
+  let scoped = [];
+  galleryRoots.forEach((root) => {
+    root.querySelectorAll('img[src*="scontent"], img[src*="fbcdn"]').forEach((img) => scoped.push(img));
   });
 
-  // og:image belongs to this listing.
+  if (!scoped.length) {
+    // Fallback: images in main that are NOT links to other listings.
+    document.querySelectorAll(
+      '[role="main"] img[src*="scontent"], [role="main"] img[src*="fbcdn"]'
+    ).forEach((img) => scoped.push(img));
+  }
+
+  scoped.forEach(collectFromImg);
+
+  // og:image belongs to this listing (usually first gallery photo).
   const og = document.querySelector('meta[property="og:image"]');
   if (og && og.content) pushImg(og.content);
 
@@ -363,20 +425,123 @@ def unescape_fb_url(value: str) -> str:
 
 
 def is_junk_image_url(url: str) -> bool:
-    lower = url.lower()
-    junk = [
+    """Drop feed thumbs, profile pics, and tiny related/ad tiles by URL hints."""
+    lower = (url or "").lower()
+    junk_substrings = [
         "emoji",
         "static.xx.fbcdn",
         "rsrc.php",
         "profile_pic",
-        "s60x60",
-        "s100x100",
-        "s261x260",
-        "p261x260",
-        "ctp=s261x260",
         "safe_image.php",
     ]
-    return any(j in lower for j in junk)
+    if any(j in lower for j in junk_substrings):
+        return True
+    # Facebook CDN size tokens: s60x60, p225x225, ctp=s261x260, etc.
+    for m in re.finditer(r"(?:[sp]|ctp=s|stp=[^&]*[sp])(\d{2,4})x(\d{2,4})", lower):
+        try:
+            w, h = int(m.group(1)), int(m.group(2))
+        except ValueError:
+            continue
+        if w < 400 or h < 400:
+            return True
+    return False
+
+
+def _image_dimensions(content: bytes) -> Optional[tuple[int, int]]:
+    """Best-effort JPEG/PNG dimensions from raw bytes (no Pillow required)."""
+    if not content or len(content) < 24:
+        return None
+    # PNG
+    if content[:8] == b"\x89PNG\r\n\x1a\n" and len(content) >= 24:
+        w = int.from_bytes(content[16:20], "big")
+        h = int.from_bytes(content[20:24], "big")
+        if w > 0 and h > 0:
+            return w, h
+    # JPEG SOF0/SOF2 scan
+    if content[:2] == b"\xff\xd8":
+        i = 2
+        n = len(content)
+        while i + 9 < n:
+            if content[i] != 0xFF:
+                i += 1
+                continue
+            marker = content[i + 1]
+            if marker in (0xC0, 0xC1, 0xC2):  # SOF
+                h = int.from_bytes(content[i + 5 : i + 7], "big")
+                w = int.from_bytes(content[i + 7 : i + 9], "big")
+                if w > 0 and h > 0:
+                    return w, h
+                return None
+            if marker == 0xD9 or marker == 0xDA:
+                break
+            if marker == 0x01 or (0xD0 <= marker <= 0xD9):
+                i += 2
+                continue
+            seg_len = int.from_bytes(content[i + 2 : i + 4], "big")
+            if seg_len < 2:
+                break
+            i += 2 + seg_len
+    return None
+
+
+def is_junk_image_bytes(content: bytes, *, min_side: int = 400) -> bool:
+    """Reject tiny related/ad tiles after download (e.g. 225×225 promo thumbs)."""
+    if not content or len(content) < 20_000:
+        return True
+    dims = _image_dimensions(content)
+    if not dims:
+        return False  # keep if we cannot parse — URL filters already applied
+    w, h = dims
+    if w < min_side or h < min_side:
+        return True
+    return False
+
+
+def filter_minority_square_promos(
+    saved_rel_paths: list[str],
+    photos_dir: Path,
+) -> list[str]:
+    """Drop minority exact-square creatives among mostly non-square listing photos.
+
+    Marketplace pages often inject 1:1 ad banners (NEXT/Radisson-style) into the
+    scraped set while real villa photos are 4:3 / 3:4. When squares are a small
+    minority, drop them.
+    """
+    if len(saved_rel_paths) < 5:
+        return saved_rel_paths
+
+    dims: list[tuple[str, int, int]] = []
+    for rel in saved_rel_paths:
+        path = photos_dir / Path(rel).name
+        if not path.exists():
+            continue
+        try:
+            d = _image_dimensions(path.read_bytes())
+        except OSError:
+            d = None
+        if d:
+            dims.append((rel, d[0], d[1]))
+
+    if len(dims) < 5:
+        return saved_rel_paths
+
+    def is_square(w: int, h: int) -> bool:
+        return 0.92 <= (w / h) <= 1.08
+
+    squares = [rel for rel, w, h in dims if is_square(w, h)]
+    nonsquare_n = len(dims) - len(squares)
+    if nonsquare_n >= 5 and len(squares) <= 3 and (len(squares) / len(dims)) <= 0.25:
+        drop = set(squares)
+        # Also remove the dropped files from disk so Agent2 does not re-upload them.
+        for rel in drop:
+            try:
+                (photos_dir / Path(rel).name).unlink(missing_ok=True)
+            except OSError:
+                pass
+        kept = [rel for rel in saved_rel_paths if rel not in drop]
+        # Re-number not required — Agent2 uses the file list as-is.
+        return kept
+    return saved_rel_paths
 
 
 def extract_listing_images_from_html(html: str, item_id: str) -> list[str]:
@@ -826,7 +991,8 @@ def crawl_with_scrapegraph(url: str) -> ListingData:
         "Ignore related/similar listings and Marketplace feed. Return JSON with keys: "
         "title, price_raw, location_raw, description, seller_name, bedrooms, bathrooms, area_sqm, "
         "housing_type, amenities (array), image_urls (array of large gallery image URLs only). "
-        "Prefer images from the current item gallery, not 261x260 thumbnails."
+        "Prefer images from the current item gallery, not 261x260 thumbnails, "
+        "not similar/related cards, not promotional/ad creatives with CTA buttons."
     )
     api_key = os.getenv("OPENAI_API_KEY", "").strip() or "YOUR_OPENAI_API_KEY"
     config = {
@@ -896,6 +1062,8 @@ def save_images(image_urls: list[str], photos_dir: Path, timeout: int = 20) -> l
     saved: list[str] = []
     idx = 1
     for image_url in image_urls:
+        if is_junk_image_url(image_url):
+            continue
         suffix = ".jpg"
         parsed = urlparse(image_url)
         path_l = parsed.path.lower()
@@ -914,15 +1082,24 @@ def save_images(image_urls: list[str], photos_dir: Path, timeout: int = 20) -> l
             ) as resp:
                 resp.raise_for_status()
                 content = b"".join(chunk for chunk in resp.iter_content(chunk_size=1024 * 64) if chunk)
-            # Drop tiny feed thumbs that slipped through.
-            if len(content) < 12_000:
+            # Drop tiny feed thumbs / ad tiles that slipped through URL filters.
+            if is_junk_image_bytes(content):
                 continue
+            # Prefer real image extension from magic bytes.
+            if content[:2] == b"\xff\xd8":
+                suffix = ".jpg"
+                filename = f"photo_{idx:03d}{suffix}"
+                target = photos_dir / filename
+            elif content[:8] == b"\x89PNG\r\n\x1a\n":
+                suffix = ".png"
+                filename = f"photo_{idx:03d}{suffix}"
+                target = photos_dir / filename
             target.write_bytes(content)
             saved.append(f"photos/{filename}")
             idx += 1
         except Exception:
             continue
-    return saved
+    return filter_minority_square_promos(saved, photos_dir)
 
 
 def build_description(listing: ListingData) -> str:

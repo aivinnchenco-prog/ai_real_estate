@@ -233,6 +233,8 @@ def agent6_ready(
     """
     if not flag_enabled(listing.publish_flag, default_publish):
         return False, "«Публикация» = НЕТ (постинг выключен)"
+    if listing.agent6_locked:
+        return False, "agent6_locked — уже опубликовано или в работе (сбросьте для force)"
     if (
         not ignore_error_count
         and listing.error_count >= MAX_PUBLISH_ERRORS

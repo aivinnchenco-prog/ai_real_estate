@@ -127,6 +127,15 @@ def update_fields(page_id: str, properties: dict[str, Any]) -> None:
     req("PATCH", f"https://api.notion.com/v1/pages/{page_id}", payload)
 
 
+def patch_database(database_id: str, properties: dict[str, Any]) -> dict[str, Any]:
+    payload = json.dumps({"properties": properties}).encode("utf-8")
+    return req("PATCH", f"https://api.notion.com/v1/databases/{database_id}", payload)
+
+
+def get_database(database_id: str) -> dict[str, Any]:
+    return req("GET", f"https://api.notion.com/v1/databases/{database_id}")
+
+
 def checkbox_prop(checked: bool) -> dict[str, Any]:
     return {"checkbox": checked}
 

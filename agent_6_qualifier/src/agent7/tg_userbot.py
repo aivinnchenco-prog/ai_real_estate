@@ -167,14 +167,24 @@ async def handle_owner_message(client, event, sender, amo: AmoClient | None) -> 
         return True
 
     # Обогащаем реестр: теперь знаем и chat_id владельца.
+    owner_object_id = ""
+    if session.chosen:
+        owner_object_id = session.chosen.object_id
+    elif reg and reg.get("object_id"):
+        owner_object_id = reg["object_id"]
+    elif session.pending_owner_requests:
+        owner_object_id = session.pending_owner_requests[-1].get("object_id", "")
+
     owner_registry.mark_owner(
         tg_username=username, tg_chat_id=owner_chat_id,
-        object_id=session.chosen.object_id if session.chosen else "",
+        object_id=owner_object_id,
     )
 
     from agent8.owner_result import (
+        apply_verdict_to_pending,
         apply_verdict_to_session,
         build_client_message,
+        build_client_message_for_object,
         notion_availability_update,
         parse_owner_reply,
     )
@@ -193,20 +203,56 @@ async def handle_owner_message(client, event, sender, amo: AmoClient | None) -> 
     ack = OWNER_ACK_FREE if verdict.status == "free" else OWNER_ACK_CONDITIONS
     await humanized_respond(event, ack)
 
-    client_msg = build_client_message(verdict, session)
-    reply = brain.polish_reply(client_msg, session.language, session.lead.name)
-    apply_verdict_to_session(session, verdict)
+    active_object_id = session.chosen.object_id if session.chosen else ""
+    is_background = (
+        owner_object_id
+        and active_object_id
+        and owner_object_id != active_object_id
+        and session.awaiting_owner is False
+    )
 
-    if session.chosen and session.chosen.page_id:
+    if is_background:
+        from datetime import date as date_type
+        pending = next(
+            (p for p in session.pending_owner_requests
+             if p.get("object_id") == owner_object_id),
+            None,
+        )
+        check_in = None
+        check_out = None
+        if pending:
+            if pending.get("check_in"):
+                try:
+                    check_in = date_type.fromisoformat(pending["check_in"])
+                except ValueError:
+                    pass
+            if pending.get("check_out"):
+                try:
+                    check_out = date_type.fromisoformat(pending["check_out"])
+                except ValueError:
+                    pass
+        client_msg = build_client_message_for_object(
+            verdict, owner_object_id, check_in, check_out,
+        )
+        apply_verdict_to_pending(session, owner_object_id, verdict)
+        page_id = (pending or {}).get("chosen", {}).get("page_id", "")
+    else:
+        client_msg = build_client_message(verdict, session)
+        apply_verdict_to_session(session, verdict)
+        page_id = session.chosen.page_id if session.chosen else ""
+
+    reply = brain.polish_reply(client_msg, session.language, session.lead.name)
+
+    if page_id:
         try:
             upd = notion_availability_update(verdict)
             notion_store.update_availability(
-                session.chosen.page_id, upd["status"],
+                page_id, upd["status"],
                 busy_until=upd.get("busy_until"),
                 future_bookings=upd.get("future_bookings", ""),
             )
         except Exception as e:
-            notify_error("notion.availability", str(e), f"объект {session.chosen.object_id}")
+            notify_error("notion.availability", str(e), f"объект {owner_object_id}")
 
     await client.send_message(int(session.chat_id), reply)
     session.history.append({"role": "assistant", "text": reply})
@@ -304,10 +350,18 @@ async def main() -> None:
                 update = {}
 
             turn = qualifier.handle_message(session, text, update)
+            if turn.silent:
+                session.history.append({"role": "user", "text": text})
+                _store.save(session)
+                print(f"[out] {chat_id}: (silent — human-owned)")
+                return
+
             reply = (
                 turn.reply_draft if turn.skip_polish
                 else brain.polish_reply(turn.reply_draft, session.language, session.lead.name)
             )
+            if turn.template_key:
+                session.last_outbound_template_key = turn.template_key
             await humanized_respond(event, reply)
             print(f"[out] {chat_id}: {reply[:80]}")
 

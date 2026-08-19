@@ -1,0 +1,23 @@
+{
+  "$comment": "Organic score component weights. Missing metrics redistribute weight among available components only.",
+  "min_age_hours": 1.0,
+  "windows_hours": {
+    "24h": 24,
+    "72h": 72,
+    "7d": 168
+  },
+  "default_window": "72h",
+  "weights": {
+    "save_rate": 0.28,
+    "comment_rate": 0.18,
+    "share_rate": 0.14,
+    "engagement_rate": 0.20,
+    "reach_velocity": 0.12,
+    "view_velocity": 0.08
+  },
+  "rate_denominator_priority": ["impressions", "reach", "views"],
+  "velocity_metric_map": {
+    "reach_velocity": "reach",
+    "view_velocity": "views"
+  }
+}

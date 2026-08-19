@@ -1,0 +1,19 @@
+[Unit]
+Description=Open Home Availability Service (scheduler-loop)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app
+EnvironmentFile=/opt/openhome/.env
+ExecStart=/opt/openhome/venv/bin/python3 -m availability_service.main scheduler-loop
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=120
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

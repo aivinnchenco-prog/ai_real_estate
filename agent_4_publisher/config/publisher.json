@@ -502,6 +502,8 @@
     "planner_url_template": "https://app.postmypost.io/{locale}/p/{project_code}#share={publication_id}",
     "upload_poll_seconds": 2,
     "upload_poll_attempts": 45,
+    "upload_mode": "direct",
+    "$comment_upload_mode": "direct = VPS скачивает R2 и грузит в PostMyPost (S3). url = PostMyPost качает сам (R2 часто 422).",
     "$comment_accounts": "platform_accounts — явный маппинг account_id по платформе. Если пусто — авто по channel code из API.",
     "platform_accounts": {
       "instagram": [2214120],

@@ -1498,50 +1498,59 @@ def publish_one(
             else None
         )
         if not published_url:
-            result["deferred_url_sync"] = spawn_deferred_post_url_sync(
-                page_id,
-                post_id,
-                platform,
-                scheduled_time,
-                config,
-                post_kind=post_kind,
-            )
+            try:
+                result["deferred_url_sync"] = spawn_deferred_post_url_sync(
+                    page_id,
+                    post_id,
+                    platform,
+                    scheduled_time,
+                    config,
+                    post_kind=post_kind,
+                )
+            except OSError as exc:
+                print(f"[deferred_sync] spawn failed (non-fatal): {exc}", file=sys.stderr)
         if backend == "postmypost":
-            pmp_spawn = spawn_deferred_postmypost_funnel(
-                page_id,
-                platform,
-                scheduled_time,
-                config,
-                post_id=post_id,
-                post_kind=post_kind,
-            )
-            if pmp_spawn:
-                result["deferred_postmypost_funnel"] = pmp_spawn
+            try:
+                pmp_spawn = spawn_deferred_postmypost_funnel(
+                    page_id,
+                    platform,
+                    scheduled_time,
+                    config,
+                    post_id=post_id,
+                    post_kind=post_kind,
+                )
+                if pmp_spawn:
+                    result["deferred_postmypost_funnel"] = pmp_spawn
+            except OSError as exc:
+                print(f"[postmypost funnel] spawn failed (non-fatal): {exc}", file=sys.stderr)
         else:
-            cp_spawn = spawn_deferred_chatplace_funnel(
-                page_id,
-                platform,
-                scheduled_time,
-                config,
-                post_id=post_id,
-                post_kind=post_kind,
-            )
-            if cp_spawn:
-                result["deferred_chatplace_funnel"] = cp_spawn
+            try:
+                cp_spawn = spawn_deferred_chatplace_funnel(
+                    page_id,
+                    platform,
+                    scheduled_time,
+                    config,
+                    post_id=post_id,
+                    post_kind=post_kind,
+                )
+                if cp_spawn:
+                    result["deferred_chatplace_funnel"] = cp_spawn
+            except OSError as exc:
+                print(f"[chatplace funnel] spawn failed (non-fatal): {exc}", file=sys.stderr)
         return result
 
     except Exception as e:
         err_field = fields.get("publish_error", nfc.LAST_ERROR)
         err_count_field = fields.get("error_count", "error_count")
         err_count = get_prop(page, err_count_field, "number") or 0
-        notion_update_fields(
-            page_id,
-            {
-                fields["status"]: {"status": {"name": status_failed}},
-                err_field: {"rich_text": [{"text": {"content": str(e)[:2000]}}]},
-                err_count_field: {"number": err_count + 1},
-            },
-        )
+        fail_props: dict[str, Any] = {
+            fields["status"]: {"status": {"name": status_failed}},
+            err_field: {"rich_text": [{"text": {"content": str(e)[:2000]}}]},
+            err_count_field: {"number": err_count + 1},
+        }
+        if lock_field:
+            fail_props[lock_field] = notion_checkbox_property(False)
+        notion_update_fields(page_id, fail_props)
         raise
 
 
@@ -1664,6 +1673,7 @@ def main() -> int:
                 except Exception as e:
                     print(f"ERROR {platform}/{job_mode or 'auto'}: {e}", file=sys.stderr)
                     exit_code = 1
+                    bypass_lock = True
                     continue
                 print(json.dumps(out, indent=2, ensure_ascii=False))
                 if not out.get("skipped") and not args.dry_run:

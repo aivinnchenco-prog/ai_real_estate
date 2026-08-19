@@ -4,9 +4,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent7.models import Availability, LeadProfile, Listing
-from agent7.qualifier import Session
-from agent7.sessions import SessionStore
+from agent6_qualifier.models import Availability, LeadProfile, Listing
+from agent6_qualifier.qualifier import Session
+from agent6_qualifier.sessions import SessionStore
 
 
 def make_session() -> Session:
@@ -58,7 +58,7 @@ def test_corrupt_file_recovers(tmp_path):
 
 def test_dialog_continues_after_restart(tmp_path):
     """После «перезапуска» агент не задаёт вопросы заново."""
-    from agent7.qualifier import Qualifier
+    from agent6_qualifier.qualifier import Qualifier
     listing = make_session().chosen
     store = SessionStore(tmp_path)
     store.save(make_session())

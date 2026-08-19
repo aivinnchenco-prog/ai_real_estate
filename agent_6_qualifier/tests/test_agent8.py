@@ -46,31 +46,23 @@ def test_airbnb_open_dates_proceeds_via_whatsapp():
     assert "01.08.2026" in plan.first_message
 
 
-def test_airbnb_dm_uses_special_script():
-    l = make_listing(source_url="https://airbnb.com/rooms/1")  # контактов WA/TG нет
+def test_airbnb_source_without_wa_uses_fb_or_none():
+    l = make_listing(source_url="https://airbnb.com/rooms/1")  # нет WA, не FB
     plan = build_outreach_plan(l, LEAD, checker=checker_open)
-    assert plan.channel == OwnerChannel.AIRBNB
-    assert "Можно посмотреть дом" in plan.first_message
-    assert "клиент" not in plan.first_message.lower()
+    assert plan.channel is None
 
 
-def test_no_contacts_at_all():
+def test_whatsapp_beats_fb_source():
+    l = make_listing(source_url="https://facebook.com/marketplace/item/2",
+                     owner_whatsapp="+66123")
+    plan = build_outreach_plan(l, LEAD, checker=checker_open)
+    assert plan.channel == OwnerChannel.WHATSAPP
     l = make_listing(source_url="")
     plan = build_outreach_plan(l, LEAD)
     assert plan.channel is None and "нет ни одного контакта" in plan.skip_reason
 
 
-def test_telegram_contact_beats_airbnb_source():
-    """WA/TG из колонок контактов всегда приоритетнее Airbnb DM."""
-    l = make_listing(source_url="https://airbnb.com/rooms/1",
-                     calendar_url="https://airbnb.com/rooms/1",
-                     owner_telegram="@owner_tg")
-    plan = build_outreach_plan(l, LEAD, checker=checker_open)
-    assert plan.channel == OwnerChannel.TELEGRAM
-    assert plan.contact == "@owner_tg"
-
-
-def test_precheck_uses_calendar_column_not_source():
+def test_no_contacts_at_all():
     """Проверка дат идёт по колонке «Календарь», даже если источник не Airbnb."""
     seen = {}
 

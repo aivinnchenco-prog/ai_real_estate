@@ -7,29 +7,30 @@
 2. Реальная проверка календаря («Календарь»: Airbnb / iCal / Google-таблица).
 3. Результат проверки -> Notion (availability, «Занято до», «Будущие брони»).
 4. Даты закрыты -> клиенту сразу окно занятости (полное или частичное).
-5. Даты открыты -> первое сообщение владельцу: Telegram — автоматически
-   (+ реестр владельцев + папка «Собственники»), другие каналы — алерт менеджеру.
+5. Даты открыты -> первое сообщение владельцу автоматически:
+   WhatsApp (Green API) или FB Marketplace Messenger.
+   Airbnb DM и Telegram владельцу — не используются.
+
+Agent 8 не делегирует outreach в Agent 9.
 """
 from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
 
-from agent7 import notion_store, owner_registry
+from agent7 import notion_store
 from agent7.alerts import notify_error
 from agent7.models import Availability, OwnerChannel
 from agent7.templates import client_object_busy, client_object_partial
+from agent7.whatsapp_send import send_whatsapp
 
 from .calendar_check import notion_update_from_precheck
+from .fb_messenger import send_fb_marketplace_message
 from .outreach import build_outreach_plan
 
 
 def busy_message_for_client(precheck, listing, lead) -> str:
-    """Текст клиенту, когда календарь закрыл его даты.
-
-    Если желаемая дата заезда свободна, но весь срок не помещается —
-    честно называем окно (N ночей) и дату полной свободы.
-    """
+    """Текст клиенту, когда календарь закрыл его даты."""
     busy_until = precheck.busy_until(lead.check_in)
     free_from = busy_until + timedelta(days=1) if busy_until else None
     free_nights = precheck.free_nights_from(lead.check_in)
@@ -50,6 +51,17 @@ def busy_message_for_client(precheck, listing, lead) -> str:
     )
 
 
+async def _mark_outreach_sent(
+    session, store, amo, listing, plan, channel_label: str,
+) -> None:
+    session.awaiting_owner = True
+    store.save(session)
+    if amo is not None and session.amo_lead_id:
+        await asyncio.to_thread(
+            amo.note_owner, session.amo_lead_id, listing.object_id,
+            f"Запрос владельцу ({channel_label}): {plan.first_message[:150]}")
+
+
 async def auto_outreach(client, session, store, amo) -> None:
     """Полный цикл Agent 8 для одной сессии. Ошибки не роняют юзербота."""
     lead = session.lead
@@ -63,7 +75,6 @@ async def auto_outreach(client, session, store, amo) -> None:
             return
         session.chosen = listing
 
-        # build_outreach_plan внутри ходит в календарь (Playwright/HTTP) — в поток.
         plan = await asyncio.to_thread(build_outreach_plan, listing, lead)
 
         if plan.precheck is not None:
@@ -82,7 +93,6 @@ async def auto_outreach(client, session, store, amo) -> None:
                     notify_error("notion.availability", str(e),
                                  f"объект {listing.object_id}")
 
-        # --- даты закрыты: клиенту сразу занятость, владельцу не пишем ---
         if plan.skip_reason and plan.precheck and plan.precheck.available is False:
             msg = busy_message_for_client(plan.precheck, listing, lead)
             session.awaiting_owner = False
@@ -102,36 +112,41 @@ async def auto_outreach(client, session, store, amo) -> None:
                     f"Календарь: даты закрыты ({plan.precheck.note})")
             return
 
-        # --- владельцу не написать: контактов нет ---
         if plan.channel is None:
             notify_error("agent8.auto", f"владельцу не написать: {plan.skip_reason}",
                          f"объект {listing.object_id}, клиент chat_id={chat_id}")
             return
 
-        # --- Telegram: отправляем автоматически ---
-        if plan.channel == OwnerChannel.TELEGRAM:
-            username = plan.contact.lstrip("@")
-            entity = await client.get_entity(username)
-            await client.send_message(entity, plan.first_message)
-            print(f"[agent8] владельцу @{username}: {plan.first_message[:80]}")
-
-            owner_registry.mark_owner(
-                tg_username=username,
-                tg_chat_id=str(getattr(entity, "id", "") or ""),
-                object_id=listing.object_id,
+        if plan.channel == OwnerChannel.WHATSAPP:
+            ok, err = await asyncio.to_thread(
+                send_whatsapp, plan.contact, plan.first_message,
             )
-            from agent7.tg_userbot import OWNERS_FOLDER, add_to_folder
-            await add_to_folder(client, entity, OWNERS_FOLDER)
-
-            session.awaiting_owner = True
-            store.save(session)
-            if amo is not None and session.amo_lead_id:
-                await asyncio.to_thread(
-                    amo.note_owner, session.amo_lead_id, listing.object_id,
-                    f"Запрос владельцу (telegram): {plan.first_message[:150]}")
+            if not ok:
+                notify_error(
+                    "agent8.whatsapp_send",
+                    f"WA не отправлено: {err}",
+                    f"объект {listing.object_id}, номер {plan.contact}",
+                )
+                return
+            print(f"[agent8] владельцу WA {plan.contact}: {plan.first_message[:80]}")
+            await _mark_outreach_sent(session, store, amo, listing, plan, "whatsapp")
             return
 
-        # --- WA / Airbnb DM / FB DM: авто-отправка не подключена — менеджеру ---
+        if plan.channel == OwnerChannel.FB_MARKETPLACE:
+            ok, err = await asyncio.to_thread(
+                send_fb_marketplace_message, plan.contact, plan.first_message,
+            )
+            if not ok:
+                notify_error(
+                    "agent8.fb_send",
+                    f"FB Messenger не отправлено: {err}",
+                    f"объект {listing.object_id}, url {plan.contact[:80]}",
+                )
+                return
+            print(f"[agent8] владельцу FB {plan.contact[:50]}: {plan.first_message[:80]}")
+            await _mark_outreach_sent(session, store, amo, listing, plan, "fb_marketplace")
+            return
+
         notify_error(
             "agent8.manual_send",
             f"Отправьте владельцу вручную ({plan.channel.value}: {plan.contact})",

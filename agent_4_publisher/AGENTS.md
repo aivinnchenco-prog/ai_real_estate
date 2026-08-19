@@ -1,6 +1,8 @@
 # Agent 6 — Publisher (Real Estate Multi-Agent)
 
-Ты **Agent 6** из мультиагентной системы.  
+> **Именование:** в этом модуле префикс `agent6_*` (поля Notion, секция конфига, функции вроде `is_agent6_locked`) — **legacy-названия Publisher**. По целевой архитектуре это **Agent 4 — Publisher**, не Agent 6 Qualifier (лиды). Переименование `agent6_*` → `publisher_*` **намеренно отложено** из‑за зависимости от production Notion CRM. См. корневой [`ROLE_MAP.md`](../ROLE_MAP.md).
+
+Ты **Agent 6** из мультиагентной системы *(legacy-номер в handoff-документах Publisher; целевой — Agent 4)*.
 **Полная спека:** `docs/AGENT6_SPEC.md`
 
 Ты публикуешь объекты недвижимости: **Telegram (сразу) → Metricool (отложенно) → ChatPlace (IG/TikTok воронка)**.
@@ -19,7 +21,7 @@
 **Telegram:** только **фото** из `Фото` → [@OpenHome_th](https://t.me/OpenHome_th), **без Seedance**.  
 **Telegram:** колонка **Описание для Telegram**.  
 **Metricool:** колонка **Описание сец.сети** (универсальное для всех соцсетей).  
-**Блокировка:** `agent6_locked` — после взятия не повторять без `--force`.
+**Блокировка:** `agent6_locked` — активный publisher-процесс (не признак «уже опубликовано»). Lock ставится один раз перед batch, снимается в `finally` после всех slots. Текущий run получает `bypass_lock` сразу после захвата. Опубликованные slots — по `post_url_*`, не по lock. FB Groups/Marketplace — `pending_external` (Termux). Ручной сброс lock — только после `kill -9`/crash.
 
 ## Workflow (строго по порядку)
 
@@ -27,7 +29,7 @@
 2. **Telegram** — только фото из `Фото` → @OpenHome_th → `post_url_telegram`
 3. **Metricool** — отложенно: F1 карусель (1/сеть/день) или F2 видео Seedance (2/сеть/день)
 4. **ChatPlace** — воронка на IG (carousel + reel отдельно) со ссылкой на TG-пост
-5. Записать `post_url_*`, `chatplace_funnel_*_done`, `agent6_carousel_done` / `agent6_video_done`, `agent6_locked=true`
+5. Записать `post_url_*`, `chatplace_funnel_*_done`, `agent6_carousel_done` / `agent6_video_done` (lock снимается автоматически после batch)
 
 > **Состояние сессии:** `docs/SESSION_STATE.md` — читать при продолжении работы.
 
@@ -40,7 +42,7 @@
 | `Описание сец.сети` | Универсальная подпись для Metricool (все соцсети) |
 | `Описание` | Полное описание объекта (не для публикации Agent 6) |
 | `video_url_Seedance` | Видео Reel (Metricool only, не в TG) |
-| `agent6_locked` | Объект взят, без повтора |
+| `agent6_locked` | Активный publisher-процесс (не «опубликовано») |
 | `Дата и время публикации` | Когда выйдет пост — дата + время (календарь Notion / Metricool) |
 | `post_url_telegram` | Ссылка для ChatPlace DM |
 | `CTA Instagram` | Текст «Оставьте +…» на IG-посте |
@@ -78,7 +80,8 @@ python3 scripts/publish_pipeline.py --page-id PAGE_ID --platform instagram --dry
 - TG **всегда первым**, только **фото**, канал **@OpenHome_th**
 - Seedance **никогда** не идёт в Telegram
 - ChatPlace **только после** `post_url_telegram`
-- Без `--force` — не трогать `agent6_locked` записи
+- Без `--force` — не стартовать batch, если объект locked другим процессом
+- `--retry-failed` — повтор только slots без `post_url_*` (published не трогаются)
 - Agent 5 webhook — **после тестов**, не включать в прод
 
 ## Announce
@@ -88,5 +91,5 @@ page_id: {id}
 mode: carousel|video
 telegram_url: {post_url_telegram}
 metricool_post_id: {id}
-agent6_locked: true
+agent6_locked: false  # снимается автоматически после batch
 ```

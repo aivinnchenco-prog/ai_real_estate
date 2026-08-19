@@ -94,3 +94,46 @@ def test_allows_locked_with_bypass_for_unfilled_slot():
         force=False,
     )
     assert reason is None
+
+
+def test_skips_when_local_registry_has_slot(tmp_path, monkeypatch):
+    from postmypost_publication_state import register_publication, state_path
+
+    page = _page()
+    page["id"] = "page-local-1"
+    state_file = tmp_path / "postmypost_publications.json"
+    monkeypatch.setattr(
+        "postmypost_publication_state.state_path", lambda: state_file
+    )
+    register_publication(
+        page_id="page-local-1",
+        object_id="A_1",
+        platform="instagram",
+        publication_id="31505570",
+        planner_url="https://app.postmypost.io/publications/31505570",
+        scheduled_time="2026-08-10T02:55:10.000Z",
+        post_kind="carousel",
+        upload_video=False,
+        path=state_file,
+    )
+    reason = publish_skip_reason(
+        page,
+        CFG["notion"]["fields"],
+        "instagram",
+        CFG,
+        upload_video=False,
+        mode="carousel",
+        bypass_lock=True,
+        force=True,
+    )
+    assert reason and "already published (local:" in reason
+
+
+def test_resolve_url_to_save_prefers_live_then_planner():
+    from publish_pipeline import resolve_url_to_save_after_schedule
+
+    live = "https://www.instagram.com/p/ABC"
+    planner = "https://app.postmypost.io/publications/1"
+    assert resolve_url_to_save_after_schedule(published_url=live, planner_url=planner) == live
+    assert resolve_url_to_save_after_schedule(published_url=None, planner_url=planner) == planner
+    assert resolve_url_to_save_after_schedule(published_url=None, planner_url=None) is None

@@ -3,11 +3,13 @@
 > Версия: 2026-07-07  
 > Статус: проектирование → поэтапная реализация
 
+> **Именование:** заголовок «Agent 6» и поля Notion `agent6_*` — **legacy-имена Publisher**. По целевой архитектуре монорепо это **Agent 4 — Publisher** (`agent_4_publisher/`). Agent 6 в системе — **Qualifier** (квалификация лидов), см. `agent_6_qualifier/`. Переименование `agent6_*` в CRM и коде **намеренно не выполняется** на текущем этапе рефакторинга. Карта ролей: [`ROLE_MAP.md`](../../ROLE_MAP.md).
+
 ## Роль агента
 
-**Agent 6** — дистрибьютор контента объекта недвижимости из Notion CRM в соцсети через Metricool, с обязательной предварительной публикацией в Telegram-канале и подключением воронки ChatPlace для Instagram и TikTok.
+**Agent 6** *(legacy; целевой Agent 4)* — дистрибьютор контента объекта недвижимости из Notion CRM в соцсети через Metricool, с обязательной предварительной публикацией в Telegram-канале и подключением воронки ChatPlace для Instagram и TikTok.
 
-Agent 6 **не** парсит, **не** монтирует видео, **не** квалифицирует лиды.
+Agent 6 Publisher **не** парсит, **не** монтирует видео, **не** квалифицирует лиды *(это Agent 6 Qualifier в другом модуле)*.
 
 ---
 
@@ -144,18 +146,19 @@ python3 scripts/publish_pipeline.py --page-id PAGE_ID --mode all --force
 
 | Поле | Тип | Назначение |
 |------|-----|------------|
-| `agent6_locked` | Checkbox | Объект взят Agent 6, авто-повтор запрещён |
+| `agent6_locked` | Checkbox | Активный publisher-процесс (не признак публикации) |
 | `agent6_carousel_done` | Checkbox | Карусель запланирована |
 | `agent6_video_done` | Checkbox | Видео запланировано |
 | `agent6_taken_at` | Date | Когда взяли в работу |
 | `agent6_mode` | Select | `auto` / `manual` / `force` |
 
 **Алгоритм:**
-1. Перед работой: если `agent6_locked` и не `--force` → SKIP
-2. Сразу после взятия: `agent6_locked = true`, `agent6_taken_at = now`
+1. Перед работой: если `agent6_locked` и не текущий run → SKIP (другой процесс)
+2. Lock ставится один раз перед batch; текущий run обходит собственный lock
 3. После успеха F1: `agent6_carousel_done = true`
 4. После успеха F2: `agent6_video_done = true`
-5. Сброс только вручную: снять `agent6_locked` в Notion или `--force --reset-lock`
+5. Lock снимается автоматически в `finally` после batch (success/partial/fail)
+6. Ручной сброс lock — только после аварийного `kill -9`/crash или `--force --reset-lock`
 
 ---
 

@@ -97,6 +97,14 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
         "Наш менеджер уже видит вашу заявку и скоро напишет вам "
         "для назначения просмотра. Ожидайте, пожалуйста."
     ),
+    "client_new_search_prompt": (
+        "Конечно. Давайте подберём новый вариант. Что хотите изменить в критериях?"
+    ),
+    "client_new_search_with_criteria": (
+        "Конечно, подберём новый вариант. Учту ваши критерии: {criteria_summary}. "
+        "Уточните, пожалуйста, что ещё важно — или сразу назовите дату заезда, "
+        "если ещё не указали."
+    ),
     "client_owner_confirmed": (
         "Отличные новости! Владелец подтвердил, что ваш вариант {object_id} "
         "свободен на ваши даты ({date_range}). Подтверждаете бронь?"
@@ -199,6 +207,30 @@ CLIENT_BOOKING_CITIZENSHIP = _T["client_booking_citizenship"]
 CLIENT_BOOKING_WHATSAPP = _T["client_booking_whatsapp"]
 CLIENT_BOOKING_GUESTS = _T["client_booking_guests"]
 CLIENT_HANDOFF_WAIT = _T["client_handoff_wait"]
+CLIENT_NEW_SEARCH_PROMPT = _T["client_new_search_prompt"]
+
+
+def _criteria_summary(lead) -> str:
+    parts = []
+    if lead.districts:
+        parts.append(f"район {', '.join(lead.districts)}")
+    if lead.bedrooms:
+        parts.append(f"{lead.bedrooms} спален")
+    if lead.budget:
+        parts.append(f"бюджет до {lead.budget:,.0f} THB/мес".replace(",", " "))
+    if lead.check_in:
+        parts.append(f"заезд {lead.check_in.strftime('%d.%m.%Y')}")
+    return ", ".join(parts) if parts else "ваш запрос"
+
+
+def client_new_search_prompt() -> str:
+    return _T["client_new_search_prompt"]
+
+
+def client_new_search_with_criteria(lead) -> str:
+    return _T["client_new_search_with_criteria"].format(
+        criteria_summary=_criteria_summary(lead),
+    )
 
 
 def _fmt_with_id(key: str, object_id: str, **kwargs) -> str:

@@ -37,6 +37,12 @@
   "ui_automation": {
     "enabled": true,
     "engine": "uiautomator2",
-    "notes": "TikTok ✅ / carousel ✅; IG Reel+Carousel ✅; FB Marketplace ✅; LinkedIn/Twitter ✅; YouTube Shorts ✅"
+    "vision_fallback": {
+      "enabled": true,
+      "min_confidence": 0.72,
+      "model": "gemini-2.5-flash",
+      "max_calls_per_run": 25
+    },
+    "notes": "TikTok ✅ / carousel ✅; IG Reel+Carousel ✅; FB Marketplace ✅; LinkedIn/Twitter ✅; YouTube Shorts ✅. vision_fallback = Gemini при сбое селекторов."
   }
 }

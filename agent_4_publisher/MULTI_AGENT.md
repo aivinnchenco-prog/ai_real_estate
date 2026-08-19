@@ -1,5 +1,7 @@
 # Agent 6 — Publisher (часть Real Estate Multi-Agent)
 
+> **Legacy documentation.** Handoff-архив Publisher: нумерация Agent 6/7 ниже не совпадает с целевой архитектурой (Publisher = Agent 4, Qualifier = Agent 6). Поля `agent6_*` в Notion — legacy Publisher. См. [`ROLE_MAP.md`](../ROLE_MAP.md).
+
 Этот архив — **один агент** из мультиагентной системы недвижимости.  
 Родительская папка: `Desktop/Агенты/Real Estate Agent/agent_6_piblich_social`
 
@@ -18,7 +20,7 @@
 │  Agent 3  Video Creator           — FFmpeg reel               │
 │  Agent 5  Seedance (Higgsfield)   — video_url_Seedance      │
 │  ► Agent 6  Publisher ◄           — Notion → Metricool ← ВЫ │
-│  Agent 7  Qualifier (planned)     — лиды TG/WhatsApp        │
+│  Agent 6 Qualifier (planned; legacy label: Agent 7) — лиды TG/WhatsApp │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -80,7 +82,7 @@ python3 scripts/chain_runner.py --from-agent 6 --object-id 20260701_001 --publis
 | Agent 3 Video (FFmpeg) | `agent 4/workspaces/video/` |
 | Agent 5 Seedance | `agent_5_higgsfield_video/` |
 | Agent 6 Publisher | `agent_6_piblich_social/` (этот пакет) |
-| Agent 7 Qualifier | `agent_7_qualifying/` |
+| Agent 6 Qualifier *(legacy doc: Agent 7)* | `agent_6_qualifier/` (`agent_7_qualifying/` — устаревшее имя папки) |
 | Полный пайплайн | `agent 4/_import/assistant-media/` |
 
 ---

@@ -4,16 +4,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent7.context import build_knowledge, dialog_stage, format_history
-from agent7.models import Listing
-from agent7.qualifier import Session
+from agent6_qualifier.context import build_knowledge, dialog_stage, format_history
+from agent6_qualifier.models import Listing
+from agent6_qualifier.qualifier import Session
 from agent8.owner_result import OwnerVerdict, build_client_message
 
 
 def test_dialog_stage_awaiting_owner():
     s = Session(chat_id="1")
     s.awaiting_owner = True
-    assert dialog_stage(s) == "ожидание ответа владельца"
+    assert dialog_stage(s) == "ожидание ответа владельца (активный объект)"
 
 
 def test_knowledge_includes_object_and_dates():
@@ -66,3 +66,18 @@ def test_owner_conditions_message():
                      conditions_note="заезд с 16 июля"), s)
     assert "изменились" in msg.lower()
     assert "75" in msg
+
+
+def test_busy_verdict_updates_notion_availability():
+    from agent6_qualifier.models import Availability
+    from agent8.owner_result import OwnerVerdict, notion_availability_update
+
+    v = OwnerVerdict(
+        status="busy",
+        busy_until=date(2026, 8, 15),
+        future_bookings="20–25 сентября",
+    )
+    upd = notion_availability_update(v)
+    assert upd["status"] == Availability.BUSY
+    assert upd["busy_until"] == date(2026, 8, 15)
+    assert upd["future_bookings"] == "20–25 сентября"

@@ -20,14 +20,10 @@ def resolve_profile_lock_path(profile_dir: Path | None = None) -> Path:
     if profile_dir is None:
         profile_dir = _agent1_profile_dir_from_env()
     name = profile_dir.name or "facebook_profile"
-    lock_dir = os.getenv("OPENHOME_FB_LOCK_DIR", "").strip()
-    if not lock_dir:
-        default_lock = Path("/opt/openhome/runtime/state/shared/locks")
-        try:
-            default_lock.mkdir(parents=True, exist_ok=True)
-            lock_dir = str(default_lock)
-        except OSError:
-            lock_dir = str(Path.cwd() / "data" / "locks")
+    lock_dir = os.getenv(
+        "OPENHOME_FB_LOCK_DIR",
+        "/opt/openhome/runtime/state/shared/locks",
+    ).strip()
     return Path(lock_dir) / f"{name}.lock"
 
 

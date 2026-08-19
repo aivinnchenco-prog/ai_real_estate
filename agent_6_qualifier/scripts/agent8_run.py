@@ -1,4 +1,4 @@
-"""Agent 8: реальный прогон «проверить объект и связаться с владельцем».
+"""Agent 7 Envoy: реальный прогон «проверить объект и связаться с владельцем».
 
 Запуск:
   python3 scripts/agent8_run.py --chat 5041767749            # план + Notion, без отправки
@@ -11,6 +11,8 @@
 4. Даты закрыты -> сразу сообщает клиенту (занят до X, свободен с Y) + альтернативы.
 5. Даты открыты -> выбирает канал владельца (WA -> TG -> Airbnb DM -> FB DM)
    и готовит первое сообщение; --send отправляет владельцу в TG (канал telegram).
+
+Имя скрипта `agent8_run.py` — legacy (историческая нумерация пакета `agent8`).
 """
 from __future__ import annotations
 
@@ -23,23 +25,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-for line in (ROOT / ".env").read_text().splitlines():
-    line = line.strip()
-    if line and not line.startswith("#") and "=" in line:
-        k, v = line.split("=", 1)
-        os.environ.setdefault(k, v.strip())
+for env in (Path(os.getenv("OPENHOME_ENV_FILE") or "/opt/openhome/.env"), ROOT / ".env"):
+    if not env.exists():
+        continue
+    for line in env.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k, v.strip())
 
-from agent7 import notion_store, owner_registry  # noqa: E402
-from agent7.alerts import notify_error  # noqa: E402
-from agent7.amo import AmoClient  # noqa: E402
-from agent7.models import Availability, OwnerChannel  # noqa: E402
-from agent7.sessions import SessionStore  # noqa: E402
-from agent7.tg_userbot import make_script_client  # noqa: E402
-from agent8.auto import busy_message_for_client  # noqa: E402
-from agent8.calendar_check import format_busy_ranges, notion_update_from_precheck  # noqa: E402
-from agent8.outreach import build_outreach_plan  # noqa: E402
+from agent6_qualifier import notion_store  # noqa: E402
+from agent7_envoy import owner_registry  # noqa: E402
+from agent6_qualifier.alerts import notify_error  # noqa: E402
+from agent6_qualifier.amo import AmoClient  # noqa: E402
+from agent6_qualifier.models import Availability, OwnerChannel  # noqa: E402
+from agent6_qualifier.runtime_paths import qualifier_session_store_dir  # noqa: E402
+from agent6_qualifier.sessions import SessionStore  # noqa: E402
+from agent6_qualifier.tg_userbot import make_script_client  # noqa: E402
+from agent7_envoy.auto import busy_message_for_client  # noqa: E402
+from agent7_envoy.calendar_check import format_busy_ranges, notion_update_from_precheck  # noqa: E402
+from agent7_envoy.outreach import build_outreach_plan  # noqa: E402
 
-_store = SessionStore(ROOT / "data" / "sessions")
+_store = SessionStore(qualifier_session_store_dir())
 
 
 async def send_tg(to, text: str) -> None:
@@ -51,12 +58,12 @@ async def send_tg(to, text: str) -> None:
     await client.disconnect()
 
 
-async def send_tg_owner(to: str, text: str) -> str:
-    """Первое сообщение владельцу: отправить + папка «Собственники».
+async def send_tg_owner(to: str, text: str, owner_agent_type: str = "") -> str:
+    """Первое сообщение владельцу: отправить + папка Owner/Agent по роли Notion.
 
     Возвращает chat_id владельца для реестра.
     """
-    from agent7.tg_userbot import OWNERS_FOLDER, add_to_folder
+    from agent6_qualifier.telegram_folders import assign_role_folder
 
     client = make_script_client()
     await client.connect()
@@ -64,13 +71,13 @@ async def send_tg_owner(to: str, text: str) -> str:
         raise RuntimeError("TG не авторизован — python3 scripts/tg_login.py")
     entity = await client.get_entity(to)
     await client.send_message(entity, text)
-    await add_to_folder(client, entity, OWNERS_FOLDER)
+    await assign_role_folder(client, entity, owner_agent_type)
     await client.disconnect()
     return str(getattr(entity, "id", "") or "")
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Agent 8: проверка дат + контакт с владельцем")
+    p = argparse.ArgumentParser(description="Agent 7 Envoy: проверка дат + контакт с владельцем")
     p.add_argument("--chat", required=True, help="chat_id клиента")
     p.add_argument("--send", action="store_true", help="реально отправить сообщения в TG")
     args = p.parse_args()
@@ -148,12 +155,31 @@ def main() -> int:
         print(f"\nВладельцу не пишем: {plan.skip_reason}")
         return 0
 
+    # CONTACT_OUTREACH_STARTED — canonical OWNER/AGENT before first message.
+    try:
+        from agent6_qualifier.messaging.contact_role_hook import (
+            on_contact_outreach_started,
+        )
+
+        on_contact_outreach_started(
+            listing=listing,
+            phone=(
+                listing.owner_whatsapp
+                or (plan.contact if plan.channel == OwnerChannel.WHATSAPP else "")
+            ),
+            channel=plan.channel.value,
+        )
+    except Exception:
+        pass
+
     # --- пишем владельцу ---
     print(f"\nКанал владельца: {plan.channel.value} -> {plan.contact}")
     print(f"Первое сообщение владельцу:\n{plan.first_message}")
     if args.send and plan.channel == OwnerChannel.TELEGRAM:
         to = plan.contact.lstrip("@")
-        owner_chat_id = asyncio.run(send_tg_owner(to, plan.first_message))
+        owner_chat_id = asyncio.run(
+            send_tg_owner(to, plan.first_message, listing.owner_agent_type),
+        )
         # Помечаем контакт как владельца (реестр + папка «Собственники»):
         # его ответы никогда не обрабатываются юзерботом как новый клиент.
         owner_registry.mark_owner(tg_username=to, tg_chat_id=owner_chat_id,

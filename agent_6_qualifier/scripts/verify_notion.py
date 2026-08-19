@@ -21,7 +21,7 @@ for line in (ROOT / ".env").read_text().splitlines():
         k, v = line.split("=", 1)
         os.environ.setdefault(k, v.strip())
 
-from agent7 import notion_store as ns  # noqa: E402
+from agent6_qualifier import notion_store as ns  # noqa: E402
 
 API = "https://api.notion.com/v1"
 DB = os.environ["NOTION_DATABASE_ID"]

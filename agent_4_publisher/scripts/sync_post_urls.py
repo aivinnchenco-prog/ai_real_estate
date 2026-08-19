@@ -32,6 +32,7 @@ from publish_pipeline import (  # noqa: E402
     notion_get_page,
     notion_update_fields,
     notion_url_property,
+    post_kind_slot_flags,
     postmypost_enabled,
     published_url_field,
 )
@@ -99,8 +100,7 @@ def sync_post_url_to_notion(
 
     if network == "instagram" and not post_kind:
         post_kind = infer_instagram_post_kind(post_payload)
-    mode = "video" if post_kind == "reel" else "carousel" if post_kind == "carousel" else None
-    upload_video = post_kind == "reel"
+    upload_video, mode = post_kind_slot_flags(post_kind)
     url = extract_post_url(post_payload, network)
     url_field = published_url_field(
         platform, config, upload_video=upload_video, mode=mode
@@ -132,8 +132,8 @@ def main() -> int:
     parser.add_argument("--platform", help=f"Platform: {', '.join(ALL_PUBLISH_PLATFORMS)}")
     parser.add_argument(
         "--post-kind",
-        choices=["carousel", "reel"],
-        help="Instagram: carousel vs reel column",
+        choices=["carousel", "reel", "video"],
+        help="Слот двухформатной сети: carousel | reel (IG) | video (TikTok)",
     )
     parser.add_argument("--all-platforms", action="store_true", help="Sync all platforms via object_id search")
     args = parser.parse_args()

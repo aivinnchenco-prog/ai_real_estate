@@ -122,7 +122,7 @@ NOTIFY_IDLE=0            # писать, когда очередь пуста (�
 DAILY_DIGEST_HOUR=21     # час вечерней сводки, -1 = выключить
 DEDUP_MINUTES=60         # не повторять одинаковый алерт чаще, чем раз в час
 MAX_LOG_MB=20
-STOP_AFTER_CHANNEL=1     # live: один канал → обязательный отчёт → остановка
+STOP_AFTER_FB_BATCH=1    # live: fb_groups→fb_marketplace batch → отчёт → остановка
 ENV
   say "Создал $RUNNER_ENV"
 fi

@@ -5,13 +5,6 @@ from typing import Any
 
 
 CHANNELS = (
-    "tiktok",
-    "tiktok_carousel",
-    "instagram_reel",
-    "instagram_carousel",
-    "youtube_shorts",
-    "linkedin",
-    "twitter",
     "fb_groups",
     "fb_marketplace",
 )

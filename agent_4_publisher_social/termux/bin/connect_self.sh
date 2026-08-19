@@ -24,6 +24,18 @@ connected_serial() {
   adb devices | awk '/127\.0\.0\.1:.*device$/ {print $1; exit}'
 }
 
+connected_usb_serial() {
+  adb devices | awk 'NR>1 && $2=="device" && $1 !~ /^emulator-/ && $1 !~ /^127\./ {print $1; exit}'
+}
+
+disconnect_stale_emulator() {
+  adb devices | awk '/^emulator-/{print $1}' | while read -r s; do
+    [ -n "$s" ] && adb disconnect "$s" 2>/dev/null || true
+  done
+}
+
+disconnect_stale_emulator
+
 persist_serial() {
   local serial="$1"
   local env_file="${PROJECT_DIR:-$HOME_DIR/publisher-social}/.env"
@@ -40,6 +52,9 @@ persist_serial() {
 
 # --- уже подключены? ---------------------------------------------------------
 S="$(connected_serial)"
+if [ -z "$S" ]; then
+  S="$(connected_usb_serial)"
+fi
 if [ -n "$S" ]; then
   ok "Уже подключено: $S"
   persist_serial "$S"
@@ -63,7 +78,16 @@ find_port_settings() {
   settings get global adb_wifi_port 2>/dev/null | grep -E '^[0-9]+$' || true
 }
 
-PORT="$(find_port_mdns)"
+# Способ 3: порт, записанный с Mac (adb mdns services) в /sdcard/Download/adb_wifi_port.txt
+find_port_file() {
+  local f="/sdcard/Download/adb_wifi_port.txt"
+  [ -f "$f" ] || return 0
+  tr -d '[:space:]' <"$f" | grep -E '^[0-9]+$' || true
+}
+
+# Порт с Mac (adb_wifi_port.txt) — самый свежий после переподключения Wi‑Fi.
+PORT="$(find_port_file)"
+[ -z "$PORT" ] && PORT="$(find_port_mdns)"
 [ -z "$PORT" ] && PORT="$(find_port_settings)"
 
 # --- подключение -------------------------------------------------------------
@@ -113,6 +137,7 @@ fi
 
 # --- зафиксировать серийник --------------------------------------------------
 S="$(connected_serial)"
+[ -z "$S" ] && S="$(connected_usb_serial)"
 [ -z "$S" ] && { warn "Подключение не поднялось"; exit 1; }
 persist_serial "$S"
 ok "Готово: $S"

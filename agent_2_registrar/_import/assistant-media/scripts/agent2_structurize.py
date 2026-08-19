@@ -40,8 +40,12 @@ from event_log import log_event  # noqa: E402
 
 
 def load_dotenv() -> None:
-    for name in (".env.real-estate", ".env"):
-        p = ROOT / name
+    candidates = [
+        Path(os.getenv("OPENHOME_ENV_FILE") or "/opt/openhome/.env"),
+        ROOT / ".env.real-estate",
+        ROOT / ".env",
+    ]
+    for p in candidates:
         if not p.exists():
             continue
         for line in p.read_text(encoding="utf-8").splitlines():

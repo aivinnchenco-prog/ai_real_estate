@@ -89,7 +89,8 @@ def parse_proxy_from_env() -> Optional[ProxySettings]:
 
 def get_profile_path() -> Path:
     raw = os.getenv("FB_BROWSER_PROFILE", ".fb_profile").strip() or ".fb_profile"
-    if "@" in raw or raw.count("/") > 2:
+    # Reject email/password mistaken as profile path (e.g. user@gmail.com), not /opt/... paths.
+    if "@" in raw and "/" not in raw:
         raise ValueError(
             "FB_BROWSER_PROFILE must be a folder path (e.g. .fb_profile), "
             "not email/password. Put credentials into FB_EMAIL and FB_PASSWORD."
@@ -153,31 +154,21 @@ def build_browser_kwargs(for_login: bool = False) -> dict[str, Any]:
 
 @asynccontextmanager
 async def profile_lock():
-    await _PROFILE_LOCK.acquire()
-    lock_file = get_profile_path() / ".profile.lock"
-    for _ in range(30):
-        try:
-            if not lock_file.exists():
-                lock_file.write_text(str(os.getpid()), encoding="utf-8")
-                break
-            await asyncio.sleep(0.5)
-        except OSError:
-            await asyncio.sleep(0.5)
-    try:
+    profile = get_profile_path()
+    from openhome_shared.facebook_profile_lock import facebook_profile_lock
+
+    with facebook_profile_lock(profile):
         yield
-    finally:
-        try:
-            lock_file.unlink(missing_ok=True)
-        except OSError:
-            pass
-        _PROFILE_LOCK.release()
 
 
 async def is_logged_in(page) -> bool:
     url = page.url.lower()
     if "login" in url or "checkpoint" in url:
         return False
-    body = (await page.content()).lower()
+    try:
+        body = (await page.content()).lower()
+    except Exception:
+        body = ""
     login_markers = [
         "log into facebook",
         "email or mobile number",
@@ -186,7 +177,7 @@ async def is_logged_in(page) -> bool:
         "увійти",
         "войти",
     ]
-    if any(m in body for m in login_markers):
+    if body and any(m in body for m in login_markers):
         return False
     cookies = await page.context.cookies()
     if any(c.get("name") == "c_user" and "facebook.com" in c.get("domain", "") for c in cookies):

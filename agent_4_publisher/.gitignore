@@ -3,3 +3,7 @@
 .DS_Store
 __pycache__/
 *.pyc
+data/*.sqlite3
+data/*.db
+data/publications.sqlite3
+data/postmypost_publications.json

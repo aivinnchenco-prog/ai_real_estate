@@ -151,6 +151,23 @@ def append_cta_line(text: str, cta: str) -> str:
     return f"{text.rstrip()}\n\n{cta}"
 
 
+def strip_inline_object_tag(text: str, object_id: str) -> str:
+    """Убрать «Объект №ID» из тела — код уже идёт отдельной строкой 🏷."""
+    if not text or not object_id:
+        return text
+    patterns = [
+        rf"\s*Объект\s*№\s*{re.escape(object_id)}\b",
+        rf"\s*Объект\s*#\s*{re.escape(object_id)}\b",
+        rf"\s*Object\s*(?:No\.?|#|№)?\s*{re.escape(object_id)}\b",
+    ]
+    out = text
+    for pattern in patterns:
+        out = re.sub(pattern, "", out, flags=re.IGNORECASE)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r" *\n", "\n", out)
+    return out.strip(" \t")
+
+
 def merge_first_comment(*parts: str) -> str:
     lines = [p.strip() for p in parts if p and p.strip()]
     return "\n\n".join(lines)
@@ -177,12 +194,16 @@ def build_postmypost_caption_bundle(
 
     if object_id:
         base = append_utm_to_urls_in_text(base, platform, object_id, config)
+        base = strip_inline_object_tag(base, object_id)
 
     hashtags = build_hashtags(page, fields, cfg, get_prop)
     if object_id:
-        tag = f"#{object_id.replace('_', '')}"
+        # Keep readable id in hashtag (#A_20260810_003), not the underscore-stripped form.
+        tag = f"#{object_id}"
         if tag.lower() not in hashtags.lower():
-            hashtags = f"{hashtags} {tag}".strip()
+            compact = f"#{object_id.replace('_', '')}"
+            if compact.lower() not in hashtags.lower():
+                hashtags = f"{hashtags} {tag}".strip()
 
     code_line = object_code_line(object_id, config)
     if code_line:

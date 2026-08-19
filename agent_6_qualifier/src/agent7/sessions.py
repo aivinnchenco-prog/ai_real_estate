@@ -69,10 +69,25 @@ class SessionStore:
             return None
         for path in self.root.glob("*.json"):
             s = self.load(path.stem)
-            if (s is not None and s.awaiting_owner and s.chosen is not None
-                    and s.chosen.owner_telegram.strip().lstrip("@").lower() == want):
+            if s is None:
+                continue
+            if self._session_awaiting_owner_for_username(s, want):
                 return s
         return None
+
+    def _session_awaiting_owner_for_username(self, s: Session, username: str) -> bool:
+        if s.awaiting_owner and s.chosen is not None:
+            owner = s.chosen.owner_telegram.strip().lstrip("@").lower()
+            if owner == username:
+                return True
+        for item in s.pending_owner_requests:
+            if not item.get("awaiting_owner"):
+                continue
+            chosen = item.get("chosen") or {}
+            owner = str(chosen.get("owner_telegram") or "").strip().lstrip("@").lower()
+            if owner == username:
+                return True
+        return False
 
     def find_awaiting_owner_by_object(self, object_id: str) -> Session | None:
         """Сессия клиента, ждущая ответа владельца по конкретному объекту.
@@ -84,10 +99,19 @@ class SessionStore:
             return None
         for path in self.root.glob("*.json"):
             s = self.load(path.stem)
-            if (s is not None and s.awaiting_owner and s.chosen is not None
-                    and s.chosen.object_id == object_id):
+            if s is None:
+                continue
+            if self._session_awaiting_owner_for_object(s, object_id):
                 return s
         return None
+
+    def _session_awaiting_owner_for_object(self, s: Session, object_id: str) -> bool:
+        if s.awaiting_owner and s.chosen is not None and s.chosen.object_id == object_id:
+            return True
+        for item in s.pending_owner_requests:
+            if item.get("object_id") == object_id and item.get("awaiting_owner"):
+                return True
+        return False
 
     def load(self, chat_id: str) -> Session | None:
         path = self._path(chat_id)

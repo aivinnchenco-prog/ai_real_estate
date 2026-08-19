@@ -68,6 +68,8 @@
     {"exact_name": "fb_marketplace_locked", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"], "$comment": "Лок ветки постинга в FB Marketplace (fb_marketplace_pipeline)."},
     {"exact_name": "fb_marketplace_taken_at", "type": "date", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
     {"exact_name": "fb_marketplace_log", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"], "$comment": "Журнал постинга в Marketplace."},
+    {"exact_name": "phone_fb_groups_done", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"], "$comment": "Termux: FB Groups опубликованы с телефона. Снять галочку = повтор."},
+    {"exact_name": "phone_fb_marketplace_done", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"], "$comment": "Termux: FB Marketplace опубликован с телефона. Снять галочку = повтор."},
     {"exact_name": "chatplace_funnel_done", "type": "checkbox", "writers": ["agent_5_usher"], "readers": ["agent_5_usher"]},
     {"exact_name": "chatplace_funnel_id", "type": "rich_text", "writers": ["agent_5_usher"], "readers": ["agent_5_usher"]},
     {"exact_name": "chatplace_funnel_carousel_done", "type": "checkbox", "writers": ["agent_5_usher"], "readers": ["agent_5_usher"]},

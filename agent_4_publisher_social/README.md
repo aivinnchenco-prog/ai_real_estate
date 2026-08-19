@@ -44,7 +44,7 @@
 для отчёта и ручной проверки. Автоматические live-повторы отключены.
 
 Общее:
-1. Notion → R2 → скачивание → `adb push` (carousel → `publisher_social`, Marketplace → `brand_open_home`)
+1. Notion → R2 → скачивание → `adb push` в **отдельную папку объекта** `publisher_social/Carousel <object_id>/` (Marketplace → `brand_open_home`)
 2. UI через **uiautomator2**
 3. Публикация только с `--live` (иначе `--ui` — стоп перед постом)
 

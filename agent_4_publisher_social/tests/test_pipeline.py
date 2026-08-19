@@ -37,7 +37,6 @@ def base_config(*, daily: dict[str, int] | None = None) -> dict:
         "limits": {"per_channel_daily_max": daily or {}},
         "notion": {"fields": {}},
         "orchestration": {
-            "one_channel_per_live_run": True,
             "automatic_live_retries": False,
             "video_channels": ["tiktok"],
             "carousel_channels": [],
@@ -149,26 +148,29 @@ class PipelineTests(unittest.TestCase):
 
     def test_real_notion_url_is_reconciled_into_local_verified_state(self) -> None:
         cfg = base_config()
+        cfg["channels"] = ["fb_groups", "fb_marketplace"]
         cfg["notion"]["fields"] = {
-            "post_url_tiktok": "TikTok URL",
+            "post_url_fb_groups": "FB Groups URL",
         }
         page = {
             "id": "page-object-1",
             "properties": {
-                "TikTok URL": {
-                    "type": "url",
-                    "url": "https://www.tiktok.com/@account/video/123",
+                "FB Groups URL": {
+                    "type": "rich_text",
+                    "rich_text": [
+                        {"plain_text": "https://www.facebook.com/groups/example/posts/123"}
+                    ],
                 }
             },
         }
-        job = make_job("object-1", pending=["tiktok_carousel"])
+        job = make_job("object-1", pending=["fb_marketplace"])
 
         reconciled = pipeline.reconcile_local_completed_from_notion(page, job, cfg)
 
-        self.assertEqual(reconciled, ["tiktok"])
-        done = state.load_state()["objects"]["object-1"]["channels_done"]["tiktok"]
+        self.assertEqual(reconciled, ["fb_groups"])
+        done = state.load_state()["objects"]["object-1"]["channels_done"]["fb_groups"]
         self.assertEqual(done["status"], "verified")
-        self.assertIn("tiktok.com", done["post_url"])
+        self.assertIn("facebook.com", done["post_url"])
         self.assertEqual(state.load_state()["daily"], {})
 
     def test_queue_consumes_due_then_runs_only_immediate_channels(self) -> None:
@@ -203,14 +205,18 @@ class PipelineTests(unittest.TestCase):
         scheduled.assert_called_once()
         self.assertEqual(run.call_args.kwargs["channels"], ["tiktok"])
 
-    def test_live_run_channels_executes_only_first_requested_channel(self) -> None:
+    def test_live_run_executes_all_requested_non_fb_channels(self) -> None:
         cfg = base_config()
-        channel = Mock()
-        channel.publish.return_value = ChannelResult(
-            channel="tiktok",
-            ok=True,
-            post_url="https://www.tiktok.com/@account/video/123",
-        )
+
+        def track_get_channel(name: str):
+            channel = Mock()
+            channel.publish.return_value = ChannelResult(
+                channel=name,
+                ok=True,
+                post_url=f"https://example.invalid/{name}",
+            )
+            return channel
+
         with patch("publisher_social.pipeline.load_publisher_config", return_value=cfg):
             with patch("publisher_social.pipeline.load_android_config", return_value={}):
                 with patch(
@@ -219,13 +225,13 @@ class PipelineTests(unittest.TestCase):
                 ):
                     with patch(
                         "publisher_social.pipeline.get_channel",
-                        return_value=channel,
+                        side_effect=track_get_channel,
                     ) as get_channel:
                         with patch("publisher_social.pipeline._try_write_notion_result"):
                             with patch("publisher_social.pipeline._maybe_write_published_at"):
                                 results = pipeline.run_channels(
                                     make_job(
-                                        "stepwise",
+                                        "multi-channel",
                                         pending=["tiktok", "instagram_carousel"],
                                     ),
                                     channels=["tiktok", "instagram_carousel"],
@@ -233,10 +239,13 @@ class PipelineTests(unittest.TestCase):
                                     confirm_post=True,
                                 )
 
-        self.assertEqual([result.channel for result in results], ["tiktok"])
-        get_channel.assert_called_once_with("tiktok")
+        self.assertEqual(
+            [result.channel for result in results],
+            ["tiktok", "instagram_carousel"],
+        )
+        self.assertEqual(get_channel.call_count, 2)
 
-    def test_live_run_skips_done_channel_before_choosing_single_action(self) -> None:
+    def test_live_run_skips_done_channel_before_running_remaining(self) -> None:
         snapshot = state.load_state()
         state.mark_channel_done(
             snapshot,
@@ -274,11 +283,12 @@ class PipelineTests(unittest.TestCase):
 
         self.assertEqual(
             [result.channel for result in results],
-            ["instagram_carousel"],
+            ["tiktok", "instagram_carousel"],
         )
+        self.assertTrue(results[0].skipped)
         get_channel.assert_called_once_with("instagram_carousel")
 
-    def test_live_retry_is_disabled_in_stepwise_mode(self) -> None:
+    def test_live_retry_respects_automatic_live_retries_flag(self) -> None:
         job = make_job("one-attempt", pending=["tiktok"])
         failed = ChannelResult(channel="tiktok", ok=False, reason="needs review")
         cfg = base_config()

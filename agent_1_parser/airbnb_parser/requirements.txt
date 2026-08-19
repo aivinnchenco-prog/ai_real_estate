@@ -1,0 +1,16 @@
+aiogram>=3.22.0
+google-api-python-client>=2.154.0
+google-auth>=2.36.0
+google-auth-oauthlib>=1.2.1
+gspread>=6.1.4
+loguru>=0.7.2
+lxml>=5.3.0
+requests>=2.32.4
+selenium>=4.35.0
+seleniumbase>=4.41.1
+supabase>=2.10.0
+cursor-sdk>=0.1.7
+# Календарь доступности Airbnb (monthly_pricing): после установки — playwright install chromium
+playwright>=1.47.0
+# Веб-поиск контактов владельца/агентства (owner_detect)
+ddgs>=9.0.0

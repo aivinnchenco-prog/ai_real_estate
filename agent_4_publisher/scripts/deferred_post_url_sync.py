@@ -51,6 +51,12 @@ def sync_target_utc(scheduled_time: str, delay_minutes: int) -> datetime:
     return parse_scheduled_time_utc(scheduled_time) + timedelta(minutes=delay_minutes)
 
 
+def url_sync_setting(config: dict, key: str, fallback: int) -> int:
+    """Настройка окна синка из секции активного бэкенда публикации."""
+    section = "postmypost" if postmypost_enabled(config) else "metricool"
+    return int((config.get(section) or {}).get(key, fallback))
+
+
 def wait_until(target: datetime) -> None:
     now = datetime.now(timezone.utc)
     seconds = (target - now).total_seconds()
@@ -68,8 +74,8 @@ def main() -> int:
     parser.add_argument("--platform", required=True)
     parser.add_argument(
         "--post-kind",
-        choices=["carousel", "reel"],
-        help="Instagram: carousel vs reel column",
+        choices=["carousel", "reel", "video"],
+        help="Слот двухформатной сети: carousel | reel (IG) | video (TikTok)",
     )
     parser.add_argument("--scheduled-time", help="ISO schedule time; omit to read from post or skip wait")
     parser.add_argument(
@@ -77,16 +83,8 @@ def main() -> int:
         type=int,
         default=None,
     )
-    parser.add_argument(
-        "--retries",
-        type=int,
-        default=int(config.get("metricool", {}).get("url_sync_retries", 3)),
-    )
-    parser.add_argument(
-        "--retry-interval-minutes",
-        type=int,
-        default=int(config.get("metricool", {}).get("url_sync_retry_interval_minutes", 3)),
-    )
+    parser.add_argument("--retries", type=int, default=None)
+    parser.add_argument("--retry-interval-minutes", type=int, default=None)
     parser.add_argument(
         "--skip-wait",
         action="store_true",
@@ -95,31 +93,13 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.delay_minutes is None:
-        if postmypost_enabled(config):
-            args.delay_minutes = int(
-                (config.get("postmypost") or {}).get("url_sync_delay_minutes", 5)
-            )
-        else:
-            args.delay_minutes = int(
-                config.get("metricool", {}).get("url_sync_delay_minutes", 5)
-            )
-
-    retries = int(
-        (config.get("postmypost") or {}).get("url_sync_retries", 3)
-        if postmypost_enabled(config)
-        else config.get("metricool", {}).get("url_sync_retries", 3)
-    )
-    retry_interval = int(
-        (config.get("postmypost") or {}).get("url_sync_retry_interval_minutes", 3)
-        if postmypost_enabled(config)
-        else config.get("metricool", {}).get("url_sync_retry_interval_minutes", 3)
-    )
-    if args.retries == int(config.get("metricool", {}).get("url_sync_retries", 3)) and postmypost_enabled(config):
-        args.retries = retries
-    if args.retry_interval_minutes == int(
-        config.get("metricool", {}).get("url_sync_retry_interval_minutes", 3)
-    ) and postmypost_enabled(config):
-        args.retry_interval_minutes = retry_interval
+        args.delay_minutes = url_sync_setting(config, "url_sync_delay_minutes", 5)
+    if args.retries is None:
+        args.retries = url_sync_setting(config, "url_sync_retries", 3)
+    if args.retry_interval_minutes is None:
+        args.retry_interval_minutes = url_sync_setting(
+            config, "url_sync_retry_interval_minutes", 3
+        )
 
     scheduled_time = args.scheduled_time
     if not args.skip_wait:
@@ -145,6 +125,9 @@ def main() -> int:
         last_result["attempt"] = attempt + 1
         last_result["sync_at_utc"] = datetime.now(timezone.utc).isoformat()
         if last_result.get("updated"):
+            print(json.dumps(last_result, indent=2, ensure_ascii=False))
+            return 0
+        if last_result.get("reason") in {"noop_same", "conflict"}:
             print(json.dumps(last_result, indent=2, ensure_ascii=False))
             return 0
         if attempt + 1 < attempts:

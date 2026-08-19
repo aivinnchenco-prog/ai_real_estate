@@ -50,6 +50,12 @@ class Session:
     booking_confirmed: bool = False
     booking_intent: bool = False         # клиент согласился на бронь
     handoff_to_human: bool = False    # живой менеджер подключается к диалогу
+    human_handoff_active: bool = False  # менеджер вмешался в активный диалог
+    human_handoff_at: str = ""          # ISO UTC — начало human ownership
+    last_human_message_at: str = ""     # ISO UTC — последнее сообщение менеджера
+    last_client_message_at: str = ""    # ISO UTC — последнее сообщение клиента
+    pending_owner_requests: list = field(default_factory=list)  # background owner checks
+    last_outbound_template_key: str = ""  # защита от повторного wait-template
     history: list = field(default_factory=list)  # [{"role":"user"|"assistant","text":...}]
     amo_lead_id: int | None = None
     language: str = "ru"
@@ -123,6 +129,8 @@ class Turn:
     booking_confirmed: bool = False   # клиент подтвердил бронь
     handoff_to_human: bool = False    # передать живому менеджеру
     skip_polish: bool = False         # не отдавать Gemini — шаблон точный
+    silent: bool = False              # не отправлять ответ (human-owned диалог)
+    template_key: str = ""            # ключ шаблона для anti-loop tracking
 
 
 class Qualifier:
@@ -138,8 +146,67 @@ class Qualifier:
     def handle_message(self, session: Session, message: str, update: dict) -> Turn:
         """update — факты, извлечённые Gemini (brain.extract_lead_update)."""
         from .brain import apply_update
+        from .ownership import should_bot_respond, touch_client_message
+        from .intent import classify_intent
+        from .search_context import reset_search_context
+
         apply_update(session.lead, update)
         events: list[str] = []
+        touch_client_message(session)
+
+        if not should_bot_respond(session):
+            return Turn(reply_draft="", events=events, silent=True, skip_polish=True)
+
+        intent = None
+        if session.awaiting_owner or session.pending_owner_requests:
+            intent = classify_intent(message, session, update)
+        elif session.human_handoff_active or session.handoff_to_human:
+            intent = classify_intent(message, session, update)
+
+        if intent in ("NEW_PROPERTY_SEARCH", "CHANGE_CRITERIA"):
+            reset_search_context(session, intent, update)
+            events.append(f"Новый поиск: {intent}")
+            listing = self._resolve_listing(message)
+            if listing is not None:
+                session.chosen = listing
+                session.lead.preferred_object_id = listing.object_id
+                session.wants_selection = False
+            if intent == "NEW_PROPERTY_SEARCH":
+                from .templates import client_new_search_prompt, client_new_search_with_criteria
+                lead = session.lead
+                has_criteria = (
+                    lead.districts or lead.budget or lead.bedrooms
+                    or lead.check_in or update.get("districts") or update.get("budget")
+                )
+                if has_criteria:
+                    draft = client_new_search_with_criteria(lead)
+                    session.asked_core = True
+                else:
+                    draft = client_new_search_prompt()
+                return Turn(reply_draft=draft, events=events, skip_polish=True)
+
+        if intent == "CONTINUE_CURRENT_REQUEST" and (
+                session.awaiting_owner or session.pending_owner_requests):
+            from .templates import client_waiting_owner
+            oid = self._oid(session)
+            if not session.awaiting_owner and session.pending_owner_requests:
+                oid = session.pending_owner_requests[-1].get("object_id", oid)
+            return Turn(
+                reply_draft=client_waiting_owner(oid),
+                events=events + ["Статус запроса владельцу"],
+                skip_polish=True,
+                template_key="client_waiting_owner",
+            )
+
+        if intent == "HUMAN_REQUIRED":
+            from .ownership import activate_human_handoff
+            activate_human_handoff(session)
+            return Turn(
+                reply_draft="Передал ваш запрос менеджеру — скоро подключится к диалогу.",
+                events=events + ["Клиент просит менеджера"],
+                handoff_to_human=True,
+                skip_polish=True,
+            )
 
         # Владелец уже ответил — не держим флаг «ждём владельца».
         if session.owner_verdict:
@@ -194,11 +261,6 @@ class Qualifier:
                 session.awaiting_alt_consent = False
                 session.offered_alternatives = True
                 return self._show_alternatives(session, events)
-
-        # Владелец подтвердил — бронь: согласие → ФИО + гражданство → передача менеджеру.
-        if session.handoff_to_human:
-            from .templates import CLIENT_HANDOFF_WAIT
-            return Turn(reply_draft=CLIENT_HANDOFF_WAIT, events=events, skip_polish=True)
 
         if session.owner_verdict == "free" and not session.booking_confirmed:
             chosen = session.chosen
@@ -279,8 +341,27 @@ class Qualifier:
 
         if session.awaiting_owner and not session.owner_verdict:
             from .templates import client_waiting_owner
-            return Turn(reply_draft=client_waiting_owner(self._oid(session)),
-                        events=events, skip_polish=True)
+            key = "client_waiting_owner"
+            if session.last_outbound_template_key == key:
+                from .intent import classify_intent as _reclassify
+                forced = _reclassify(message, session, {}, use_llm=False)
+                if forced in ("NEW_PROPERTY_SEARCH", "CHANGE_CRITERIA"):
+                    from .search_context import reset_search_context
+                    reset_search_context(session, forced, {})
+                    events.append(f"Принудительный новый поиск: {forced}")
+                    from .templates import client_new_search_prompt
+                    return Turn(
+                        reply_draft=client_new_search_prompt(),
+                        events=events,
+                        skip_polish=True,
+                    )
+            session.last_outbound_template_key = key
+            return Turn(
+                reply_draft=client_waiting_owner(self._oid(session)),
+                events=events,
+                skip_polish=True,
+                template_key=key,
+            )
 
         # Клиент пришёл без объекта, без запроса на подбор и без параметров —
         # выясняем: конкретный объект с наших ресурсов или подбор по запросу.

@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pytest
 
-from agent7.amo import AmoClient
+from agent6_qualifier.amo import AmoClient
 
 
 @pytest.fixture
@@ -46,3 +46,51 @@ def test_find_open_lead_ignores_other_pipeline(amo, monkeypatch):
 def test_find_open_lead_no_leads(amo, monkeypatch):
     monkeypatch.setattr(amo, "_req", make_req({"/contacts/10": {"_embedded": {}}}))
     assert amo.find_open_lead(10) is None
+
+
+def test_ensure_amo_lead_reuses_open_lead(monkeypatch):
+    """Открытая сделка контакта переиспользуется — новая не создаётся."""
+    from unittest.mock import MagicMock
+
+    from agent6_qualifier.qualifier import Session
+    from agent6_qualifier.tg_userbot import ensure_amo_lead
+
+    class Sender:
+        username = "client"
+        phone = ""
+        first_name = "Ivan"
+        last_name = ""
+
+    amo = MagicMock()
+    amo.find_contact.return_value = {"id": 10}
+    amo.find_open_lead.return_value = 42
+
+    session = Session(chat_id="1")
+    ensure_amo_lead(amo, session, Sender())
+    assert session.amo_lead_id == 42
+    amo.create_lead.assert_not_called()
+
+
+def test_ensure_amo_lead_noop_when_lead_id_already_set():
+    """При установленном session.amo_lead_id повторный вызов ensure_amo_lead,
+    в том числе после изменения preferred_object_id, не ищет и не создаёт сделку."""
+    from unittest.mock import MagicMock
+
+    from agent6_qualifier.qualifier import Session
+    from agent6_qualifier.tg_userbot import ensure_amo_lead
+
+    class Sender:
+        username = "client"
+        phone = ""
+        first_name = ""
+        last_name = ""
+
+    session = Session(chat_id="1", amo_lead_id=55)
+    session.lead.preferred_object_id = "20260708_001"
+    amo = MagicMock()
+    ensure_amo_lead(amo, session, Sender())
+    session.lead.preferred_object_id = "20260708_002"
+    ensure_amo_lead(amo, session, Sender())
+    assert session.amo_lead_id == 55
+    amo.find_contact.assert_not_called()
+    amo.create_lead.assert_not_called()
