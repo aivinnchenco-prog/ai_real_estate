@@ -6,7 +6,7 @@ import random
 import time
 from dataclasses import dataclass
 
-from .config_loader import load_connector_config
+from .config_loader import facebook_profile_dir, load_connector_config
 from .connectors.facebook import FacebookConnector
 from .gemini import GeminiClient, confidence_action
 from .logging_util import log_event
@@ -21,6 +21,7 @@ from .state_machine import (
     next_after_intro_sent,
     next_after_role_asked,
 )
+from .profile_lock import facebook_profile_lock
 from .state_store import ConversationState, StateStore
 
 
@@ -242,9 +243,6 @@ class ConnectorRuntime:
 
     def run_forever(self) -> None:
         cfg = load_connector_config()
-        if not self.facebook.mock_mode:
-            self.facebook.ensure_browser()
-            log_event("browser_started", profile=str(self.facebook.profile_path()))
         notion_poll = int(cfg.get("notion_poll_seconds", 300))
         conv_poll = int(cfg.get("conversation_poll_seconds", 120))
         last_notion = 0.0
@@ -253,10 +251,30 @@ class ConnectorRuntime:
             now = time.time()
             if now - last_notion >= notion_poll:
                 self.discover_notion()
-                self.process_queue()
+                if self.facebook.mock_mode:
+                    self.process_queue()
+                else:
+                    with facebook_profile_lock(facebook_profile_dir()):
+                        self.facebook.ensure_browser()
+                        try:
+                            log_event(
+                                "browser_started",
+                                profile=str(self.facebook.profile_path()),
+                            )
+                            self.process_queue()
+                        finally:
+                            self.facebook.stop_browser()
                 last_notion = now
             if now - last_conv >= conv_poll:
-                self.poll_active_conversations()
+                if self.facebook.mock_mode:
+                    self.poll_active_conversations()
+                else:
+                    with facebook_profile_lock(facebook_profile_dir()):
+                        self.facebook.ensure_browser()
+                        try:
+                            self.poll_active_conversations()
+                        finally:
+                            self.facebook.stop_browser()
                 last_conv = now
             delay = random.randint(
                 int((cfg.get("new_outreach_delay_seconds") or {}).get("min", 20)),

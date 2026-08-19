@@ -50,6 +50,8 @@ def resolve_webhook_channel(
     if low == "facebook":
         return WebhookRouteResult(ok=True, channel_key="facebook", scope_id=tail)
     if low == "airbnb":
+        if not cfg.airbnb_enabled:
+            return WebhookRouteResult(ok=False, reason="airbnb_disabled")
         return WebhookRouteResult(ok=True, channel_key="airbnb", scope_id=tail)
     if low == "health":
         return WebhookRouteResult(ok=True, channel_key="", reason="health")
@@ -59,5 +61,7 @@ def resolve_webhook_channel(
     if fb_scope and tail == fb_scope:
         return WebhookRouteResult(ok=True, channel_key="facebook", scope_id=tail)
     if ab_scope and tail == ab_scope:
+        if not cfg.airbnb_enabled:
+            return WebhookRouteResult(ok=False, reason="airbnb_disabled")
         return WebhookRouteResult(ok=True, channel_key="airbnb", scope_id=tail)
     return WebhookRouteResult(ok=False, scope_id=tail, reason="unknown_scope")

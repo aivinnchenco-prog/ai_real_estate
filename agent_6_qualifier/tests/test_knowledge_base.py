@@ -304,6 +304,34 @@ def test_archive_parity_still_holds():
     assert "уточните, пожалуйста, дату заезда" not in low
 
 
+def test_wave3_conversational_rules_present(entries):
+    """Wave 3 §20: conversational guidance lives in knowledge, rules in code."""
+    titles = [e.title.lower() for e in entries if e.agents == ["AGENT6"]]
+    for needle in ("исправляет", "противоречит", "реакция клиента",
+                   "мягкое пожелание", "неправильно понял", "антипаттерны диалога"):
+        assert any(needle in t for t in titles), f"missing Wave 3 rule: {needle}"
+
+
+def test_wave3_antipatterns_listed():
+    text = A6.read_text(encoding="utf-8")
+    for phrase in (
+        "Не писать «я уже спрашивал»",
+        "Не повторять всю анкету после исправления",
+        "Не спорить с клиентом",
+        "Не игнорировать «этот не подходит»",
+        "Не показывать повторно отвергнутый объект",
+        "Не писать длинные извинения",
+        "Не передавать менеджеру автоматически после одной ошибки",
+    ):
+        assert phrase in text, f"missing anti-pattern: {phrase}"
+
+
+def test_wave3_knowledge_parses_without_issues():
+    entries, issues = load_all_human_entries()
+    assert not issues, f"knowledge parse issues: {issues[:5]}"
+    assert len(entries) >= 80
+
+
 def test_candidate_destination():
     c6 = CandidatePattern(
         id="c1",

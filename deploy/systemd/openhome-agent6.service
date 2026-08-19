@@ -1,0 +1,24 @@
+[Unit]
+Description=Open Home Agent 6 Qualifier (Telethon userbot)
+After=network-online.target openhome-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app/agent_6_qualifier
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=src
+Environment=HOME=/opt/openhome
+Environment=PATH=/opt/openhome/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=-/opt/openhome/.env
+ExecStart=/opt/openhome/venv/bin/python -u -m agent6_qualifier.tg_userbot
+Restart=always
+RestartSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openhome-agent6
+
+[Install]
+WantedBy=multi-user.target

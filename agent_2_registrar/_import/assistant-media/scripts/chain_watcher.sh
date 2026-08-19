@@ -17,6 +17,8 @@ PYTHON="${PYTHON:-python3}"
 mkdir -p "$(dirname "$PIDFILE")" "$(dirname "$LOGFILE")"
 
 load_env() {
+  # Never bash-source /opt/openhome/.env — values may contain spaces.
+  # systemd EnvironmentFile and Python load_dotenv handle production env.
   for f in "$ROOT/.env.real-estate" "$ROOT/.env"; do
     [[ -f "$f" ]] || continue
     set -a

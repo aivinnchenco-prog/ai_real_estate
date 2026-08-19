@@ -2,22 +2,29 @@ import os
 
 
 def _load_dotenv():
-    env_path = os.path.join(os.path.dirname(__file__), '.env')
-    if not os.path.exists(env_path):
-        return
-    with open(env_path, encoding='utf-8') as env_file:
-        for line in env_file:
-            line = line.strip()
-            if not line or line.startswith('#') or '=' not in line:
-                continue
-            key, value = line.split('=', 1)
-            # .env — источник правды (перезаписывает пустые переменные из shell)
-            os.environ[key.strip()] = value.strip().strip('"\'')
+    paths = [
+        os.environ.get("OPENHOME_ENV_FILE") or "/opt/openhome/.env",
+        os.path.join(os.path.dirname(__file__), ".env"),
+    ]
+    for env_path in paths:
+        if not os.path.exists(env_path):
+            continue
+        with open(env_path, encoding="utf-8") as env_file:
+            for line in env_file:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                # Local agent .env overwrites; production file fills gaps.
+                if env_path.endswith("/.env") and "airbnb_parser" in env_path:
+                    os.environ[key.strip()] = value.strip().strip('"\'')
+                else:
+                    os.environ.setdefault(key.strip(), value.strip().strip('"\''))
 
 
 _load_dotenv()
 
-TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN', '')
+TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN') or os.getenv('TG_BOT_TOKEN_AGENT1') or os.getenv('TELEGRAM_BOT_TOKEN') or ''
 # Telegram ID админов бота, через запятую (ADMIN_TG_IDS=111,222)
 ADMIN_IDS = [
     int(x) for x in os.getenv('ADMIN_TG_IDS', '5041767749').replace(' ', '').split(',') if x

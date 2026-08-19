@@ -6,7 +6,11 @@
 |---|---|---|
 | Production env | `/opt/openhome/.env` | **secrets** — encrypted/restricted backup only |
 | App code | `/opt/openhome/app` | normal |
-| Amo chat mirror store | `/opt/openhome/app/agent_6_qualifier/data/amo_chat_mirrors.json` (or `AMO_CHAT_MIRROR_STORE_PATH`) | business mapping |
+| Runtime (canonical) | `/opt/openhome/runtime/` | sqlite, Telethon sessions, contracts, JSON state |
+| Publisher ledger | `/opt/openhome/runtime/publisher/publications.sqlite3` | publication history |
+| Telethon sessions | `/opt/openhome/runtime/sessions/` | **auth — highly sensitive** |
+| Contracts | `/opt/openhome/runtime/contracts/` | generated DOCX |
+| Amo chat mirror store | `AMO_CHAT_MIRROR_STORE_PATH` (runtime/stores) | business mapping |
 | OwnerRequest store | under Agent7 runtime/data (see `OwnerRequestStore`) | business state |
 | Browser profiles | `/opt/openhome/runtime/browser_profiles/` | **cookies/session — highly sensitive** |
 | Browser failure shots | `/opt/openhome/runtime/agent7_browser_failures/` | may contain PII UI |

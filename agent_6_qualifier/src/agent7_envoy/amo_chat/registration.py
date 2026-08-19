@@ -152,13 +152,17 @@ def local_webhook_base_url() -> str:
 
 
 def channel_registration_labels() -> dict[str, dict[str, str]]:
-    return {
+    from agent7_envoy.amo_chat.config import airbnb_chat_enabled
+
+    labels = {
         "facebook": {
             "code": FACEBOOK_CHANNEL_CODE,
             "display_name": FACEBOOK_DISPLAY_NAME,
         },
-        "airbnb": {
+    }
+    if airbnb_chat_enabled():
+        labels["airbnb"] = {
             "code": AIRBNB_CHANNEL_CODE,
             "display_name": AIRBNB_DISPLAY_NAME,
-        },
-    }
+        }
+    return labels

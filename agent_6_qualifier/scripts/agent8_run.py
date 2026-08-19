@@ -25,24 +25,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-for line in (ROOT / ".env").read_text().splitlines():
-    line = line.strip()
-    if line and not line.startswith("#") and "=" in line:
-        k, v = line.split("=", 1)
-        os.environ.setdefault(k, v.strip())
+for env in (Path(os.getenv("OPENHOME_ENV_FILE") or "/opt/openhome/.env"), ROOT / ".env"):
+    if not env.exists():
+        continue
+    for line in env.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k, v.strip())
 
 from agent6_qualifier import notion_store  # noqa: E402
 from agent7_envoy import owner_registry  # noqa: E402
 from agent6_qualifier.alerts import notify_error  # noqa: E402
 from agent6_qualifier.amo import AmoClient  # noqa: E402
 from agent6_qualifier.models import Availability, OwnerChannel  # noqa: E402
+from agent6_qualifier.runtime_paths import qualifier_session_store_dir  # noqa: E402
 from agent6_qualifier.sessions import SessionStore  # noqa: E402
 from agent6_qualifier.tg_userbot import make_script_client  # noqa: E402
 from agent7_envoy.auto import busy_message_for_client  # noqa: E402
 from agent7_envoy.calendar_check import format_busy_ranges, notion_update_from_precheck  # noqa: E402
 from agent7_envoy.outreach import build_outreach_plan  # noqa: E402
 
-_store = SessionStore(ROOT / "data" / "sessions")
+_store = SessionStore(qualifier_session_store_dir())
 
 
 async def send_tg(to, text: str) -> None:

@@ -36,16 +36,18 @@ def channel_presence(ch: AmoChatChannelConfig) -> ChannelPresence:
 
 def validate_channel_config(cfg: AmoChatConfig | None = None) -> dict[str, ChannelPresence]:
     config = cfg or load_amo_chat_config()
-    return {
-        "facebook": channel_presence(config.facebook),
-        "airbnb": channel_presence(config.airbnb),
-    }
+    out = {"facebook": channel_presence(config.facebook)}
+    if config.airbnb_enabled:
+        out["airbnb"] = channel_presence(config.airbnb)
+    return out
 
 
 def format_channel_presence_report(cfg: AmoChatConfig | None = None) -> str:
-    data = validate_channel_config(cfg)
+    config = cfg or load_amo_chat_config()
+    data = validate_channel_config(config)
     lines: list[str] = []
-    for key in ("facebook", "airbnb"):
+    keys = ("facebook", "airbnb") if config.airbnb_enabled else ("facebook",)
+    for key in keys:
         p = data[key]
         lines.append(f"{key.upper()}:")
         lines.append(f"channel_id {'present' if p.channel_id else 'MISSING'}")

@@ -5,23 +5,22 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=REPLACE_USER
-Group=REPLACE_USER
-WorkingDirectory=REPLACE_AGENT6_DIR
-Environment=PYTHONPATH=src
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app/agent_6_qualifier
+Environment=PYTHONPATH=/opt/openhome/app:/opt/openhome/app/agent_6_qualifier/src
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=OPENHOME_API_PRODUCTION=true
 Environment=AMO_CHAT_WEBHOOK_HOST=127.0.0.1
 Environment=AMO_CHAT_WEBHOOK_PORT=8000
-Environment=AGENT7_BROWSER_PROFILES_DIR=REPLACE_RUNTIME_DIR/browser_profiles
-Environment=AGENT7_BROWSER_FAILURES_DIR=REPLACE_RUNTIME_DIR/agent7_browser_failures
-EnvironmentFile=-REPLACE_ENV_FILE
-ExecStart=REPLACE_VENV_PYTHON REPLACE_AGENT6_DIR/scripts/amo_chat_webhook_serve.py
+Environment=AGENT7_BROWSER_PROFILES_DIR=/opt/openhome/runtime/browser_profiles
+Environment=AGENT7_BROWSER_FAILURES_DIR=/opt/openhome/runtime/agent7_browser_failures
+EnvironmentFile=-/opt/openhome/.env
+ExecStart=/opt/openhome/venv/bin/python /opt/openhome/app/agent_6_qualifier/scripts/amo_chat_webhook_serve.py
 Restart=always
 RestartSec=5
 TimeoutStopSec=30
 LimitNOFILE=65535
-# Mild hardening — avoid Chromium-breaking sandboxes (NoNewPrivileges/PrivateDevices keep safe)
 NoNewPrivileges=true
 PrivateTmp=true
 StandardOutput=journal

@@ -277,6 +277,16 @@ def test_reconcile_from_current_state(tmp_path: Path) -> None:
     assert PublicationLedger(db).get_by_postmypost_id("777") is not None
 
 
+def test_default_db_path_env_override(monkeypatch, tmp_path: Path) -> None:
+    from publication_ledger import default_db_path
+
+    monkeypatch.delenv("PUBLISHER_LEDGER_PATH", raising=False)
+    assert default_db_path().name == "publications.sqlite3"
+    target = tmp_path / "runtime" / "publications.sqlite3"
+    monkeypatch.setenv("PUBLISHER_LEDGER_PATH", str(target))
+    assert default_db_path() == target
+
+
 def test_runtime_db_gitignored() -> None:
     root_gi = (ROOT.parents[0] / ".gitignore").read_text(encoding="utf-8")
     local_gi = (ROOT / ".gitignore").read_text(encoding="utf-8")

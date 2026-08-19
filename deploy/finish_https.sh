@@ -13,9 +13,9 @@ fi
 
 echo "==> DNS check (must be ${EXPECTED_IP})"
 RESOLVED="$(dig +short "$DOMAIN" A @8.8.8.8 | head -1 | tr -d '[:space:]')"
-AUTH="$(dig +short "$DOMAIN" A @ns1.pananames.com | head -1 | tr -d '[:space:]')"
+AUTH="$(dig +short "$DOMAIN" A @ignacio.ns.cloudflare.com | head -1 | tr -d '[:space:]')"
 echo "resolver@8.8.8.8: ${RESOLVED:-EMPTY}"
-echo "authoritative@pananames: ${AUTH:-EMPTY}"
+echo "authoritative@cloudflare: ${AUTH:-EMPTY}"
 
 if [[ "$RESOLVED" != "$EXPECTED_IP" ]]; then
   echo "STOP: DNS not ready (expected $EXPECTED_IP). No certbot run."
@@ -27,8 +27,13 @@ apt-get install -y certbot python3-certbot-nginx >/dev/null
 certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect
 nginx -t
 systemctl reload nginx
-curl -fsSI "https://${DOMAIN}/health" | head -n 1
-curl -fsS "https://${DOMAIN}/health"
+# GET only — the API health handler does not implement HEAD.
+# Avoid piping curl into head: pipefail would treat SIGPIPE as failure.
+curl -fsS -D /tmp/openhome-health.hdr -o /tmp/openhome-health.body "https://${DOMAIN}/health"
+head -n 12 /tmp/openhome-health.hdr
+echo
+cat /tmp/openhome-health.body
+rm -f /tmp/openhome-health.hdr /tmp/openhome-health.body
 echo
 certbot renew --dry-run
 echo "HTTPS_READY"

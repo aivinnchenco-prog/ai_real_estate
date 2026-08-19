@@ -141,7 +141,208 @@ def test_tiktok_carousel_published_url_field(pmp_config) -> None:
     assert published_url_field("tiktok", pmp_config, upload_video=True) == "post_url_tiktok"
 
 
+def test_tiktok_slots_have_explicit_post_kind() -> None:
+    """У TikTok два формата, поэтому слот всегда назван явно — как у Instagram."""
+    from publish_pipeline import post_kind_slot_flags, publication_post_kind
+
+    assert publication_post_kind("tiktok", upload_video=True, mode="video") == "video"
+    assert publication_post_kind("tiktok", upload_video=True) == "video"
+    assert publication_post_kind("tiktok", upload_video=False, mode="carousel") == "carousel"
+
+    assert post_kind_slot_flags("video") == (True, "video")
+    assert post_kind_slot_flags("reel") == (True, "video")
+    assert post_kind_slot_flags("carousel") == (False, "carousel")
+    assert post_kind_slot_flags(None) == (False, None)
+
+
+def test_tiktok_video_field_without_post_kind(pmp_config) -> None:
+    """Старый deferred sync без --post-kind: слот всё равно должен быть видео."""
+    from publish_pipeline import published_url_field
+
+    assert published_url_field("tiktok", pmp_config) == "post_url_tiktok"
+    assert published_url_field("tiktok", pmp_config, mode="video") == "post_url_tiktok"
+    assert (
+        published_url_field("tiktok", pmp_config, mode="carousel") == "post_url_tiktok_carousel"
+    )
+
+
+def test_tiktok_auto_mode_plans_carousel_and_video(pmp_config) -> None:
+    """auto-режим TikTok ставит два поста: карусель в слот, видео с задержкой."""
+    from publish_pipeline import platform_jobs
+
+    config = {**pmp_config, "tiktok": {"video_delay_hours": 4}}
+    jobs = platform_jobs("tiktok", "2026-08-19T10:00:00.000Z", config, None)
+    assert [mode for mode, _ in jobs] == ["carousel", "video"]
+    assert jobs[0][1] == "2026-08-19T10:00:00.000Z"
+    assert jobs[1][1] == "2026-08-19T14:00:00.000Z"
+
+    # Явный mode не размножается: один слот — одна публикация.
+    assert platform_jobs("tiktok", "2026-08-19T10:00:00.000Z", config, "video") == [
+        ("video", "2026-08-19T10:00:00.000Z")
+    ]
+
+
+def test_tiktok_slot_ids_split_by_format() -> None:
+    from postmypost_publication_state import postmypost_slot_id
+
+    assert postmypost_slot_id("tiktok", post_kind="video", upload_video=True) == "tiktok:video"
+    assert postmypost_slot_id("tiktok", post_kind="carousel") == "tiktok:carousel"
+    assert postmypost_slot_id("tiktok") == "tiktok:video"
+
+
+def test_tiktok_ledger_format_by_slot() -> None:
+    """Ledger: видео-слот TikTok остаётся reel, карусель — carousel."""
+    from publication_ledger import infer_format
+
+    assert infer_format(platform="tiktok", post_kind="video", upload_video=True) == "reel"
+    assert infer_format(platform="tiktok", post_kind="carousel") == "carousel"
+
+
+def test_tiktok_video_sync_writes_video_field(pmp_config) -> None:
+    """Живая ссылка TikTok-видео не должна попадать в колонку карусели."""
+    page = {
+        "properties": {
+            "post_url_tiktok": {
+                "type": "url",
+                "url": "https://app.postmypost.io/publications/31462708",
+            },
+        }
+    }
+    payload = _fixture("tiktok_published.json")
+    updates: dict = {}
+
+    def fake_update(page_id, fields):
+        updates.update(fields)
+
+    with patch("sync_postmypost_urls.postmypost_get_publication", return_value=payload), patch(
+        "sync_postmypost_urls.notion_update_fields", side_effect=fake_update
+    ):
+        result = sync_postmypost_url_to_notion(
+            "page-1",
+            "tiktok",
+            pmp_config,
+            publication_id="31462708",
+            post_kind=None,
+            page=page,
+        )
+    assert result["url_field"] == "post_url_tiktok"
+    assert result["reason"] == "replace_planner"
+    assert updates["post_url_tiktok"]["url"] == payload["posts"][0]["url"]
+    assert "post_url_tiktok_carousel" not in updates
+
+
+def test_unresolved_tiktok_url_rejected(pmp_config) -> None:
+    """PostMyPost отдаёт publish_id вместо permalink — такую ссылку не пишем."""
+    from postmypost_social_url import is_unresolved_tiktok_url
+
+    fake = "https://www.tiktok.com/@/video/v_pub_url~v2-1.7674934237509994497"
+    assert is_unresolved_tiktok_url(fake)
+    assert not is_valid_social_post_url(fake, "tiktok")
+    assert not is_unresolved_tiktok_url("https://www.tiktok.com/@openhome/video/7123456789")
+
+    payload = _fixture("tiktok_published.json")
+    payload["posts"][0]["url"] = fake
+    assert extract_publication_url(payload, "tiktok", pmp_config) is None
+    assert decide_notion_url_update("", fake, "tiktok") == (False, None, "invalid_new")
+
+
 def test_tiktok_carousel_sync_writes_correct_field(pmp_config) -> None:
+    """Фото-пост TikTok (/photo/) уходит в колонку карусели, не задевая видео."""
+    page = {
+        "properties": {
+            "post_url_tiktok_carousel": {
+                "type": "url",
+                "url": "https://app.postmypost.io/publications/99",
+            },
+        }
+    }
+    payload = _fixture("tiktok_carousel_published.json")
+    updates: dict = {}
+
+    def fake_update(page_id, fields):
+        updates.update(fields)
+
+    with patch("sync_postmypost_urls.postmypost_get_publication", return_value=payload), patch(
+        "sync_postmypost_urls.notion_update_fields", side_effect=fake_update
+    ):
+        result = sync_postmypost_url_to_notion(
+            "page-1",
+            "tiktok",
+            pmp_config,
+            publication_id="31462708",
+            post_kind="carousel",
+            page=page,
+        )
+    assert result["url_field"] == "post_url_tiktok_carousel"
+    assert result["reason"] == "replace_planner"
+    assert updates["post_url_tiktok_carousel"]["url"] == payload["posts"][0]["url"]
+    assert "post_url_tiktok" not in updates
+
+
+def test_tiktok_carousel_payload_drops_video_only_settings(pmp_config) -> None:
+    """Фото-пост TikTok: publication_type=1, без дуэта и стича."""
+    from postmypost_client import postmypost_schedule_post
+
+    captured: dict = {}
+
+    def fake_request(method, path, body=None, *, config=None):
+        captured.update({"method": method, "path": path, "body": body})
+        return {"id": 42, "publication_status": 5}
+
+    config = {
+        **pmp_config,
+        "postmypost": {
+            **pmp_config["postmypost"],
+            "project_id": 1,
+            "account_ids": {"tiktok": [2214123]},
+            "platform_settings": {
+                "tiktok": {
+                    "tiktok_comment": True,
+                    "tiktok_duet": True,
+                    "tiktok_stitch": True,
+                }
+            },
+        },
+    }
+
+    with patch("postmypost_client.postmypost_request", side_effect=fake_request), patch(
+        "postmypost_client.upload_file_by_url", return_value=101
+    ), patch("postmypost_client._rate_limit_pause"):
+        postmypost_schedule_post(
+            "tiktok",
+            "caption",
+            "2026-08-19T10:00:00.000Z",
+            None,
+            ["https://cdn.example/1.jpg", "https://cdn.example/2.jpg"],
+            False,
+            config,
+        )
+
+    detail = captured["body"]["details"][0]
+    assert detail["publication_type"] == 1
+    assert detail["tiktok_comment"] is True
+    assert "tiktok_duet" not in detail
+    assert "tiktok_stitch" not in detail
+
+
+def test_tiktok_url_form_must_match_slot(pmp_config) -> None:
+    """Видео-ссылку нельзя записать в колонку карусели и наоборот."""
+    from postmypost_social_url import is_valid_social_post_url
+
+    video_url = "https://www.tiktok.com/@openhome.th/video/7123456789"
+    photo_url = "https://www.tiktok.com/@openhome.th/photo/7667981702362320149"
+
+    assert is_valid_social_post_url(video_url, "tiktok", mode="video")
+    assert not is_valid_social_post_url(video_url, "tiktok", mode="carousel")
+    assert is_valid_social_post_url(photo_url, "tiktok", mode="carousel")
+    assert not is_valid_social_post_url(photo_url, "tiktok", mode="video")
+    # Без mode проверка остаётся мягкой: обе формы — валидные permalink'и.
+    assert is_valid_social_post_url(video_url, "tiktok")
+    assert is_valid_social_post_url(photo_url, "tiktok")
+
+
+def test_tiktok_video_url_not_written_into_carousel_column(pmp_config) -> None:
+    """Слот карусели с видео-ссылкой: колонку не трогаем, планер остаётся."""
     page = {
         "properties": {
             "post_url_tiktok_carousel": {
@@ -168,8 +369,41 @@ def test_tiktok_carousel_sync_writes_correct_field(pmp_config) -> None:
             page=page,
         )
     assert result["url_field"] == "post_url_tiktok_carousel"
-    assert updates["post_url_tiktok_carousel"]["url"] == _fixture("tiktok_published.json")["posts"][0]["url"]
-    assert "post_url_tiktok" not in updates
+    assert result["reason"] == "invalid_new"
+    assert updates == {}
+
+
+def test_url_sync_settings_come_from_active_backend() -> None:
+    from deferred_post_url_sync import url_sync_setting
+
+    config = {
+        "postmypost": {
+            "enabled": True,
+            "url_sync_retries": 12,
+            "url_sync_retry_interval_minutes": 5,
+        },
+        "metricool": {
+            "enabled": False,
+            "url_sync_retries": 3,
+            "url_sync_retry_interval_minutes": 3,
+        },
+    }
+    assert url_sync_setting(config, "url_sync_retries", 3) == 12
+    assert url_sync_setting(config, "url_sync_retry_interval_minutes", 3) == 5
+
+    config["postmypost"]["enabled"] = False
+    assert url_sync_setting(config, "url_sync_retries", 3) == 3
+
+
+def test_url_sync_window_covers_late_publishes() -> None:
+    """PostMyPost может выйти позже слота — окно должно быть не меньше 45 минут."""
+    from publish_pipeline import load_config
+
+    pmp = load_config()["postmypost"]
+    last_attempt_minutes = pmp["url_sync_delay_minutes"] + (
+        pmp["url_sync_retries"] - 1
+    ) * pmp["url_sync_retry_interval_minutes"]
+    assert last_attempt_minutes >= 45
 
 
 def test_decide_notion_url_update_cases() -> None:

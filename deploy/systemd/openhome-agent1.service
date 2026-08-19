@@ -1,0 +1,24 @@
+[Unit]
+Description=Open Home Agent 1 parser bot (Airbnb/FB Telegram)
+After=network-online.target openhome-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app/agent_1_parser/airbnb_parser
+Environment=PYTHONUNBUFFERED=1
+Environment=HOME=/opt/openhome
+Environment=PATH=/opt/openhome/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=OPENHOME_ENV_FILE=/opt/openhome/.env
+EnvironmentFile=-/opt/openhome/.env
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1440x900x24" /opt/openhome/venv/bin/python -u main.py
+Restart=on-failure
+RestartSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openhome-agent1
+
+[Install]
+WantedBy=multi-user.target

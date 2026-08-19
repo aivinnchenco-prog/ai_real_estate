@@ -28,6 +28,8 @@ from .amo import AmoClient
 from .human import humanized_respond
 from .qualifier import Qualifier, Session
 from .sessions import SessionStore
+from .runtime_paths import qualifier_session_store_dir
+from .tg_account import session_file_path, session_name
 from .telegram_folders import (
     CLIENT_FOLDER,
     add_to_folder,
@@ -35,20 +37,27 @@ from .telegram_folders import (
 )
 
 _sessions: dict[str, Session] = {}
-_store = SessionStore(Path(__file__).resolve().parents[2] / "data" / "sessions")
-# Защита от двойного запуска Agent 8 по одному чату (пока идёт проверка календаря).
 _outreach_inflight: set[str] = set()
 
 
 def load_env() -> None:
     root = Path(__file__).resolve().parents[2]
-    env = root / ".env"
-    if env.exists():
+    candidates = [
+        Path(os.getenv("OPENHOME_ENV_FILE") or "/opt/openhome/.env"),
+        root / ".env",
+    ]
+    for env in candidates:
+        if not env.exists():
+            continue
         for line in env.read_text().splitlines():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
                 os.environ.setdefault(k, v.strip())
+
+
+load_env()
+_store = SessionStore(qualifier_session_store_dir())
 
 
 def run_schema_check(skip: bool) -> None:
@@ -72,8 +81,9 @@ def run_schema_check(skip: bool) -> None:
 
 
 def make_client() -> TelegramClient:
+    session = str(session_file_path().with_suffix(""))
     return TelegramClient(
-        os.environ.get("TG_SESSION", "agent7_userbot"),
+        session,
         int(os.environ["TG_API_ID"]),
         os.environ["TG_API_HASH"],
     )
@@ -88,10 +98,9 @@ def make_script_client() -> TelegramClient:
     """
     import shutil
 
-    name = os.environ.get("TG_SESSION", "agent7_userbot")
-    root = Path(__file__).resolve().parents[2]
-    src = root / f"{name}.session"
-    copy = root / f"{name}_script.session"
+    name = session_name()
+    src = session_file_path()
+    copy = src.with_name(f"{name}_script.session")
     if src.exists() and not copy.exists():
         shutil.copy(src, copy)
     # receive_updates=False: иначе вторая сессия «уводит» входящие

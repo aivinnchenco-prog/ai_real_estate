@@ -21,15 +21,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-for line in (ROOT / ".env").read_text().splitlines():
-    line = line.strip()
-    if line and not line.startswith("#") and "=" in line:
-        k, v = line.split("=", 1)
-        os.environ.setdefault(k, v.strip())
+for env in (Path(os.getenv("OPENHOME_ENV_FILE") or "/opt/openhome/.env"), ROOT / ".env"):
+    if not env.exists():
+        continue
+    for line in env.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k, v.strip())
 
 from agent6_qualifier import brain, notion_store  # noqa: E402
 from agent6_qualifier.alerts import notify_error  # noqa: E402
 from agent6_qualifier.amo import AmoClient  # noqa: E402
+from agent6_qualifier.runtime_paths import qualifier_session_store_dir  # noqa: E402
 from agent6_qualifier.sessions import SessionStore  # noqa: E402
 from agent6_qualifier.tg_userbot import make_script_client  # noqa: E402
 from agent7_envoy.owner_result import (  # noqa: E402
@@ -39,7 +43,7 @@ from agent7_envoy.owner_result import (  # noqa: E402
     parse_owner_reply,
 )
 
-_store = SessionStore(ROOT / "data" / "sessions")
+_store = SessionStore(qualifier_session_store_dir())
 
 
 async def send_tg(chat_id: str, text: str) -> None:

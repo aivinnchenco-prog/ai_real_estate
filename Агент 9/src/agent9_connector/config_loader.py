@@ -9,10 +9,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
+DEFAULT_AGENT9_FB_PROFILE_DIR = "/opt/openhome/runtime/browser_profiles/facebook_agent9"
+LEGACY_FB_PROFILE_NAME = "facebook_profile"
+
 
 def data_dir() -> Path:
     raw = os.getenv("AGENT9_DATA_DIR", "").strip()
     return Path(raw) if raw else ROOT / "data"
+
+
+def facebook_profile_dir() -> Path:
+    """Active persistent Chromium profile for Agent 9 Messenger."""
+    raw = os.getenv("AGENT9_FACEBOOK_PROFILE_DIR", "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return Path(DEFAULT_AGENT9_FB_PROFILE_DIR)
+
+
+def legacy_facebook_profile_dir() -> Path:
+    """Previous profile location — kept as backup until manual re-auth."""
+    return data_dir() / LEGACY_FB_PROFILE_NAME
 
 
 def config_dir() -> Path:

@@ -31,9 +31,17 @@ def test_session_name_default(monkeypatch):
 
 
 def test_session_name_official(monkeypatch):
+    monkeypatch.delenv("TG_SESSION_DIR", raising=False)
+    monkeypatch.delenv("OPENHOME_SESSIONS_DIR", raising=False)
     monkeypatch.setenv("TG_SESSION", "official_company")
     assert session_name() == "official_company"
     assert session_file_path().name == "official_company.session"
+
+
+def test_session_file_path_uses_tg_session_dir(monkeypatch, tmp_path):
+    monkeypatch.setenv("TG_SESSION_DIR", str(tmp_path))
+    monkeypatch.setenv("TG_SESSION", "official_company")
+    assert session_file_path() == tmp_path / "official_company.session"
 
 
 def test_identity_check_skip(monkeypatch):

@@ -1,0 +1,38 @@
+{
+  "timestamp_utc": "2026-08-15T11:30:00Z",
+  "source_path": "Real Estate Agent - refactor",
+  "notes": "Canonical refactor reconciled with VPS deploy metadata; production not modified",
+  "vps": "72.60.108.152",
+  "canonical": {
+    "APP": "/opt/openhome/app",
+    "ENV": "/opt/openhome/.env",
+    "RUNTIME": "/opt/openhome/runtime",
+    "VENV": "/opt/openhome/venv",
+    "BACKUPS": "/opt/openhome/backups"
+  },
+  "systemd_units": [
+    "openhome-agent1.service",
+    "openhome-agent6.service",
+    "openhome-agent9.service",
+    "openhome-api.service",
+    "openhome-availability.service",
+    "openhome-chain-watcher.service",
+    "openhome-wazzup-webhook.service",
+    "openhome-amo-task.service",
+    "openhome-amo-task.timer",
+    "openhome-planner-urls.service",
+    "openhome-planner-urls.timer"
+  ],
+  "nginx": "deploy/nginx/api.open-home.online.conf",
+  "bootstrap": [
+    "deploy/bootstrap_runtime.sh",
+    "openhome_shared/deploy/ensure_facebook_profile_dirs.sh",
+    "deploy/install_api_server.sh"
+  ],
+  "packages": [
+    "agent_6_qualifier (agent6_qualifier + agent7_envoy + agent8_notary)",
+    "availability_service",
+    "openhome_shared",
+    "Агент 9 (agent9_connector)"
+  ]
+}

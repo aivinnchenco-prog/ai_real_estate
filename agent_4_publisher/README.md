@@ -106,11 +106,20 @@ Docs: https://app.metricool.com/resources/apidocs/index.html
 (настройка: `config/publisher.json` → `carousel.platforms`)
 
 Для Instagram / Threads / X / LinkedIn при наличии карусели — **только фото** (без видео в том же посте).  
-TikTok / Facebook — видео + карусель вместе.
+Facebook — видео + карусель вместе.
+
+**Instagram и TikTok в auto-режиме получают ДВА поста** — карусель в назначенный слот и
+видео с задержкой (`instagram.reel_delay_hours`, `tiktok.video_delay_hours`, по умолчанию 4 ч):
+одним постом их не выложить, а одновременно постить не стоит — алгоритм режет охват.
+У каждого слота своя колонка `post_url_*`.
 
 TikTok: `tiktokData.autoAddMusic: true` в `config/publisher.json`.
+Дуэт и стич (`platform_settings.tiktok`) уходят только в видео — фото-пост их не принимает.
 
-После публикации ссылки записываются в Notion: `post_url_instagram_carousel`, `post_url_instagram_reel`, `post_url_tiktok`, ...
+После публикации ссылки записываются в Notion: `post_url_instagram_carousel`,
+`post_url_instagram_reel`, `post_url_tiktok` (видео, `/@handle/video/…`),
+`post_url_tiktok_carousel` (фото-карусель, `/@handle/photo/…`), ...
+Форма ссылки проверяется против слота: видео-permalink не попадёт в колонку карусели и наоборот.
 
 **Publication mapping для Agent 6:** каждая платформа → колонка `post_url_*` в Notion;
 PostMyPost publication ID → `metricool_post_id`. Agent 6 строит индекс URL/ID → `Объект ID`

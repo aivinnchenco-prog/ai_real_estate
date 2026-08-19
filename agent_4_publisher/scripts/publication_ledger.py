@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sqlite3
 import uuid
 from dataclasses import asdict, dataclass
@@ -98,6 +99,9 @@ def package_root() -> Path:
 
 
 def default_db_path() -> Path:
+    override = (os.getenv("PUBLISHER_LEDGER_PATH") or "").strip()
+    if override:
+        return Path(override).expanduser()
     return package_root() / "data" / "publications.sqlite3"
 
 
@@ -130,7 +134,8 @@ def infer_format(
 
     if post_kind in {"reel", "carousel", "video", "post"}:
         if post_kind == "video":
-            return "reel" if network == "instagram" else "post"
+            # TikTok/IG видео-слот пишем как reel — так его пишет и generic-ветка ниже.
+            return "reel" if network in {"instagram", "tiktok"} else "post"
         return post_kind
 
     if network == "instagram":

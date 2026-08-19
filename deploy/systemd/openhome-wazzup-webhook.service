@@ -1,0 +1,28 @@
+[Unit]
+Description=Open Home Wazzup WhatsApp webhook (Agent 6/7 inbound + auto-reply)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app/agent_6_qualifier
+Environment=PYTHONPATH=src
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=WAZZUP_WEBHOOK_HOST=127.0.0.1
+Environment=WAZZUP_WEBHOOK_PORT=8765
+EnvironmentFile=-/opt/openhome/.env
+ExecStart=/opt/openhome/venv/bin/python /opt/openhome/app/agent_6_qualifier/scripts/wazzup_webhook_serve.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65535
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openhome-wazzup-webhook
+
+[Install]
+WantedBy=multi-user.target

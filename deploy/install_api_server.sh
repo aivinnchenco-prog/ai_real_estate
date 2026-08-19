@@ -42,20 +42,58 @@ if ! id -u "$RUN_USER" >/dev/null 2>&1; then
   useradd --system --create-home --home-dir "$OPENHOME_ROOT" --shell /usr/sbin/nologin "$RUN_USER"
 fi
 
+BACKUPS_DIR="${OPENHOME_ROOT}/backups"
+
 echo "==> Creating directories"
-mkdir -p "$APP_DIR" "$VENV_DIR" "$RUNTIME_DIR/browser_profiles" \
-  "$RUNTIME_DIR/agent7_browser_failures" "$LOGS_DIR"
+mkdir -p "$APP_DIR" "$VENV_DIR" "$LOGS_DIR" "$BACKUPS_DIR" \
+  "$RUNTIME_DIR/browser_profiles" \
+  "$RUNTIME_DIR/agent7_browser_failures" \
+  "$RUNTIME_DIR/publisher" \
+  "$RUNTIME_DIR/sessions" \
+  "$RUNTIME_DIR/contracts" \
+  "$RUNTIME_DIR/state" \
+  "$RUNTIME_DIR/stores" \
+  "$RUNTIME_DIR/logs"
+
+# rsync dest is APP_DIR only. Never --delete into OPENHOME_ROOT (would wipe
+# /opt/openhome/runtime, /opt/openhome/.env, /opt/openhome/backups).
+if [[ "$APP_DIR" == "$OPENHOME_ROOT" ]]; then
+  echo "REFUSE: APP_DIR must not equal OPENHOME_ROOT (rsync --delete would wipe runtime/env/backups)"
+  exit 1
+fi
+if [[ "$REPO_ROOT" == "$OPENHOME_ROOT" ]]; then
+  echo "REFUSE: run installer from the app checkout, not OPENHOME_ROOT"
+  exit 1
+fi
+
 # Sync code if installer is not already running from /opt/openhome/app
 if [[ "$REPO_ROOT" != "$APP_DIR" ]]; then
-  echo "==> Syncing project tree into $APP_DIR (rsync; excludes .git/.venv/profiles)"
+  echo "==> Syncing project tree into $APP_DIR (rsync; excludes .git/.venv/profiles + mutable state)"
   rsync -a --delete \
     --exclude '.git/' \
     --exclude '.venv/' \
+    --exclude 'venv/' \
+    --exclude '**/node_modules/' \
     --exclude '**/__pycache__/' \
     --exclude '**/.pytest_cache/' \
-    --exclude 'runtime/browser_profiles/' \
+    --exclude 'runtime/' \
+    --exclude 'backups/' \
     --exclude '**/.fb_profile/' \
     --exclude '**/.env' \
+    --exclude '*.session' \
+    --exclude '*.session-journal' \
+    --exclude '**/publications.sqlite3' \
+    --exclude '**/postmypost_publications.json' \
+    --exclude '**/data/contracts/' \
+    --exclude '**/data/sessions/' \
+    --exclude '**/amo_task_state.json' \
+    --exclude '**/owners.json' \
+    --exclude '**/owner_requests.json' \
+    --exclude '**/amo_chat_mirrors.json' \
+    --exclude '**/error_notify_state.json' \
+    --exclude '**/Users.txt' \
+    --exclude '**/postmypost_ai_agent_state.json' \
+    --exclude '**/agent10.sqlite3' \
     "$REPO_ROOT/" "$APP_DIR/"
 fi
 

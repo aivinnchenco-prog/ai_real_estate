@@ -13,7 +13,7 @@ from agent8.owner_result import OwnerVerdict, build_client_message
 def test_dialog_stage_awaiting_owner():
     s = Session(chat_id="1")
     s.awaiting_owner = True
-    assert dialog_stage(s) == "ожидание ответа владельца"
+    assert dialog_stage(s) == "ожидание ответа владельца (активный объект)"
 
 
 def test_knowledge_includes_object_and_dates():

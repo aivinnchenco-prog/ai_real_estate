@@ -22,6 +22,7 @@ from publish_pipeline import (  # noqa: E402
     notion_get_page,
     notion_update_fields,
     notion_url_property,
+    post_kind_slot_flags,
     postmypost_enabled,
     published_url_field,
 )
@@ -52,15 +53,16 @@ def sync_postmypost_url_to_notion(
     network = network_for(platform)
     url = extract_publication_url(payload, platform, config)
 
-    upload_video = post_kind == "reel"
-    mode = "video" if post_kind == "reel" else "carousel" if post_kind == "carousel" else None
+    upload_video, mode = post_kind_slot_flags(post_kind)
     url_field = published_url_field(
         platform, config, upload_video=upload_video, mode=mode
     )
 
     page = page or notion_get_page(page_id)
     current_url = _notion_url_from_page(page, url_field)
-    should_update, url_to_write, reason = decide_notion_url_update(current_url, url, network)
+    should_update, url_to_write, reason = decide_notion_url_update(
+        current_url, url, network, mode=mode
+    )
 
     updated = False
     if should_update and url_field and url_to_write:
@@ -155,7 +157,7 @@ def main() -> int:
     parser.add_argument("--page-id", required=True)
     parser.add_argument("--platform", required=True)
     parser.add_argument("--publication-id", required=True)
-    parser.add_argument("--post-kind", choices=["carousel", "reel"])
+    parser.add_argument("--post-kind", choices=["carousel", "reel", "video"])
     parser.add_argument("--analytics", action="store_true")
     args = parser.parse_args()
 

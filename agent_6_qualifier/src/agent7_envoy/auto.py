@@ -9,8 +9,7 @@
 4. Даты закрыты -> клиенту сразу окно занятости (полное или частичное).
 5. Даты открыты -> первое сообщение владельцу:
    - Telegram — автоматически (+ реестр владельцев + папка «Собственники»)
-   - WhatsApp — автоматически только на controlled allowlist
-     (AGENT7_CONTROLLED_OWNER_PHONES); иначе BLOCKED AT OWNER LIVE CONTACT
+   - WhatsApp — автоматически через Wazzup24 (optional AGENT7_CONTROLLED_OWNER_PHONES)
    - Airbnb DM / FB DM — алерт менеджеру.
 """
 from __future__ import annotations
@@ -253,19 +252,7 @@ async def auto_outreach(client, session, store, amo) -> None:
             )
             owner_digits = _normalize_owner_phone(owner_phone_raw)
             controlled = _controlled_owner_phones()
-            if not controlled:
-                print(
-                    "[agent7] BLOCKED AT OWNER LIVE CONTACT: "
-                    "AGENT7_CONTROLLED_OWNER_PHONES empty"
-                )
-                notify_error(
-                    "agent7.owner_blocked",
-                    "BLOCKED AT OWNER LIVE CONTACT",
-                    f"object={listing.object_id} no controlled owner allowlist",
-                )
-                store.save(session)
-                return
-            if not owner_digits or owner_digits not in controlled:
+            if controlled and (not owner_digits or owner_digits not in controlled):
                 print(
                     "[agent7] BLOCKED AT OWNER LIVE CONTACT: "
                     f"owner not on controlled list object={listing.object_id}"
@@ -305,18 +292,8 @@ async def auto_outreach(client, session, store, amo) -> None:
                 store.save(session)
                 return
 
-            send_wa = getattr(client, "send_whatsapp_text", None)
-            if not callable(send_wa):
-                notify_error(
-                    "agent8.manual_send",
-                    f"WhatsApp owner send unavailable on this client "
-                    f"({owner_digits})",
-                    f"объект {listing.object_id}, текст: {plan.first_message[:200]}",
-                )
-                store.save(session)
-                return
-
             from agent7_envoy.owner_request_store import OwnerRequestStore
+            from agent6_qualifier.messaging.owner_outbound import send_owner_whatsapp_text
 
             req_store = OwnerRequestStore()
             owner_req = req_store.create(
@@ -328,7 +305,18 @@ async def auto_outreach(client, session, store, amo) -> None:
             session.owner_request_id = owner_req.owner_request_id
 
             e164 = f"+{owner_digits}"
-            await send_wa(e164, plan.first_message)
+            try:
+                await asyncio.to_thread(
+                    send_owner_whatsapp_text, e164, plan.first_message
+                )
+            except Exception as exc:
+                notify_error(
+                    "agent7.owner_wa_send",
+                    str(exc),
+                    f"object={listing.object_id} owner={e164[-4:]}",
+                )
+                store.save(session)
+                return
             print(f"[agent8] владельцу WA {e164[-4:]}: {plan.first_message[:80]}")
             req_store.mark_awaiting(owner_req.owner_request_id)
             owner_registry.mark_owner(

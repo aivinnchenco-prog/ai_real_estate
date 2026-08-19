@@ -8,12 +8,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..config_loader import data_dir, load_connector_config
+from ..config_loader import data_dir, facebook_profile_dir, load_connector_config
 from ..state_machine import BrowserScreenState
 from . import ChannelConnector, InboundMessage, SendResult
 from . import facebook_playwright as pw
 
-PROFILE_DIR = data_dir() / "facebook_profile"
+PROFILE_DIR = facebook_profile_dir()
 DIAG_DIR = data_dir() / "diagnostics"
 
 
@@ -36,7 +36,7 @@ class FacebookConnector(ChannelConnector):
     _browser_started: bool = False
 
     def profile_path(self) -> Path:
-        return PROFILE_DIR
+        return facebook_profile_dir()
 
     @staticmethod
     def extract_thread_id(url: str) -> str:

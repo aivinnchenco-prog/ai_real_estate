@@ -528,9 +528,10 @@
     "auto_hashtags": true,
     "auto_geolocation": true,
     "api_min_interval_seconds": 6.5,
+    "$comment_url_sync": "Окно ожидания живого permalink: post_at + delay, далее retries × interval. PostMyPost может выйти позже слота (X сдвигал на 13 мин) — окно должно быть с запасом.",
     "url_sync_delay_minutes": 5,
-    "url_sync_retries": 3,
-    "url_sync_retry_interval_minutes": 3,
+    "url_sync_retries": 12,
+    "url_sync_retry_interval_minutes": 5,
     "utm": {
       "source_template": "{platform}",
       "medium": "social"
@@ -605,5 +606,9 @@
   },
   "instagram": {
     "reel_delay_hours": 4
+  },
+  "tiktok": {
+    "$comment": "TikTok умеет и фото-карусель (publication_type=1), и видео (4). Auto-режим ставит два поста: карусель в слот, видео через video_delay_hours.",
+    "video_delay_hours": 4
   }
 }

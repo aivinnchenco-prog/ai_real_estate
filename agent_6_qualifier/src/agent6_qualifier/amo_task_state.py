@@ -6,7 +6,9 @@ import json
 import time
 from pathlib import Path
 
-_STATE_PATH = Path(__file__).resolve().parents[2] / "data" / "amo_task_state.json"
+from .runtime_paths import amo_task_state_path
+
+_STATE_PATH = amo_task_state_path()
 
 
 def _load() -> dict:

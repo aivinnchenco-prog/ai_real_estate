@@ -31,6 +31,7 @@ from publish_pipeline import (  # noqa: E402
     load_dotenv,
     notion_get_page,
     notion_update_fields,
+    post_kind_slot_flags,
     published_url_field,
 )
 from funnel_notion import (  # noqa: E402
@@ -116,8 +117,7 @@ def prepare_postmypost_job(
         raise ValueError("post_url_telegram is empty — publish to Telegram first")
 
     object_id = object_id_from_page(page, fields) or ""
-    upload_video = post_kind == "reel"
-    mode = "video" if post_kind == "reel" else "carousel" if post_kind == "carousel" else None
+    upload_video, mode = post_kind_slot_flags(post_kind)
 
     if sync_urls:
         post_id_field = config["notion"]["fields"].get("metricool_post_id", "metricool_post_id")
@@ -253,7 +253,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="PostMyPost IG automation readiness")
     parser.add_argument("--page-id", required=True)
     parser.add_argument("--platform", default="instagram")
-    parser.add_argument("--post-kind", choices=["carousel", "reel"])
+    parser.add_argument("--post-kind", choices=["carousel", "reel", "video"])
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 

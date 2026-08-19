@@ -32,6 +32,7 @@ from agent7_envoy.messaging.fb_profile import (
     facebook_profile_has_session,
     resolve_agent7_facebook_profile_dir,
 )
+from openhome_shared.facebook_profile_lock import facebook_profile_lock
 
 
 LOGIN_URL_HINTS = (
@@ -313,10 +314,11 @@ class FacebookMessengerOwnerTransport:
                 page = self.page_factory()
             else:
                 assert self.profile_dir is not None
-                pw, context, page = launch_persistent_context(
-                    profile_dir=self.profile_dir,
-                    headless=self.headless,
-                )
+                with facebook_profile_lock(self.profile_dir):
+                    pw, context, page = launch_persistent_context(
+                        profile_dir=self.profile_dir,
+                        headless=self.headless,
+                    )
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
             auth = classify_auth_from_url(page.url, login_hints=LOGIN_URL_HINTS)
             if auth == AuthStatus.AUTH_REQUIRED:

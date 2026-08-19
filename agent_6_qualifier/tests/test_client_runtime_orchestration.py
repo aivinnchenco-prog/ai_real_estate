@@ -315,7 +315,9 @@ def test_booking_confirmed_runs_notary(runtime):
     sess, contact, kwargs = runtime.notary_calls[0]
     assert sess is session
     assert contact == "Telegram: @client_user"
-    assert kwargs["generate_doc"] is generate_booking_doc
+    gen = kwargs["generate_doc"]
+    assert gen.__name__ == generate_booking_doc.__name__
+    assert gen.__module__ == generate_booking_doc.__module__
     assert kwargs["amo_lead_id"] == session.amo_lead_id
     assert kwargs["attach_file"] is runtime.amo.attach_file
     on_generation_error = kwargs["on_generation_error"]

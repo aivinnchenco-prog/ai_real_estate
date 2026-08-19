@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .runtime_paths import telethon_session_dir
+
 
 def qualifier_root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -14,7 +16,7 @@ def session_name() -> str:
 
 
 def session_file_path() -> Path:
-    return qualifier_root() / f"{session_name()}.session"
+    return telethon_session_dir() / f"{session_name()}.session"
 
 
 def mask_phone(phone: str | None) -> str:

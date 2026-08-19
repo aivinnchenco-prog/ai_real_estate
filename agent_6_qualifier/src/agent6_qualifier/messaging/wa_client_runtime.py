@@ -34,6 +34,7 @@ from agent6_qualifier.messaging.types import CanonicalInboundMessage, Conversati
 from agent6_qualifier.messaging.wazzup_config import WazzupConfig, load_wazzup_config
 from agent6_qualifier.messaging.wazzup_transport import WazzupWhatsAppTransport
 from agent6_qualifier.qualifier import Qualifier, Session
+from agent6_qualifier.runtime_paths import qualifier_session_store_dir
 from agent6_qualifier.sessions import SessionStore
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ def agent7_live_outreach_enabled() -> bool:
 
 
 def default_session_store() -> SessionStore:
-    return SessionStore(_DEFAULT_SESSION_ROOT)
+    return SessionStore(qualifier_session_store_dir())
 
 
 @dataclass
@@ -248,7 +249,7 @@ async def process_whatsapp_client_turn(
         result.notes.append("OWN_BOT_OUTBOUND ignored")
         return result
 
-    if state.owner != ConversationOwner.BOT_ACTIVE or state.manager_takeover:
+    if not state.bot_may_reply():
         result.notes.append(f"handoff/ownership block owner={state.owner.value}")
         result.handoff = True
         result.outbound_mode = "blocked"
@@ -513,10 +514,12 @@ async def process_whatsapp_client_turn(
 
         asked = getattr(session, "asked_core", False)
         lead = session.lead
-        qualification_complete = bool(
-            lead.check_in and lead.check_out and lead.budget is not None
-            and lead.guests and lead.districts
-        ) or bool(session.chosen and session.lead.preferred_object_id)
+        from agent6_qualifier.slot_planner import plan_qualification
+
+        plan = plan_qualification(session, session.chosen)
+        qualification_complete = plan.mvc_ready or bool(
+            session.chosen and session.lead.preferred_object_id and lead.check_in
+        )
         record_client_turn(
             inbound_text=message.text or "",
             phone=phone,

@@ -42,6 +42,7 @@ def _cfg(tmp_path, *, secret="sec-fb", bot="bot-fb", scope="scope-fb"):
         account_id="acct",
         owner_silent_default=True,
         webhook_enabled=True,
+        airbnb_enabled=True,
         facebook=AmoChatChannelConfig(
             key="facebook",
             title="Open Home | Facebook Marketplace",
@@ -198,7 +199,7 @@ def test_rollback_and_recovery_docs_exist():
 def test_systemd_and_nginx_hardening_markers():
     unit = (ROOT / "deploy" / "systemd" / "openhome-api.service").read_text(encoding="utf-8")
     assert "TimeoutStopSec=30" in unit
-    assert "User=REPLACE_USER" in unit
+    assert "User=REPLACE_USER" in unit or "User=openhome" in unit
     assert "127.0.0.1" in unit
     conf = (ROOT / "deploy" / "nginx" / "api.open-home.online.conf").read_text(encoding="utf-8")
     assert "server_tokens off" in conf

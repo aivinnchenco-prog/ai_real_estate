@@ -36,7 +36,7 @@ function extractVideoUrl(jobSet) {
   return url;
 }
 
-export async function generateClipViaPlatform({ imageUrl, prompt, cfg }) {
+export function buildImage2VideoParams({ imageUrl, prompt, cfg }) {
   const params = {
     model: cfg.api_model || "dop-turbo",
     prompt,
@@ -46,9 +46,14 @@ export async function generateClipViaPlatform({ imageUrl, prompt, cfg }) {
 
   const resolution = cfg.api_resolution || cfg.resolution;
   if (resolution) params.resolution = resolution;
+  return params;
+}
+
+export async function generateClipViaPlatform({ imageUrl, prompt, cfg }) {
+  const params = buildImage2VideoParams({ imageUrl, prompt, cfg });
 
   console.log(
-    `Higgsfield Platform API: ${params.model}, resolution ${resolution || "default"}`
+    `Higgsfield Platform API: ${params.model}, resolution ${params.resolution || "default"}`
   );
 
   const jobSet = await client().generate("/v1/image2video/dop", params, {

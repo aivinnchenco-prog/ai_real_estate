@@ -164,6 +164,7 @@ ALL_PUBLISH_PLATFORMS = _publish_platforms_from_config()
 def load_dotenv() -> None:
     root = package_root()
     env_files = [
+        Path(os.getenv("OPENHOME_ENV_FILE") or "/opt/openhome/.env"),
         root / ".env",
         root / ".env.local",
         root.parent / "agent_2_registrar" / "_import" / "assistant-media" / ".env.real-estate",
@@ -1020,9 +1021,12 @@ def published_url_field(
             return mapping.get("instagram_reel")
         return mapping.get("instagram_carousel")
     if network == "tiktok":
-        if upload_video or mode == "video":
-            return mapping.get("tiktok")
-        return mapping.get("tiktok_carousel") or mapping.get("tiktok")
+        # Карусель — только при явном mode=carousel. Без сигнала (например, старый
+        # deferred sync без --post-kind) слот считаем видео: так публикуется
+        # TikTok по умолчанию, а фото-пост всегда приходит с mode.
+        if mode == "carousel":
+            return mapping.get("tiktok_carousel") or mapping.get("tiktok")
+        return mapping.get("tiktok")
     return mapping.get(platform) or mapping.get(network)
 
 
@@ -1032,18 +1036,31 @@ def instagram_post_kind(*, upload_video: bool, mode: str | None = None) -> str:
     return "carousel"
 
 
+VIDEO_POST_KINDS = frozenset({"reel", "video"})
+
+
 def publication_post_kind(
     platform: str,
     *,
     upload_video: bool,
     mode: str | None = None,
 ) -> str | None:
+    """Слот публикации для сетей с двумя форматами (карусель и видео)."""
     network = network_for(platform)
     if network == "instagram":
         return instagram_post_kind(upload_video=upload_video, mode=mode)
-    if network == "tiktok" and not upload_video and mode != "video":
-        return "carousel"
+    if network == "tiktok":
+        return "video" if upload_video or mode == "video" else "carousel"
     return None
+
+
+def post_kind_slot_flags(post_kind: str | None) -> tuple[bool, str | None]:
+    """post_kind из спавна/CLI → (upload_video, mode) для выбора слота и колонки."""
+    if post_kind in VIDEO_POST_KINDS:
+        return True, "video"
+    if post_kind == "carousel":
+        return False, "carousel"
+    return False, None
 
 
 def notion_url_property(url: str) -> dict[str, Any]:
@@ -1078,23 +1095,35 @@ def shift_schedule(scheduled_time: str, hours: float) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
+# Сети с двумя форматами: карусель и видео идут отдельными публикациями.
+# (секция конфига, ключ задержки видео) — задержка в часах после карусели.
+DUAL_FORMAT_DELAY_KEYS: dict[str, tuple[str, str]] = {
+    "instagram": ("instagram", "reel_delay_hours"),
+    "tiktok": ("tiktok", "video_delay_hours"),
+}
+
+
 def platform_jobs(
     platform: str, scheduled_time: str, config: dict[str, Any], mode: str | None
 ) -> list[tuple[str | None, str]]:
     """Список публикаций (mode, scheduled_time) для платформы.
 
-    Instagram в auto-режиме получает ДВА поста: карусель в назначенное время
-    и рил через instagram.reel_delay_hours (по умолчанию 4 ч) — Metricool
-    не может выложить их одним постом, а вместе в один момент их постить
-    не стоит (алгоритм IG режет охват одновременных публикаций).
+    Instagram и TikTok в auto-режиме получают ДВА поста: карусель в назначенное
+    время и видео с задержкой. Обе сети умеют и фото-карусель, и видео, но одним
+    постом их не выложить, а публиковать одновременно не стоит — алгоритм режет
+    охват одновременных публикаций. У каждого слота своя колонка post_url_*.
     """
-    if network_for(platform) == "instagram" and mode is None:
-        delay_hours = float((config.get("instagram") or {}).get("reel_delay_hours", 4))
-        return [
-            ("carousel", scheduled_time),
-            ("video", shift_schedule(scheduled_time, delay_hours)),
-        ]
-    return [(mode, scheduled_time)]
+    if mode is not None:
+        return [(mode, scheduled_time)]
+    delay_keys = DUAL_FORMAT_DELAY_KEYS.get(network_for(platform))
+    if not delay_keys:
+        return [(mode, scheduled_time)]
+    section, key = delay_keys
+    delay_hours = float((config.get(section) or {}).get(key, 4))
+    return [
+        ("carousel", scheduled_time),
+        ("video", shift_schedule(scheduled_time, delay_hours)),
+    ]
 
 
 def default_schedule_time(minutes_ahead: int = 30) -> str:
@@ -1123,7 +1152,8 @@ def spawn_deferred_post_url_sync(
     *,
     post_kind: str | None = None,
 ) -> dict[str, Any]:
-    delay = int(config.get("metricool", {}).get("url_sync_delay_minutes", 5))
+    backend_section = "postmypost" if postmypost_enabled(config) else "metricool"
+    delay = int((config.get(backend_section) or {}).get("url_sync_delay_minutes", 5))
     script = package_root() / "scripts" / "deferred_post_url_sync.py"
     log_dir = package_root() / "data" / "deferred_sync"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -1184,8 +1214,7 @@ def spawn_deferred_postmypost_funnel(
     except ImportError:
         return None
 
-    upload_video = post_kind == "reel"
-    mode = "video" if post_kind == "reel" else "carousel" if post_kind == "carousel" else None
+    upload_video, mode = post_kind_slot_flags(post_kind)
     if not should_run_postmypost_automation(
         platform, config, upload_video=upload_video, mode=mode
     ):

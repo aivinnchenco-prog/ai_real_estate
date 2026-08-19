@@ -47,8 +47,14 @@ from pipeline_config import apply_env_overrides  # noqa: E402
 
 
 def load_dotenv() -> None:
-    # Корень монорепы (.env с ERROR_BOT_TOKEN и т.п.) + локальные .env агента.
-    for p in (ROOT / ".env.real-estate", ROOT / ".env", ROOT.parents[2] / ".env"):
+    # Production env first (Python parser — do not bash-source).
+    candidates = [
+        Path(os.getenv("OPENHOME_ENV_FILE") or "/opt/openhome/.env"),
+        ROOT / ".env.real-estate",
+        ROOT / ".env",
+        ROOT.parents[2] / ".env",
+    ]
+    for p in candidates:
         if not p.exists():
             continue
         for line in p.read_text(encoding="utf-8").splitlines():

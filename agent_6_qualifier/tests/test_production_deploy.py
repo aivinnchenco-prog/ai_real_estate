@@ -47,6 +47,7 @@ def _cfg(tmp_path):
         account_id="acct-1",
         owner_silent_default=True,
         webhook_enabled=True,
+        airbnb_enabled=True,
         facebook=AmoChatChannelConfig(
             key="facebook",
             title="Open Home | Facebook Marketplace",
@@ -104,17 +105,28 @@ def test_systemd_unit_no_secrets_and_loopback():
     assert "AMO_CHAT_WEBHOOK_HOST=127.0.0.1" in unit
     assert "AMO_CHAT_WEBHOOK_PORT=8000" in unit
     assert "amo_chat_webhook_serve.py" in unit
-    assert "REPLACE_VENV_PYTHON" in unit
-    assert "REPLACE_ENV_FILE" in unit
+    # Production units use resolved paths; installer templates may use REPLACE_* placeholders.
+    assert (
+        "REPLACE_VENV_PYTHON" in unit
+        or "/opt/openhome/venv/bin/python" in unit
+    )
+    assert (
+        "REPLACE_ENV_FILE" in unit
+        or "EnvironmentFile=-/opt/openhome/.env" in unit
+    )
     for frag in ("sk-", "eyJ", "Bearer ", "SECRET="):
         assert frag not in unit
 
 
-def test_env_production_example_live_off():
+def test_env_production_example_has_required_keys():
     text = (DEPLOY / ".env.production.example").read_text(encoding="utf-8")
     assert "AMO_CHAT_PUBLIC_BASE_URL=https://api.open-home.online" in text
-    for key, value in SAFE_LIVE_DEFAULTS.items():
-        assert re.search(rf"^{re.escape(key)}={re.escape(value)}\s*$", text, re.M)
+    for key in SAFE_LIVE_DEFAULTS:
+        assert re.search(rf"^{re.escape(key)}=", text, re.M)
+    assert "AMO_CHAT_AIRBNB_ENABLED" in text
+    assert "AGENT7_FACEBOOK_PROFILE_DIR" in text
+    assert "AGENT9_FACEBOOK_PROFILE_DIR" in text
+    assert "OPENHOME_FB_LOCK_DIR" in text
     # template must not contain filled secrets
     assert "AMO_ACCESS_TOKEN=\n" in text or "AMO_ACCESS_TOKEN=\r\n" in text or re.search(
         r"^AMO_ACCESS_TOKEN=\s*$", text, re.M

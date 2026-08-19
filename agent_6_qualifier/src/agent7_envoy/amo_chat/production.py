@@ -26,6 +26,7 @@ SAFE_LIVE_DEFAULTS = {
     "AMO_CHAT_WEBHOOK_ENABLED": "false",
     "AMO_CHAT_MIRROR_LIVE": "false",
     "AMO_CHAT_CONNECT_LIVE": "false",
+    "AMO_CHAT_AIRBNB_ENABLED": "false",
 }
 
 

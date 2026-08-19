@@ -1,0 +1,21 @@
+[Unit]
+Description=Open Home publisher: replace leftover PostMyPost planner links with live permalinks (one-shot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app/agent_4_publisher
+Environment=PATH=/opt/openhome/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HOME=/opt/openhome
+EnvironmentFile=-/opt/openhome/.env
+ExecStart=/opt/openhome/venv/bin/python3 scripts/backfill_planner_urls.py --apply
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openhome-planner-urls
+
+[Install]
+WantedBy=multi-user.target

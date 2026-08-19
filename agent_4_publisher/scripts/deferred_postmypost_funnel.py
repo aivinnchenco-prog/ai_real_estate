@@ -25,7 +25,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Deferred PostMyPost funnel setup")
     parser.add_argument("--page-id", required=True)
     parser.add_argument("--platform", default="instagram")
-    parser.add_argument("--post-kind", choices=["carousel", "reel"])
+    parser.add_argument("--post-kind", choices=["carousel", "reel", "video"])
     parser.add_argument("--scheduled-time")
     parser.add_argument(
         "--delay-minutes",

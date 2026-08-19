@@ -14,6 +14,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+
+def _load_dotenv() -> None:
+    """Python parser only — never bash-source production .env."""
+    candidates = [
+        Path(os.getenv("OPENHOME_ENV_FILE") or "/opt/openhome/.env"),
+        ROOT / ".env",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            text = line.strip()
+            if not text or text.startswith("#") or "=" not in text:
+                continue
+            key, _, value = text.partition("=")
+            os.environ.setdefault(key.strip(), value.strip().strip("'").strip('"'))
+
+
+_load_dotenv()
+
 from agent6_qualifier.amo import AmoClient  # noqa: E402
 from agent6_qualifier.amo_task_service import AmoTaskService  # noqa: E402
 from agent6_qualifier.amo_tasks_config import amo_tasks_enabled, parse_task_key, task_prefix  # noqa: E402

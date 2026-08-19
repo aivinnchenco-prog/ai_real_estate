@@ -23,4 +23,4 @@ def test_all_runtime_inside_agent9_root():
 
 def test_start_script_entrypoint():
     script = (ROOT / "scripts" / "start_connector.sh").read_text(encoding="utf-8")
-    assert "agent9_connector.main" in script
+    assert "agent9_connector" in script

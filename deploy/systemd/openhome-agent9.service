@@ -1,0 +1,25 @@
+[Unit]
+Description=Open Home Agent 9 Connector (Facebook owner outreach)
+After=network-online.target openhome-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app/Агент 9
+Environment=PYTHONUNBUFFERED=1
+Environment=HOME=/opt/openhome
+Environment=PATH=/opt/openhome/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONPATH=/opt/openhome/app:/opt/openhome/app/Агент 9/src
+EnvironmentFile=-/opt/openhome/.env
+ExecStart=/opt/openhome/venv/bin/python3 -m agent9_connector
+Restart=on-failure
+RestartSec=120
+TimeoutStopSec=120
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openhome-agent9
+
+[Install]
+WantedBy=multi-user.target

@@ -37,6 +37,7 @@ def _cfg(tmp_path, *, fb_scope="", ab_scope="", secret="sec-fb", secret_ab="sec-
         account_id="acct-1",
         owner_silent_default=True,
         webhook_enabled=True,
+        airbnb_enabled=True,
         facebook=AmoChatChannelConfig(
             key="facebook",
             title="Open Home | Facebook Marketplace",

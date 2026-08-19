@@ -146,3 +146,54 @@ def apply_verdict_to_session(session: Session, verdict: OwnerVerdict) -> None:
         session.chosen.busy_until = verdict.busy_until
     if session.chosen and verdict.status == "free":
         session.chosen.availability = Availability.FREE
+
+
+def apply_verdict_to_pending(session: Session, object_id: str, verdict: OwnerVerdict) -> bool:
+    """Apply owner verdict to a background pending request without touching active search."""
+    from agent6_qualifier.search_context import apply_pending_verdict, find_pending_owner_request
+
+    item = find_pending_owner_request(session, object_id)
+    if item is None:
+        return False
+    apply_pending_verdict(session, object_id, verdict.status)
+    chosen = item.get("chosen") or {}
+    if chosen and verdict.status == "busy" and verdict.busy_until:
+        chosen["availability"] = Availability.BUSY.value
+        chosen["busy_until"] = verdict.busy_until.isoformat()
+    return True
+
+
+def build_client_message_for_object(
+    verdict: OwnerVerdict,
+    object_id: str,
+    check_in: date | None = None,
+    check_out: date | None = None,
+) -> str:
+    """Client message for a specific object (active or background request)."""
+    if verdict.status == "free":
+        dr = ""
+        if check_in and check_out:
+            dr = f"{check_in.strftime('%d.%m')}–{check_out.strftime('%d.%m.%Y')}"
+        elif check_in:
+            dr = check_in.strftime("%d.%m.%Y")
+        return client_owner_confirmed(object_id, dr)
+    if verdict.status == "conditions_changed":
+        note = verdict.conditions_note
+        if verdict.new_price_month:
+            note = (note + " " if note else "") + (
+                f"Цена: {verdict.new_price_month:,.0f} THB/мес".replace(",", " ")
+            )
+        return client_owner_conditions(object_id, note or "уточните детали у менеджера")
+    if verdict.busy_until:
+        from datetime import timedelta
+
+        free_from = verdict.busy_until + timedelta(days=1)
+        return client_object_busy(
+            object_id,
+            verdict.busy_until.strftime("%d.%m.%Y"),
+            free_from.strftime("%d.%m.%Y"),
+        )
+    return (
+        f"К сожалению, владелец сообщил, что ваш вариант {object_id} занят "
+        "на ваши даты. Подобрать похожие варианты?"
+    )

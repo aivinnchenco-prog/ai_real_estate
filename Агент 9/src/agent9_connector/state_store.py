@@ -66,11 +66,16 @@ class StateStore:
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(self.path)
 
+    def _from_raw(self, raw: dict) -> ConversationState:
+        allowed = ConversationState.__dataclass_fields__
+        filtered = {k: v for k, v in raw.items() if k in allowed}
+        return ConversationState(**filtered)
+
     def get(self, object_id: str) -> ConversationState | None:
         raw = self._read_conversations().get(object_id)
         if not raw:
             return None
-        return ConversationState(**raw)
+        return self._from_raw(raw)
 
     def save(self, state: ConversationState) -> None:
         with self._lock:
@@ -86,7 +91,7 @@ class StateStore:
         active.add(BusinessState.CONTACT_RECEIVED.value)
         active.add(BusinessState.ROLE_ASKED.value)
         return [
-            ConversationState(**v) for v in self._read_conversations().values()
+            self._from_raw(v) for v in self._read_conversations().values()
             if v.get("state") in active
         ]
 

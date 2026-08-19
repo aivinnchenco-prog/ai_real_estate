@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,9 @@ def package_root() -> Path:
 
 
 def state_path() -> Path:
+    override = (os.getenv("PUBLISHER_PMP_STATE_PATH") or "").strip()
+    if override:
+        return Path(override).expanduser()
     return package_root() / "data" / "postmypost_publications.json"
 
 
@@ -33,9 +37,10 @@ def postmypost_slot_id(
         kind = post_kind or instagram_post_kind(upload_video=upload_video, mode=None)
         return f"instagram:{kind}"
     if network == "tiktok":
-        if upload_video or post_kind == "video":
-            return "tiktok:video"
-        return "tiktok:carousel"
+        # Как и колонка post_url_*: карусель только по явному признаку.
+        if post_kind == "carousel" and not upload_video:
+            return "tiktok:carousel"
+        return "tiktok:video"
     if network == "youtube":
         return f"{network}:video"
     return f"{network}:post"

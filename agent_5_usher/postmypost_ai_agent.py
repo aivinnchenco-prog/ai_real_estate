@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -46,7 +47,8 @@ _STATE_FILE = Path(__file__).resolve().parent / "data" / "postmypost_ai_agent_st
 
 
 def _state_path() -> Path:
-    path = _STATE_FILE
+    override = (os.getenv("AGENT5_STATE_PATH") or "").strip()
+    path = Path(override).expanduser() if override else _STATE_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 

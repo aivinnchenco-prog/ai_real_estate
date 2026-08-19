@@ -111,6 +111,15 @@ async def process_client_message(
         playbook_hints = ""
 
     turn = handle_message(session, text, update)
+    if turn.silent:
+        session.history.append({"role": "user", "text": text})
+        store.save(session)
+        print(f"[out] {chat_id}: (silent — human-owned)")
+        return
+
+    if turn.template_key:
+        session.last_outbound_template_key = turn.template_key
+
     if turn.skip_polish:
         reply = turn.reply_draft
     else:
@@ -236,6 +245,16 @@ async def process_client_message(
         except Exception as e:
             notify_error("amo.stage", str(e), "бронь подтверждена")
     if session.handoff_to_human or turn.handoff_to_human:
+        # Structured summary so the manager does not have to read the chat.
+        # Added alongside existing notes, never replacing them.
+        try:
+            from agent6_qualifier.handoff_note import post_handoff_note
+
+            post_handoff_note(
+                amo, session, last_client_message=text, notify_error=notify_error,
+            )
+        except Exception as e:
+            notify_error("amo.handoff_note", str(e), "structured handoff note")
         if tasks is not None:
             tasks.on_need_human(session, text, notify_fn=notify_manager, sender=sender)
         else:
@@ -276,3 +295,45 @@ async def process_client_message(
 
         create_task(_run_outreach())
     store.save(session)
+
+
+@dataclass
+class ClientHandleResult:
+    turn: Turn
+    reply: str
+    silent: bool
+
+
+def process_client_message_sync(
+    session: Session,
+    message: str,
+    qualifier: Any,
+    *,
+    polish: bool = True,
+) -> ClientHandleResult:
+    """Sync qualifier pipeline for tests and WA/TG parity checks."""
+    from . import brain
+    from .context import build_knowledge, format_history
+
+    try:
+        update = brain.extract_lead_update(
+            message,
+            session.lead,
+            context=build_knowledge(session),
+            history=format_history(session.history),
+        )
+    except Exception:
+        update = {}
+
+    turn = qualifier.handle_message(session, message, update)
+    if turn.silent:
+        return ClientHandleResult(turn=turn, reply="", silent=True)
+
+    if turn.template_key:
+        session.last_outbound_template_key = turn.template_key
+
+    reply = turn.reply_draft
+    if polish and not turn.skip_polish:
+        reply = brain.polish_reply(reply, session.language, session.lead.name)
+
+    return ClientHandleResult(turn=turn, reply=reply, silent=False)

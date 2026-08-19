@@ -51,11 +51,29 @@ BLOCKED_URL_PARTS = (
     ".webp",
 )
 
+# TikTok отдаёт PostMyPost только publish_id (v_pub_url~v2-…) и не отдаёт
+# ни video_id, ни handle. Такая ссылка не открывается, permalink'ом не является.
+TIKTOK_UNRESOLVED_MARKERS = ("v_pub_url", "/@/")
+
+# TikTok различает форматы в самом permalink: видео /@handle/video/<id>,
+# фото-карусель /@handle/photo/<id>. Слот и колонка Notion должны совпадать
+# с формой ссылки, иначе видео уедет в колонку карусели и наоборот.
+TIKTOK_SEGMENT_BY_MODE = {"carousel": "/photo/", "video": "/video/"}
+
 
 def is_postmypost_planner_url(url: str | None) -> bool:
     if not url:
         return False
     return bool(POSTMYPOST_PLANNER_RE.match(url.strip()))
+
+
+def is_unresolved_tiktok_url(url: str | None) -> bool:
+    if not url:
+        return False
+    lowered = url.lower()
+    if "tiktok.com" not in lowered:
+        return False
+    return any(marker in lowered for marker in TIKTOK_UNRESOLVED_MARKERS)
 
 
 def _canonical_host(host: str) -> str:
@@ -69,8 +87,20 @@ def _canonical_host(host: str) -> str:
     return host
 
 
-def is_valid_social_post_url(url: str, network: str) -> bool:
-    """True when url is a final social permalink for the given network."""
+def tiktok_url_matches_mode(url: str | None, mode: str | None) -> bool:
+    """Форма TikTok-ссылки соответствует слоту: /video/ для видео, /photo/ для карусели."""
+    segment = TIKTOK_SEGMENT_BY_MODE.get(mode or "")
+    if not segment:
+        return True
+    return segment in (url or "").lower()
+
+
+def is_valid_social_post_url(url: str, network: str, *, mode: str | None = None) -> bool:
+    """True when url is a final social permalink for the given network.
+
+    mode ("carousel"/"video") сужает проверку до формата слота там, где сеть
+    кодирует формат в permalink (TikTok).
+    """
     if not url or not url.startswith("http"):
         return False
     if is_postmypost_planner_url(url):
@@ -87,6 +117,12 @@ def is_valid_social_post_url(url: str, network: str) -> bool:
     if network == "instagram" and "/explore/locations/" in lowered:
         return False
 
+    if network == "tiktok":
+        if is_unresolved_tiktok_url(url):
+            return False
+        if not tiktok_url_matches_mode(url, mode):
+            return False
+
     if network == "facebook":
         if FACEBOOK_NUMERIC_POST_RE.match(url):
             return True
@@ -99,6 +135,8 @@ def decide_notion_url_update(
     current_url: str | None,
     new_url: str | None,
     network: str,
+    *,
+    mode: str | None = None,
 ) -> tuple[bool, str | None, str]:
     """
     Returns (should_update, url_to_write, reason).
@@ -106,7 +144,7 @@ def decide_notion_url_update(
     """
     if not new_url:
         return False, None, "not_ready"
-    if not is_valid_social_post_url(new_url, network):
+    if not is_valid_social_post_url(new_url, network, mode=mode):
         return False, None, "invalid_new"
 
     current = (current_url or "").strip()
@@ -116,6 +154,6 @@ def decide_notion_url_update(
         return True, new_url, "replace_planner"
     if current.rstrip("/") == new_url.rstrip("/"):
         return False, None, "noop_same"
-    if is_valid_social_post_url(current, network):
+    if is_valid_social_post_url(current, network, mode=mode):
         return False, None, "conflict"
     return True, new_url, "write_new"

@@ -10,8 +10,12 @@ from .qualifier import Session
 
 def dialog_stage(session: Session) -> str:
     lead = session.lead
+    if session.human_handoff_active or session.handoff_to_human:
+        return "диалог у менеджера (бот молчит до TTL или нового поиска)"
     if session.awaiting_owner:
-        return "ожидание ответа владельца"
+        return "ожидание ответа владельца (активный объект)"
+    if session.pending_owner_requests:
+        return "есть фоновые запросы владельцу по прошлым объектам"
     if session.owner_verdict:
         if session.handoff_to_human:
             return "бронь подтверждена, ждём менеджера для просмотра"
@@ -86,24 +90,37 @@ def build_knowledge(session: Session) -> str:
         flags.append("клиент согласен на бронь")
     if session.handoff_to_human:
         flags.append("передано менеджеру")
+    if session.human_handoff_active:
+        flags.append("менеджер в диалоге")
     if session.awaiting_owner:
-        flags.append("ждём владельца")
+        flags.append("ждём владельца (активный)")
+    if session.pending_owner_requests:
+        flags.append(f"фоновые запросы: {len(session.pending_owner_requests)}")
     if session.links_sent:
         flags.append("ссылки на пост/фото уже отправлены")
     if flags:
         lines.append("Флаги: " + ", ".join(flags))
+    try:
+        from .active_request import active_request_summary
+
+        lines.append(f"ACTIVE REQUEST: {active_request_summary(session)}")
+    except Exception:
+        pass
     if session.history:
         last = session.history[-1]
         if last.get("role") == "assistant":
             lines.append(f"Последний вопрос агента: {last.get('text', '')[:200]}")
+    lines.append(
+        "Правила: pending owner check не блокирует новый поиск; "
+        "клиент может начать новый поиск или изменить критерии; "
+        "не повторять wait-template после явного new-search; "
+        "после human handoff не перебивать менеджера."
+    )
     return "\n".join(lines)
 
 
 def build_playbook_hints(session: Session, *, message: str = "") -> str:
-    """Compact advisory knowledge for polish/logging — NOT for extract schema.
-
-    Fail-safe: returns "" on any error. Never overrides session/policy truth.
-    """
+    """Compact advisory knowledge for polish/logging — NOT for extract schema."""
     try:
         from agent6_qualifier.knowledge.strategy import build_conversation_strategy
 

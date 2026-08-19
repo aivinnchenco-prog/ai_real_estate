@@ -69,10 +69,25 @@ class SessionStore:
             return None
         for path in self.root.glob("*.json"):
             s = self.load(path.stem)
-            if (s is not None and s.awaiting_owner and s.chosen is not None
-                    and s.chosen.owner_telegram.strip().lstrip("@").lower() == want):
+            if s is None:
+                continue
+            if self._session_awaiting_owner_for_username(s, want):
                 return s
         return None
+
+    def _session_awaiting_owner_for_username(self, s: Session, username: str) -> bool:
+        if s.awaiting_owner and s.chosen is not None:
+            owner = s.chosen.owner_telegram.strip().lstrip("@").lower()
+            if owner == username:
+                return True
+        for item in s.pending_owner_requests:
+            if not item.get("awaiting_owner"):
+                continue
+            chosen = item.get("chosen") or {}
+            owner = str(chosen.get("owner_telegram") or "").strip().lstrip("@").lower()
+            if owner == username:
+                return True
+        return False
 
     def find_awaiting_owner_by_object(self, object_id: str) -> Session | None:
         """Сессия клиента, ждущая ответа владельца по конкретному объекту.
@@ -87,18 +102,21 @@ class SessionStore:
         matches = self.list_awaiting_owner_by_object(object_id)
         return matches[0] if matches else None
 
+    def _session_awaiting_owner_for_object(self, s: Session, object_id: str) -> bool:
+        if s.awaiting_owner and s.chosen is not None and s.chosen.object_id == object_id:
+            return True
+        for item in s.pending_owner_requests:
+            if item.get("object_id") == object_id and item.get("awaiting_owner"):
+                return True
+        return False
+
     def list_awaiting_owner_by_object(self, object_id: str) -> list[Session]:
         if not object_id:
             return []
         out: list[Session] = []
         for path in self.root.glob("*.json"):
             s = self.load(path.stem)
-            if (
-                s is not None
-                and s.awaiting_owner
-                and s.chosen is not None
-                and s.chosen.object_id == object_id
-            ):
+            if s is not None and self._session_awaiting_owner_for_object(s, object_id):
                 out.append(s)
         return out
 
@@ -108,28 +126,47 @@ class SessionStore:
         return matches[0] if matches else None
 
     def list_awaiting_owner_by_whatsapp(self, phone: str) -> list[Session]:
-        want = "".join(c for c in (phone or "") if c.isdigit())
-        if want.startswith("00"):
-            want = want[2:]
-        if want.startswith("0") and len(want) >= 9:
-            want = "66" + want[1:]
+        want = self._normalize_wa_digits(phone)
         if not want:
             return []
         out: list[Session] = []
         for path in self.root.glob("*.json"):
             s = self.load(path.stem)
-            if s is None or not s.awaiting_owner or s.chosen is None:
+            if s is None:
                 continue
-            owner_wa = "".join(
-                c for c in (s.chosen.owner_whatsapp or "") if c.isdigit()
-            )
-            if owner_wa.startswith("00"):
-                owner_wa = owner_wa[2:]
-            if owner_wa.startswith("0") and len(owner_wa) >= 9:
-                owner_wa = "66" + owner_wa[1:]
-            if owner_wa and owner_wa == want:
+            phones = self._awaiting_owner_whatsapp_digits(s)
+            if want in phones:
                 out.append(s)
         return out
+
+    @staticmethod
+    def _normalize_wa_digits(phone: str) -> str:
+        digits = "".join(c for c in (phone or "") if c.isdigit())
+        if digits.startswith("00"):
+            digits = digits[2:]
+        if digits.startswith("0") and len(digits) >= 9:
+            digits = "66" + digits[1:]
+        return digits
+
+    def _awaiting_owner_whatsapp_digits(self, s: Session) -> set[str]:
+        out: set[str] = set()
+        if s.awaiting_owner and s.chosen is not None:
+            wa = self._normalize_wa_digits(s.chosen.owner_whatsapp or "")
+            if wa:
+                out.add(wa)
+        for item in s.pending_owner_requests:
+            if not item.get("awaiting_owner"):
+                continue
+            chosen = item.get("chosen") or {}
+            wa = self._normalize_wa_digits(str(chosen.get("owner_whatsapp") or ""))
+            if wa:
+                out.add(wa)
+        return out
+
+    def _session_awaiting_owner_active(self, s: Session) -> bool:
+        if s.awaiting_owner and s.chosen is not None:
+            return True
+        return any(item.get("awaiting_owner") for item in s.pending_owner_requests)
 
     def load(self, chat_id: str) -> Session | None:
         path = self._path(chat_id)

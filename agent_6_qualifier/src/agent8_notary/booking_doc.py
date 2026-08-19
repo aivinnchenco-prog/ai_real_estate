@@ -14,9 +14,11 @@ import subprocess
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from agent6_qualifier.runtime_paths import contracts_dir
+
 _QUALIFIER_ROOT = Path(__file__).resolve().parents[2]
 _SCRIPT = _QUALIFIER_ROOT / "scripts" / "generate_booking_request.js"
-_OUT_DIR = _QUALIFIER_ROOT / "data" / "contracts"
+_OUT_DIR = contracts_dir()
 
 # Сколько дней действует бронь-заявка до заключения основного договора
 RESERVATION_VALID_DAYS = 7

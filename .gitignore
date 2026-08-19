@@ -8,6 +8,7 @@
 *.session-journal
 credentials/
 **/credentials/
+agent_6_qualifier/deploy/amo_chat_fb_credentials.txt
 
 # Виртуальные окружения и зависимости
 .venv*/

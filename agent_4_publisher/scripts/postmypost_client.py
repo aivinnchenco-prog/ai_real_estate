@@ -17,6 +17,8 @@ POSTMYPOST_BASE_DEFAULT = "https://api.postmypost.io/v4.1"
 
 PUBLICATION_TYPE_POST = 1
 PUBLICATION_TYPE_REELS = 4
+
+TIKTOK_VIDEO_ONLY_SETTINGS = frozenset({"tiktok_duet", "tiktok_stitch"})
 PUBLICATION_STATUS_PENDING = 5
 PUBLICATION_STATUS_PUBLISHED = 1
 POST_STATUS_PUBLISHED = 1
@@ -322,6 +324,13 @@ def postmypost_schedule_post(
 
     network = network_for(platform)
     platform_settings = (postmypost_cfg(config).get("platform_settings") or {}).get(network) or {}
+    if network == "tiktok" and not upload_video:
+        # Дуэт и стич существуют только для видео; фото-пост их не принимает.
+        platform_settings = {
+            key: value
+            for key, value in platform_settings.items()
+            if key not in TIKTOK_VIDEO_ONLY_SETTINGS
+        }
     detail.update(platform_settings)
 
     if network == "instagram" and upload_video:

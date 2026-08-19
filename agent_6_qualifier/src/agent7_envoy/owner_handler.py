@@ -91,10 +91,18 @@ async def process_owner_message(
             )
             return True
 
+    owner_object_id = ""
+    if session.chosen:
+        owner_object_id = session.chosen.object_id
+    elif reg and reg.get("object_id"):
+        owner_object_id = reg["object_id"]
+    elif session.pending_owner_requests:
+        owner_object_id = session.pending_owner_requests[-1].get("object_id", "")
+
     mark_owner(
         tg_username=username,
         tg_chat_id=owner_chat_id,
-        object_id=session.chosen.object_id if session.chosen else "",
+        object_id=owner_object_id,
         owner_request_id=getattr(session, "owner_request_id", "") or "",
         client_session_chat_id=session.chat_id,
     )
@@ -111,20 +119,64 @@ async def process_owner_message(
     ack = templates.ack_free if verdict.status == "free" else templates.ack_conditions
     await send_owner_response(event, ack)
 
-    client_msg = build_client_message(verdict, session)
-    reply = polish_reply(client_msg, session.language, session.lead.name)
-    apply_verdict_to_session(session, verdict)
+    from agent7_envoy.owner_result import (
+        apply_verdict_to_pending,
+        build_client_message_for_object,
+    )
 
-    if session.chosen and session.chosen.page_id:
+    active_object_id = session.chosen.object_id if session.chosen else ""
+    is_background = (
+        owner_object_id
+        and active_object_id
+        and owner_object_id != active_object_id
+        and not session.awaiting_owner
+    )
+
+    if is_background:
+        from datetime import date as date_type
+
+        pending = next(
+            (
+                p for p in session.pending_owner_requests
+                if p.get("object_id") == owner_object_id
+            ),
+            None,
+        )
+        check_in = None
+        check_out = None
+        if pending:
+            if pending.get("check_in"):
+                try:
+                    check_in = date_type.fromisoformat(pending["check_in"])
+                except ValueError:
+                    pass
+            if pending.get("check_out"):
+                try:
+                    check_out = date_type.fromisoformat(pending["check_out"])
+                except ValueError:
+                    pass
+        client_msg = build_client_message_for_object(
+            verdict, owner_object_id, check_in, check_out,
+        )
+        apply_verdict_to_pending(session, owner_object_id, verdict)
+        page_id = (pending or {}).get("chosen", {}).get("page_id", "")
+    else:
+        client_msg = build_client_message(verdict, session)
+        apply_verdict_to_session(session, verdict)
+        page_id = session.chosen.page_id if session.chosen else ""
+
+    reply = polish_reply(client_msg, session.language, session.lead.name)
+
+    if page_id:
         try:
             upd = notion_availability_update(verdict)
             update_notion_availability(
-                session.chosen.page_id, upd["status"],
+                page_id, upd["status"],
                 busy_until=upd.get("busy_until"),
                 future_bookings=upd.get("future_bookings", ""),
             )
         except Exception as e:
-            notify_error("notion.availability", str(e), f"объект {session.chosen.object_id}")
+            notify_error("notion.availability", str(e), f"объект {owner_object_id}")
 
     # Telegram chat ids are numeric ints; WhatsApp sessions use wa_<digits>.
     chat_target: Any = session.chat_id

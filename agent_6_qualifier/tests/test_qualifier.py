@@ -25,8 +25,8 @@ def make_qualifier(listings=None):
     return Qualifier(find_by_id=by_id.get, fetch_all=lambda: listings)
 
 
-def test_object_id_message_confirms_and_asks_bullets():
-    """Подтверждение объекта фактами из таблицы + анкета одним сообщением."""
+def test_object_id_message_confirms_and_asks_progressive():
+    """Подтверждение объекта + один прогрессивный вопрос (не bulk анкета)."""
     q = make_qualifier()
     s = Session(chat_id="1")
     turn = q.handle_message(s, "Здравствуйте! Интересует #obj_20260708_001", {})
@@ -34,8 +34,8 @@ def test_object_id_message_confirms_and_asks_bullets():
     assert "вилла" in turn.reply_draft                   # тип из таблицы
     assert "2 спальни" in turn.reply_draft               # спальни из таблицы
     assert "Раваи" in turn.reply_draft                   # район из таблицы
-    assert "Бюджет в месяц" in turn.reply_draft          # анкета-критерии
-    assert "Дата заезда" in turn.reply_draft
+    assert "Бюджет в месяц" not in turn.reply_draft      # не bulk анкета
+    assert "заезд" in turn.reply_draft.lower()
     assert "контракт на год" in turn.reply_draft         # выезд можно не указывать
     assert "t.me" not in turn.reply_draft                # ссылки НЕ в первом сообщении
     assert "THB" not in turn.reply_draft                 # цену до дат не называем
@@ -109,7 +109,7 @@ def test_dates_missing_asks_only_dates():
     q.handle_message(s, "#20260708_001", {})
     turn = q.handle_message(s, "бюджет 60к, Раваи, 2 спальни", {
         "budget": 60000, "districts": ["Раваи"], "bedrooms": 2})
-    assert "дату заезда" in turn.reply_draft
+    assert "заезд" in turn.reply_draft.lower()
     assert "Бюджет в месяц" not in turn.reply_draft      # анкету не повторяем
     assert not turn.need_owner_check
 
@@ -282,14 +282,14 @@ def test_greeting_without_object_asks_object_or_search():
 
 
 def test_object_or_search_answer_selection():
-    """Ответ «подберите» — отправляем анкету-критерии."""
+    """Ответ «подберите» — прогрессивный вопрос, не bulk анкета."""
     q = make_qualifier()
     s = Session(chat_id="5")
     q.handle_message(s, "Добрый день", {})
     turn = q.handle_message(s, "Подберите мне, пожалуйста, варианты", {})
     assert s.wants_selection
-    assert "Бюджет в месяц" in turn.reply_draft
-    assert "Дата заезда" in turn.reply_draft
+    assert "Бюджет в месяц" not in turn.reply_draft
+    assert "заезд" in turn.reply_draft.lower()
 
 
 def test_object_or_search_answer_specific_asks_link():
@@ -323,7 +323,8 @@ def test_object_id_with_source_prefix():
     turn = q.handle_message(s, "Здравствуйте! Интересует A_20260713_003", {})
     assert s.chosen is listing
     assert "Вилла Айрбнб" in turn.reply_draft
-    assert "Бюджет в месяц" in turn.reply_draft
+    assert "заезд" in turn.reply_draft.lower()
+    assert "Бюджет в месяц" not in turn.reply_draft
 
 
 def test_facebook_prefix_object_resolves():
@@ -334,7 +335,8 @@ def test_facebook_prefix_object_resolves():
     s = Session(chat_id="fb1")
     turn = q.handle_message(s, "Интересует F_20260708_001", {})
     assert s.chosen is listing
-    assert "Бюджет в месяц" in turn.reply_draft
+    assert "заезд" in turn.reply_draft.lower()
+    assert "Бюджет в месяц" not in turn.reply_draft
 
 
 def test_utm_link_resolves_listing():
@@ -352,9 +354,10 @@ def test_no_object_goes_straight_to_matching():
     s = Session(chat_id="2")
     turn = q.handle_message(s, "Ищу виллу на месяц", {})
     assert s.wants_selection                          # «ищу» = подбор, без переспроса
-    assert "Бюджет в месяц" in turn.reply_draft       # анкета-критерии
-    turn = q.handle_message(s, "с 1 августа, Раваи, до 60к, 2 спальни", {
+    assert "Бюджет в месяц" not in turn.reply_draft   # прогрессивно, не bulk
+    assert "заезд" in turn.reply_draft.lower()
+    turn = q.handle_message(s, "с 1 августа, Раваи, до 60к, 2 спальни, двое", {
         "check_in": "2026-08-01", "budget": 60000,
-        "districts": ["Раваи"], "bedrooms": 2})
+        "districts": ["Раваи"], "bedrooms": 2, "guests": 2})
     # объект не выбран -> сразу подбор по критериям
     assert "Вилла" in turn.reply_draft

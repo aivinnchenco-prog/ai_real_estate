@@ -70,6 +70,7 @@ class TestQueue:
         from agent9_connector.main import ConnectorRuntime
         rt = ConnectorRuntime.create()
         rt.store = tmp_store
+        rt.facebook.mock_mode = True
         rt.facebook.push_inbound("t", "hello")
         rt.poll_active_conversations()
         assert tmp_store.get("F_1").state == BusinessState.MANUAL_REVIEW.value

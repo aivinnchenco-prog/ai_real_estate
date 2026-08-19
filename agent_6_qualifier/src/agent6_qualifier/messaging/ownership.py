@@ -2,10 +2,34 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from agent6_qualifier.messaging.types import CanonicalInboundMessage, ConversationOwner
+
+
+def handoff_ttl_hours() -> float:
+    return float(os.getenv("AGENT6_HUMAN_HANDOFF_TTL_HOURS", "48"))
+
+
+def _parse_iso(ts: str | None) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def human_handoff_expired(last_human_activity_at: str | None) -> bool:
+    ref = _parse_iso(last_human_activity_at)
+    if ref is None:
+        # Active handoff without anchor — stay blocked until TTL data exists.
+        return False
+    age_hours = (datetime.now(timezone.utc) - ref).total_seconds() / 3600.0
+    return age_hours >= handoff_ttl_hours()
 
 OutboundSourceClass = Literal[
     "OWN_BOT_OUTBOUND",
@@ -47,11 +71,14 @@ class ConversationOwnershipState:
     reason: str = ""
     manager_takeover: bool = False
     last_human_message_id: str | None = None
+    last_human_activity_at: str | None = None
     known_bot_outbound_ids: set[str] = field(default_factory=set)
 
     def bot_may_reply(self) -> bool:
-        if self.manager_takeover:
+        if self.manager_takeover and not human_handoff_expired(self.last_human_activity_at):
             return False
+        if self.owner == ConversationOwner.HUMAN_HANDOFF:
+            return human_handoff_expired(self.last_human_activity_at)
         return self.owner == ConversationOwner.BOT_ACTIVE
 
     def block_reason(self) -> str | None:
@@ -87,6 +114,12 @@ def apply_inbound_to_ownership(
         state.owner = ConversationOwner.HUMAN_HANDOFF
         state.reason = "outbound not from Agent 6 (explicit is_from_bot=false)"
         state.last_human_message_id = message.message_id
+        ts = (
+            message.timestamp.isoformat(timespec="seconds")
+            if message.timestamp is not None
+            else datetime.now(timezone.utc).isoformat(timespec="seconds")
+        )
+        state.last_human_activity_at = ts
         return state
 
     # UNKNOWN_EXTERNAL_OUTBOUND — do not invent HUMAN_HANDOFF automatically.
@@ -103,6 +136,7 @@ def set_manager_takeover(state: ConversationOwnershipState, *, enabled: bool = T
     if enabled:
         state.owner = ConversationOwner.HUMAN_HANDOFF
         state.reason = "explicit manager takeover"
+        state.last_human_activity_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return state
 
 

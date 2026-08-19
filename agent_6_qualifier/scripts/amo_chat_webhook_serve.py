@@ -51,9 +51,23 @@ def main() -> int:
         PRODUCTION_INTERNAL_PORT,
     )
 
+    from agent7_envoy.amo_chat.source_send import (
+        build_facebook_send_to_source,
+        manager_reply_live,
+    )
+
     cfg = load_amo_chat_config()
-    # Always dry_run at the HTTP edge — live source send needs Agent7 gates + transport.
-    handler = AmoChatWebhookHandler(cfg, dry_run=True)
+    reply_live = manager_reply_live()
+    send_to_source = (
+        build_facebook_send_to_source(dry_run=not reply_live)
+        if cfg.facebook.configured
+        else None
+    )
+    handler = AmoChatWebhookHandler(
+        cfg,
+        dry_run=not reply_live,
+        send_to_source=send_to_source,
+    )
 
     # Production bind: 127.0.0.1:8000 behind NGINX. Local default remains :8766.
     prod = (os.getenv("OPENHOME_API_PRODUCTION") or "").strip().lower() in {
@@ -78,7 +92,8 @@ def main() -> int:
         )
 
     httpd = HTTPServer((host, port), build_request_handler(handler))
-    print(f"openhome api on http://{host}:{port} (dry_run source sends)")
+    mode = "manager_reply_live" if reply_live else "manager_reply_dry_run"
+    print(f"openhome api on http://{host}:{port} ({mode})")
     print(f"health: http://{host}:{port}/health")
     print(f"amo-chat: http://{host}:{port}/webhooks/amo-chat/:scope_id")
     httpd.serve_forever()

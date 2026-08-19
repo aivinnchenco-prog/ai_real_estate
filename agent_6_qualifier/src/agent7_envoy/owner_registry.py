@@ -11,7 +11,9 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-_PATH = Path(__file__).resolve().parents[2] / "data" / "owners.json"
+from agent6_qualifier.runtime_paths import owners_path
+
+_PATH = owners_path()
 
 
 def _load() -> dict:

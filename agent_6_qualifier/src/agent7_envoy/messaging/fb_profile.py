@@ -1,14 +1,12 @@
-"""Resolve Facebook browser profile for Agent7 owner outreach.
-
-Temporary policy (until a dedicated outreach profile exists):
-reuse the same authenticated Playwright profile as Agent1 FB Marketplace parser.
-"""
+"""Resolve Facebook browser profile for Agent7 owner outreach."""
 
 from __future__ import annotations
 
 import os
 import sqlite3
 from pathlib import Path
+
+DEFAULT_AGENT7_FB_PROFILE_DIR = "/opt/openhome/runtime/browser_profiles/facebook_agent7"
 
 
 def repo_root() -> Path:
@@ -21,7 +19,7 @@ def fb_parser_root() -> Path:
 
 
 def default_parser_fb_profile_dir() -> Path:
-    """Same default as agent1b.fb_session.get_profile_path() when FB_BROWSER_PROFILE=.fb_profile."""
+    """Legacy parser profile (Agent 1). Not used for Agent 7 unless explicitly overridden."""
     raw = (os.getenv("FB_BROWSER_PROFILE") or ".fb_profile").strip() or ".fb_profile"
     path = Path(raw).expanduser()
     if not path.is_absolute():
@@ -34,7 +32,7 @@ def resolve_agent7_facebook_profile_dir() -> Path:
 
     Priority:
     1. AGENT7_FACEBOOK_PROFILE_DIR (explicit override)
-    2. Shared parser profile (FB_BROWSER_PROFILE / agent_1_parser/fb_parser/.fb_profile)
+    2. DEFAULT_AGENT7_FB_PROFILE_DIR (isolated owner-outreach profile)
     """
     override = (os.getenv("AGENT7_FACEBOOK_PROFILE_DIR") or "").strip()
     if override:
@@ -42,7 +40,7 @@ def resolve_agent7_facebook_profile_dir() -> Path:
         if not path.is_absolute():
             path = repo_root() / path
         return path.resolve()
-    return default_parser_fb_profile_dir()
+    return Path(DEFAULT_AGENT7_FB_PROFILE_DIR).expanduser().resolve()
 
 
 def facebook_profile_has_session(profile_path: Path) -> bool:

@@ -144,7 +144,7 @@
     "aspect_ratio": "9:16",
     "duration_seconds": 14,
     "batch_duration_seconds": 14,
-    "resolution": "480p",
+    "resolution": "720p",
     "mode": "std",
     "genre": "auto",
     "cli_wait_timeout": "20m",

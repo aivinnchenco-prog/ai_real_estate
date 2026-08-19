@@ -1,0 +1,1930 @@
+# Agent6 qualification eval scenarios — see QUALIFICATION_POLICY_V2.md
+version: 1
+scenarios:
+  # --- FIRST CONTACT (6) ---
+  - id: FC01
+    tier: baseline
+    category: FIRST_CONTACT
+    session: { chat_id: fc01 }
+    steps:
+      - message: "Здравствуйте"
+        update: {}
+        assert:
+          reply_contains: ["конкретный объект", "подобрать"]
+
+  - id: FC02
+    tier: baseline
+    category: FIRST_CONTACT
+    session: { chat_id: fc02, wants_selection: true }
+    steps:
+      - message: "Ищу виллу на Пхукете"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["конкретный объект или подбор"]
+
+  - id: FC03
+    tier: baseline
+    category: FIRST_CONTACT
+    session: { chat_id: fc03 }
+    steps:
+      - message: "Подберите варианты под мой запрос"
+        update: {}
+        assert:
+          reply_contains: ["заезд"]
+          forbidden_reply_contains: ["• Бюджет", "• Район"]
+
+  - id: FC04
+    tier: baseline
+    category: FIRST_CONTACT
+    session: { chat_id: fc04 }
+    steps:
+      - message: "Какие есть варианты?"
+        update: {}
+        assert:
+          wants_selection: true
+
+  - id: FC05
+    tier: baseline
+    category: FIRST_CONTACT
+    session: { chat_id: fc05 }
+    steps:
+      - message: "#F_20260809_001"
+        update: {}
+        assert:
+          chosen_object_id: F_20260809_001
+          reply_contains: ["вилла"]
+
+  - id: FC06
+    tier: baseline
+    category: FIRST_CONTACT
+    session: { chat_id: fc06 }
+    steps:
+      - message: "Интересует объект F_20260809_999"
+        update: {}
+        assert:
+          reply_contains: ["Не нашёл"]
+
+  # --- SPECIFIC OBJECT (6) ---
+  - id: SO01
+    tier: baseline
+    category: SPECIFIC_OBJECT
+    session: { chat_id: so01, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "с 1 августа, нас двое"
+        update: { check_in: "2026-08-01", guests: 2 }
+        assert:
+          reply_contains: ["THB"]
+
+  - id: SO02
+    tier: baseline
+    category: SPECIFIC_OBJECT
+    session: { chat_id: so02, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          reply_contains: ["t.me"]
+
+  - id: SO03
+    tier: baseline
+    category: SPECIFIC_OBJECT
+    session: { chat_id: so03 }
+    steps:
+      - message: "#F_20260809_001"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["THB"]
+
+  - id: SO04
+    tier: baseline
+    category: SPECIFIC_OBJECT
+    session: { chat_id: so04, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2, budget: 55000, districts: [Раваи] }, links_sent: true, price_quoted: true }
+    steps:
+      - message: "да"
+        update: { wants_alternatives: true }
+        assert:
+          need_owner_check: true
+
+  - id: SO05
+    tier: baseline
+    category: SPECIFIC_OBJECT
+    session: { chat_id: so05, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 }, only_chosen: true, links_sent: true, price_quoted: true }
+    steps:
+      - message: "только этот"
+        update: {}
+        assert:
+          need_owner_check: true
+
+  - id: SO06
+    tier: baseline
+    category: SPECIFIC_OBJECT
+    session: { chat_id: so06, chosen: BUSY, asked_core: true, lead: { preferred_object_id: F_20260809_003, check_in: "2026-08-01", guests: 2 }, price_quoted: true }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          reply_contains: ["занят"]
+
+  # --- OPEN SEARCH (5) ---
+  - id: OS01
+    tier: baseline
+    category: OPEN_SEARCH
+    session: { chat_id: os01, wants_selection: true, asked_core: true, lead: { check_in: "2026-09-01", guests: 2, budget: 60000, districts: [Раваи] } }
+    steps:
+      - message: "покажите"
+        update: {}
+        assert:
+          reply_contains: ["предложить"]
+
+  - id: OS02
+    tier: baseline
+    category: OPEN_SEARCH
+    session: { chat_id: os02, wants_selection: true }
+    steps:
+      - message: "ищу кондо"
+        update: {}
+        assert:
+          reply_contains: ["заезд"]
+          forbidden_reply_contains: ["• Бюджет", "• Район"]
+
+  - id: OS03
+    tier: baseline
+    category: OPEN_SEARCH
+    session: { chat_id: os03, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 100000 } }
+    steps:
+      - message: "давайте"
+        update: {}
+        assert:
+          reply_contains: ["предложить"]
+
+  - id: OS04
+    tier: baseline
+    category: OPEN_SEARCH
+    session: { chat_id: os04, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 1000 } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          reply_contains: ["погрешность"]
+
+  - id: OS05
+    tier: baseline
+    category: OPEN_SEARCH
+    session: { chat_id: os05, wants_selection: true, asked_object_source: true }
+    steps:
+      - message: "подбор по запросу"
+        update: {}
+        assert:
+          wants_selection: true
+
+  # --- ALL INFO ONE MESSAGE (4) ---
+  - id: AI01
+    tier: baseline
+    category: ALL_INFO_IN_ONE_MESSAGE
+    session: { chat_id: ai01, chosen: CHOSEN }
+    steps:
+      - message: "F_20260809_001 с 1 по 10 августа двое бюджет 55к Раваи"
+        update: { check_in: "2026-08-01", check_out: "2026-08-10", guests: 2, budget: 55000, districts: [Раваи] }
+        assert:
+          lead: { guests: 2, budget: 55000 }
+
+  - id: AI02
+    tier: baseline
+    category: ALL_INFO_IN_ONE_MESSAGE
+    session: { chat_id: ai02, wants_selection: true }
+    steps:
+      - message: "Нужна вилла 3 спальни Банг Тао с сентября двое до 200000"
+        update: { bedrooms: 3, districts: [Банг Тао], check_in: "2026-09-01", guests: 2, budget: 200000 }
+        assert:
+          lead: { bedrooms: 3, guests: 2 }
+
+  - id: AI03
+    tier: post_merge
+    category: ALL_INFO_IN_ONE_MESSAGE
+    session:
+      chat_id: ai03
+      awaiting_owner: true
+      chosen: CHOSEN
+      asked_core: true
+      lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 }
+    steps:
+      - message: "Нужен дом в Банг Тао, 4 спальни, до 200 000 ฿"
+        update: { districts: [Банг Тао], bedrooms: 4, budget: 200000 }
+        assert:
+          forbidden_reply_contains: ["Бюджет в месяц"]
+          lead: { bedrooms: 4, budget: 200000 }
+
+  - id: AI04
+    tier: baseline
+    category: ALL_INFO_IN_ONE_MESSAGE
+    session: { chat_id: ai04, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "заеду 14 июля нас двое"
+        update: { check_in: "2026-07-14", guests: 2 }
+        assert:
+          forbidden_reply_contains: ["выезд"]
+
+  # --- PROGRESSIVE QUALIFICATION (6) ---
+  - id: PQ01
+    tier: baseline
+    category: PROGRESSIVE_QUALIFICATION
+    session: { chat_id: pq01, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "1 августа"
+        update: { check_in: "2026-08-01" }
+        assert:
+          reply_contains: ["THB"]
+
+  - id: PQ02
+    tier: baseline
+    category: PROGRESSIVE_QUALIFICATION
+    session: { chat_id: pq02, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "когда заезд?"
+        update: {}
+        assert:
+          reply_contains: ["заезд"]
+
+  - id: PQ03
+    tier: v2_target
+    category: PROGRESSIVE_QUALIFICATION
+    session: { chat_id: pq03, wants_selection: true }
+    steps:
+      - message: "ищу виллу"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["Район", "Бюджет", "спален"]
+
+  - id: PQ04
+    tier: v2_target
+    category: PROGRESSIVE_QUALIFICATION
+    session: { chat_id: pq04, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "интересует этот объект"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["Бюджет в месяц", "Район"]
+
+  - id: PQ05
+    tier: baseline
+    category: PROGRESSIVE_QUALIFICATION
+    session: { chat_id: pq05, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01" }, price_quoted: true, links_sent: true }
+    steps:
+      - message: "двое"
+        update: { guests: 2 }
+        assert:
+          need_owner_check: true
+
+  - id: PQ06
+    tier: baseline
+    category: PROGRESSIVE_QUALIFICATION
+    session: { chat_id: pq06, wants_selection: true, asked_core: true }
+    steps:
+      - message: "сентябрь двое"
+        update: { check_in: "2026-09-01", guests: 2 }
+        assert:
+          lead: { guests: 2 }
+
+  # --- NO RE-ASK (6) ---
+  - id: NR01
+    tier: baseline
+    category: NO_REASK
+    session: { chat_id: nr01, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 }, price_quoted: true }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["дату заезда"]
+
+  - id: NR02
+    tier: baseline
+    category: NO_REASK
+    session: { chat_id: nr02, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 50000, districts: [Раваи] } }
+    steps:
+      - message: "покажите варианты"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["Бюджет в месяц"]
+
+  - id: NR03
+    tier: post_merge
+    category: NO_REASK
+    session:
+      chat_id: nr03
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2, stay_months: 12 }
+      asked_core: true
+    steps:
+      - message: "на год через 5 дней"
+        update: { stay_months: 12 }
+        assert:
+          forbidden_reply_contains: ["дату заезда", "срок"]
+
+  - id: NR04
+    tier: baseline
+    category: NO_REASK
+    session: { chat_id: nr04, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2, budget: 50000 }, links_sent: true, price_quoted: true }
+    steps:
+      - message: "нет другие не нужны"
+        update: { declines_alternatives: true }
+        assert:
+          need_owner_check: true
+
+  - id: NR05
+    tier: post_merge
+    category: NO_REASK
+    session:
+      chat_id: nr05
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, guests: 4, check_in: "2026-09-01" }
+      asked_core: true
+    steps:
+      - message: "Нужен дом в Банг Тао"
+        update: { districts: [Банг Тао] }
+        assert:
+          lead_preserved: [guests, check_in]
+
+  - id: NR06
+    tier: v2_target
+    category: NO_REASK
+    session: { chat_id: nr06, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 } }
+    steps:
+      - message: "двое"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["сколько человек"]
+
+  # --- CORRECTIONS (5) ---
+  - id: CR01
+    tier: baseline
+    category: CORRECTIONS
+    session: { chat_id: cr01, wants_selection: true, asked_core: true, lead: { budget: 150000, guests: 2 } }
+    steps:
+      - message: "не 150 а 200 тысяч"
+        update: { budget: 200000 }
+        assert:
+          lead: { budget: 200000 }
+
+  - id: CR02
+    tier: baseline
+    category: CORRECTIONS
+    session: { chat_id: cr02, wants_selection: true, asked_core: true, lead: { districts: [Банг Тао], guests: 2 } }
+    steps:
+      - message: "не Банг Тао теперь Раваи"
+        update: { districts: [Раваи] }
+        assert:
+          lead: { guests: 2 }
+
+  - id: CR03
+    tier: baseline
+    category: CORRECTIONS
+    session: { chat_id: cr03, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001, guests: 2 } }
+    steps:
+      - message: "нас четыре"
+        update: { guests: 4 }
+        assert:
+          lead: { guests: 4 }
+
+  - id: CR04
+    tier: v2_target
+    category: CORRECTIONS
+    session: { chat_id: cr04, wants_selection: true, asked_core: true, lead: { budget: 100000, check_in: "2026-08-01", guests: 2, districts: [Раваи] } }
+    steps:
+      - message: "бюджет теперь 80"
+        update: { budget: 80000 }
+        assert:
+          lead: { check_in: "2026-08-01", guests: 2 }
+
+  - id: CR05
+    tier: v2_target
+    category: CORRECTIONS
+    session: { chat_id: cr05, awaiting_owner: true, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "не 150 а 200 тысяч бюджет"
+        update: { budget: 200000 }
+        assert:
+          session: { awaiting_owner: false }
+
+  # --- CONTRADICTIONS (5) ---
+  - id: CD01
+    tier: v2_target
+    category: CONTRADICTIONS
+    session: { chat_id: cd01, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", check_out: "2026-09-01" } }
+    steps:
+      - message: "на год"
+        update: { stay_months: 12 }
+        assert:
+          reply_contains: ["год"]
+
+  - id: CD02
+    tier: v2_target
+    category: CONTRADICTIONS
+    session: { chat_id: cd02, wants_selection: true, lead: { budget: 100000 } }
+    steps:
+      - message: "бюджета нет"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["100000"]
+
+  - id: CD03
+    tier: v2_target
+    category: CONTRADICTIONS
+    session: { chat_id: cd03, chosen: CHOSEN, only_chosen: true, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "хочу другой объект"
+        update: {}
+        assert:
+          session: { only_chosen: false }
+
+  - id: CD04
+    tier: v2_target
+    category: CONTRADICTIONS
+    session: { chat_id: cd04, lead: { guests: 2 } }
+    steps:
+      - message: "нас четыре"
+        update: { guests: 4 }
+        assert:
+          lead: { guests: 4 }
+
+  - id: CD05
+    tier: v2_target
+    category: CONTRADICTIONS
+    session: { chat_id: cd05, lead: { stay_months: 12 } }
+    steps:
+      - message: "выезд 1 марта"
+        update: { check_out: "2027-03-01" }
+        assert:
+          lead: { check_out: "2027-03-01" }
+
+  # --- FACEBOOK POLICY (5) ---
+  - id: FB01
+    tier: baseline
+    category: FACEBOOK_POLICY
+    session: { chat_id: fb01, chosen: FB_SHORT, asked_core: true, lead: { preferred_object_id: F_20260801_001, stay_months: 12, check_in: "2026-09-01" } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["6 месяцев"]
+
+  - id: FB02
+    tier: baseline
+    category: FACEBOOK_POLICY
+    session: { chat_id: fb02, chosen: FB_SHORT, asked_core: true, lead: { preferred_object_id: F_20260801_001, stay_months: 3, check_in: "2026-09-01" } }
+    steps:
+      - message: "3 месяца"
+        update: {}
+        assert:
+          reply_contains: ["6 месяцев"]
+
+  - id: FB03
+    tier: baseline
+    category: FACEBOOK_POLICY
+    session: { chat_id: fb03, chosen: FB_SHORT, asked_core: true, lead: { preferred_object_id: F_20260801_001, check_in: "2026-09-01", guests: 2 } }
+    steps:
+      - message: "на полгода"
+        update: { stay_months: 6 }
+        assert:
+          forbidden_reply_contains: ["6 месяцев"]
+
+  - id: FB04
+    tier: baseline
+    category: FACEBOOK_POLICY
+    session: { chat_id: fb04, chosen: FB_SHORT, asked_core: true, lead: { preferred_object_id: F_20260801_001, check_in: "2026-09-01", guests: 2 } }
+    steps:
+      - message: "год"
+        update: { stay_months: 12 }
+        assert:
+          reply_contains: ["THB"]
+
+  - id: FB05
+    tier: baseline
+    category: FACEBOOK_POLICY
+    session: { chat_id: fb05, chosen: FB_SHORT, asked_core: true, lead: { preferred_object_id: F_20260801_001, check_in: "2026-09-01", stay_months: 2 } }
+    steps:
+      - message: "2 месяца"
+        update: {}
+        assert:
+          reply_contains: ["6 месяцев"]
+
+  # --- AIRBNB (4) ---
+  - id: AB01
+    tier: baseline
+    category: AIRBNB
+    session: { chat_id: ab01, chosen: AIRBNB, asked_core: true, lead: { preferred_object_id: A_20260810_001, stay_months: 1, check_in: "2026-08-01", guests: 2 } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["6 месяцев"]
+
+  - id: AB02
+    tier: baseline
+    category: AIRBNB
+    session: { chat_id: ab02, chosen: AIRBNB, asked_core: true, lead: { preferred_object_id: A_20260810_001, check_in: "2026-08-01", guests: 2, stay_months: 12 } }
+    steps:
+      - message: "на год"
+        update: {}
+        assert:
+          reply_contains: ["THB"]
+
+  - id: AB03
+    tier: baseline
+    category: AIRBNB
+    session: { chat_id: ab03, chosen: AIRBNB, asked_core: true, lead: { preferred_object_id: A_20260810_001, check_in: "2026-08-01", check_out: "2026-08-10", guests: 2 } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          reply_contains: ["ночей"]
+
+  - id: AB04
+    tier: v2_target
+    category: AIRBNB
+    session: { chat_id: ab04, chosen: AIRBNB, lead: { preferred_object_id: A_20260810_001 } }
+    steps:
+      - message: "на Airbnb дешевле"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["неправы"]
+
+  # --- MATCHING (5) ---
+  - id: MT01
+    tier: baseline
+    category: MATCHING
+    session: { chat_id: mt01, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 55000, districts: [Раваи] } }
+    steps:
+      - message: "давайте"
+        update: {}
+        assert:
+          reply_contains: ["F_20260809"]
+
+  - id: MT02
+    tier: baseline
+    category: MATCHING
+    session: { chat_id: mt02, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 1000 } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          reply_contains: ["погрешность"]
+
+  - id: MT03
+    tier: baseline
+    category: MATCHING
+    session: { chat_id: mt03, chosen: CHOSEN, awaiting_owner: true, asked_core: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2, budget: 1000 } }
+    steps:
+      - message: "покажите другие"
+        update: { wants_alternatives: true }
+        assert:
+          forbidden_reply_contains: ["погрешность"]
+
+  - id: MT04
+    tier: baseline
+    category: MATCHING
+    session: { chat_id: mt04, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-20", guests: 2, budget: 60000, districts: [Раваи] } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          reply_contains: ["F_20260809_002"]
+
+  - id: MT05
+    tier: baseline
+    category: MATCHING
+    session: { chat_id: mt05, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 4, budget: 60000, districts: [Раваи] } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          reply_contains: ["предложить"]
+
+  # --- OBJECT REACTIONS (4) ---
+  - id: OR01
+    tier: v2_target
+    category: OBJECT_REACTIONS
+    session: { chat_id: or01, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 60000 } }
+    steps:
+      - message: "слишком далеко от моря"
+        update: {}
+        assert:
+          reply_contains: ["район"]
+
+  - id: OR02
+    tier: v2_target
+    category: OBJECT_REACTIONS
+    session: { chat_id: or02, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "слишком дорого"
+        update: {}
+        assert:
+          reply_contains: ["вариант"]
+
+  - id: OR03
+    tier: v2_target
+    category: OBJECT_REACTIONS
+    session: { chat_id: or03, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2 } }
+    steps:
+      - message: "хочу современнее"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["Бюджет в месяц"]
+
+  - id: OR04
+    tier: v2_target
+    category: OBJECT_REACTIONS
+    session: { chat_id: or04, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "этот район нравится но дом не подходит"
+        update: {}
+        assert:
+          reply_contains: ["Раваи"]
+
+  # --- ALTERNATIVES (5) ---
+  - id: AL01
+    tier: baseline
+    category: ALTERNATIVES
+    session: { chat_id: al01, chosen: CHOSEN, asked_core: true, awaiting_alt_consent: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 }, links_sent: true, price_quoted: true }
+    steps:
+      - message: "да покажите"
+        update: { wants_alternatives: true }
+        assert:
+          reply_contains: ["предложить"]
+
+  - id: AL02
+    tier: baseline
+    category: ALTERNATIVES
+    session: { chat_id: al02, chosen: CHOSEN, asked_core: true, awaiting_alt_consent: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 }, links_sent: true, price_quoted: true }
+    steps:
+      - message: "нет только этот"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["предложить"]
+
+  - id: AL03
+    tier: baseline
+    category: ALTERNATIVES
+    session: { chat_id: al03, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 }, only_chosen: true, links_sent: true, price_quoted: true }
+    steps:
+      - message: "мне нравится этот вариант"
+        update: {}
+        assert:
+          need_owner_check: true
+
+  - id: AL04
+    tier: baseline
+    category: ALTERNATIVES
+    session: { chat_id: al04, chosen: BUSY, asked_core: true, lead: { preferred_object_id: F_20260809_003, check_in: "2026-08-01", guests: 2 }, price_quoted: true }
+    steps:
+      - message: "нет не подходят даты"
+        update: {}
+        assert:
+          reply_contains: ["похож"]
+
+  - id: AL05
+    tier: baseline
+    category: ALTERNATIVES
+    session: { chat_id: al05, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 60000, districts: [Раваи] }, offered_alternatives: true }
+    steps:
+      - message: "интересен F_20260809_002"
+        update: {}
+        assert:
+          chosen_object_id: F_20260809_002
+
+  # --- OWNER PENDING (6) ---
+  - id: OP01
+    tier: baseline
+    category: OWNER_PENDING
+    session: { chat_id: op01, awaiting_owner: true, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "ну что?"
+        update: {}
+        assert:
+          reply_contains: ["владельц"]
+
+  - id: OP02
+    tier: post_merge
+    category: OWNER_PENDING
+    session:
+      chat_id: op02
+      awaiting_owner: true
+      chosen: CHOSEN
+      asked_core: true
+      links_sent: true
+      lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 }
+      last_outbound_template_key: client_waiting_owner
+    steps:
+      - message: "Мне нужен новый дом"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["уже отправил запрос владельцу"]
+          session: { awaiting_owner: false }
+          pending_owner_object: F_20260809_001
+
+  - id: OP03
+    tier: post_merge
+    category: OWNER_PENDING
+    session:
+      chat_id: op03
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001 }
+    steps:
+      - message: "Есть ответ от владельца?"
+        update: {}
+        assert:
+          reply_contains: ["уже отправил"]
+
+  - id: OP04
+    tier: post_merge
+    category: OWNER_PENDING
+    session:
+      chat_id: op04
+      awaiting_owner: true
+      chosen: CHOSEN
+      last_outbound_template_key: client_waiting_owner
+      lead: { preferred_object_id: F_20260809_001 }
+    steps:
+      - message: "ну что?"
+        update: {}
+        assert:
+          reply_contains: ["уже отправил"]
+      - message: "Мне нужен новый дом"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["уже отправил"]
+
+  - id: OP05
+    tier: baseline
+    category: OWNER_PENDING
+    session: { chat_id: op05, awaiting_owner: true, chosen: CHOSEN, owner_verdict: "", lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 }, asked_core: true, links_sent: true, price_quoted: true, only_chosen: true }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["погрешность"]
+
+  - id: OP06
+    tier: post_merge
+    category: OWNER_PENDING
+    session:
+      chat_id: op06
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, guests: 4, check_in: "2026-09-01" }
+    steps:
+      - message: "Что там по старому дому?"
+        update: {}
+        assert:
+          reply_contains: ["F_20260809_001"]
+
+  # --- OWNER RESPONSE (3) ---
+  - id: OV01
+    tier: baseline
+    category: OWNER_RESPONSE
+    session: { chat_id: ov01, chosen: CHOSEN, owner_verdict: free, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2 }, asked_core: true }
+    steps:
+      - message: "да"
+        update: {}
+        assert:
+          reply_contains: ["ФИО"]
+
+  - id: OV02
+    tier: baseline
+    category: OWNER_RESPONSE
+    session: { chat_id: ov02, chosen: CHOSEN, owner_verdict: free, booking_intent: true, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2, full_name: "Иван Иванов" } }
+    steps:
+      - message: "Россия"
+        update: { citizenship: "Россия" }
+        assert:
+          reply_contains: ["WhatsApp"]
+
+  - id: OV03
+    tier: baseline
+    category: OWNER_RESPONSE
+    session: { chat_id: ov03, chosen: CHOSEN, owner_verdict: free, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01" } }
+    steps:
+      - message: "нет не буду"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["ФИО"]
+
+  # --- NEW SEARCH (6) ---
+  - id: NS01
+    tier: post_merge
+    category: NEW_SEARCH
+    session:
+      chat_id: ns01
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001 }
+    steps:
+      - message: "Хочу подобрать новый объект"
+        update: {}
+        assert:
+          session: { awaiting_owner: false }
+          wants_selection: true
+
+  - id: NS02
+    tier: post_merge
+    category: NEW_SEARCH
+    session:
+      chat_id: ns02
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001 }
+    steps:
+      - message: "другой район"
+        update: { districts: [Банг Тао] }
+        assert:
+          forbidden_reply_contains: ["уже отправил"]
+
+  - id: NS03
+    tier: post_merge
+    category: NEW_SEARCH
+    session:
+      chat_id: ns03
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, guests: 2 }
+    steps:
+      - message: "этот вариант не подходит подберите другое"
+        update: {}
+        assert:
+          chosen_is_null: true
+
+  - id: NS04
+    tier: post_merge
+    category: NEW_SEARCH
+    session:
+      chat_id: ns04
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, districts: [Банг Тао], budget: 200000, bedrooms: 4 }
+    steps:
+      - message: "новый дом в новом районе"
+        update: {}
+        assert:
+          reply_contains: ["подберём"]
+
+  - id: NS05
+    tier: post_merge
+    category: NEW_SEARCH
+    session:
+      chat_id: ns05
+      awaiting_owner: true
+      chosen: CHOSEN
+      last_outbound_template_key: client_waiting_owner
+      lead: { preferred_object_id: F_20260809_001 }
+    steps:
+      - message: "Ты понимаешь? Я хочу новый дом в новом районе"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["уже отправил"]
+
+  - id: NS06
+    tier: post_merge
+    category: NEW_SEARCH
+    session:
+      chat_id: ns06
+      pending_owner_requests:
+        - { object_id: F_20260809_001, awaiting_owner: true, owner_verdict: "" }
+      lead: { districts: [Раваи] }
+      wants_selection: true
+    steps:
+      - message: "ищу в Банг Тао"
+        update: { districts: [Банг Тао] }
+        assert:
+          wants_selection: true
+
+  # --- CHANGE CRITERIA (4) ---
+  - id: CC01
+    tier: post_merge
+    category: CHANGE_CRITERIA
+    session:
+      chat_id: cc01
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, guests: 4, check_in: "2026-09-01" }
+    steps:
+      - message: "теперь бюджет 250000"
+        update: { budget: 250000 }
+        assert:
+          lead: { guests: 4 }
+
+  - id: CC02
+    tier: post_merge
+    category: CHANGE_CRITERIA
+    session:
+      chat_id: cc02
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, budget: 100000 }
+    steps:
+      - message: "сменить район на Ката"
+        update: { districts: [Ката] }
+        assert:
+          session: { awaiting_owner: false }
+
+  - id: CC03
+    tier: post_merge
+    category: CHANGE_CRITERIA
+    session:
+      chat_id: cc03
+      wants_selection: true
+      lead: { check_in: "2026-08-01", guests: 2, budget: 100000 }
+      asked_core: true
+    steps:
+      - message: "изменить бюджет до 150000"
+        update: { budget: 150000 }
+        assert:
+          lead: { budget: 150000 }
+
+  - id: CC04
+    tier: post_merge
+    category: CHANGE_CRITERIA
+    session:
+      chat_id: cc04
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, bedrooms: 2 }
+    steps:
+      - message: "3 спальни вместо 2"
+        update: { bedrooms: 3 }
+        assert:
+          lead: { bedrooms: 3 }
+
+  # --- MULTIPLE SEARCH CONTEXTS (3) ---
+  - id: MS01
+    tier: post_merge
+    category: MULTIPLE_SEARCH_CONTEXTS
+    session:
+      chat_id: ms01
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001 }
+    steps:
+      - message: "новый поиск"
+        update: {}
+        assert:
+          pending_owner_object: F_20260809_001
+          session: { chosen: null }
+
+  - id: MS02
+    tier: post_merge
+    category: MULTIPLE_SEARCH_CONTEXTS
+    session:
+      chat_id: ms02
+      pending_owner_requests:
+        - { object_id: F_20260809_001, awaiting_owner: true, owner_verdict: "" }
+      wants_selection: true
+      lead: { districts: [Банг Тао] }
+    steps:
+      - message: "покажите варианты"
+        update: {}
+        assert:
+          reply_contains: ["предложить"]
+
+  - id: MS03
+    tier: v2_target
+    category: MULTIPLE_SEARCH_CONTEXTS
+    session: { chat_id: ms03 }
+    steps:
+      - message: "закрыть старый запрос и искать новый"
+        update: {}
+        assert:
+          reply_contains: ["подбер"]
+
+  # --- HUMAN HANDOFF (5) ---
+  - id: HH01
+    tier: post_merge
+    category: HUMAN_HANDOFF
+    session: { chat_id: hh01, human_handoff_active: true }
+    steps:
+      - message: "Привет"
+        update: {}
+        assert:
+          silent: true
+
+  - id: HH02
+    tier: post_merge
+    category: HUMAN_HANDOFF
+    session: { chat_id: hh02, awaiting_owner: true, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "позовите менеджера"
+        update: {}
+        assert:
+          handoff_to_human: true
+
+  - id: HH03
+    tier: baseline
+    category: HUMAN_HANDOFF
+    session: { chat_id: hh03, handoff_to_human: true, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "когда просмотр?"
+        update: {}
+        assert:
+          reply_contains: ["менеджер"]
+
+  - id: HH04
+    tier: post_merge
+    category: HUMAN_HANDOFF
+    session:
+      chat_id: hh04
+      human_handoff_active: true
+      human_handoff_at: "2020-01-01T00:00:00+00:00"
+      last_human_message_at: "2020-01-01T00:00:00+00:00"
+    steps:
+      - message: "Хочу подобрать новый объект"
+        update: {}
+        assert:
+          silent: false
+
+  # Structured summary lands in the amoCRM note, not in the client reply.
+  - id: HH05
+    tier: v2_target
+    category: HUMAN_HANDOFF
+    session: { chat_id: hh05 }
+    steps:
+      - message: "нужен живой человек"
+        update: {}
+        assert:
+          handoff_to_human: true
+          forbidden_reply_contains: ["HANDOFF"]
+          handoff_note_contains:
+            - "[HANDOFF]"
+            - "Lead temperature:"
+            - "Next best action:"
+            - "Reason for handoff:"
+
+  # --- 48H RE-ENGAGEMENT (3) ---
+  - id: RE01
+    tier: post_merge
+    category: 48H_REENGAGEMENT
+    session:
+      chat_id: re01
+      human_handoff_active: true
+      human_handoff_at: "2020-01-01T00:00:00+00:00"
+      last_human_message_at: "2020-01-01T00:00:00+00:00"
+    steps:
+      - message: "снова здесь ищу дом"
+        update: {}
+        assert:
+          silent: false
+
+  - id: RE02
+    tier: post_merge
+    category: 48H_REENGAGEMENT
+    session:
+      chat_id: re02
+      human_handoff_active: true
+      human_handoff_at: "2099-01-01T00:00:00+00:00"
+      last_human_message_at: "2099-01-01T00:00:00+00:00"
+    steps:
+      - message: "привет"
+        update: {}
+        assert:
+          silent: true
+
+  - id: RE03
+    tier: v2_target
+    category: 48H_REENGAGEMENT
+    session: { chat_id: re03, human_handoff_active: true }
+    steps:
+      - message: "я готов продолжить сам"
+        update: {}
+        assert:
+          silent: false
+
+  # --- REPAIR (4) ---
+  - id: RP01
+    tier: v2_target
+    category: REPAIR
+    session: { chat_id: rp01, awaiting_owner: true, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "Ты понимаешь? Я хочу новый дом"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["уже отправил"]
+
+  - id: RP02
+    tier: v2_target
+    category: REPAIR
+    session: { chat_id: rp02, wants_selection: true }
+    steps:
+      - message: "уже третий раз спрашиваю варианты"
+        update: {}
+        assert:
+          reply_contains: ["район"]
+
+  - id: RP03
+    tier: v2_target
+    category: REPAIR
+    session: { chat_id: rp03, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "ты не понял"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["Бюджет в месяц"]
+
+  # Policy §14: escalate only past AGENT6_MAX_REPAIR_ATTEMPTS, never on the
+  # first misunderstanding.
+  - id: RP04
+    tier: v2_target
+    category: REPAIR
+    session: { chat_id: rp04 }
+    steps:
+      - message: "????"
+        update: {}
+        assert:
+          handoff_to_human: false
+      - message: "???"
+        update: {}
+        assert:
+          handoff_to_human: false
+      - message: "??"
+        update: {}
+        assert:
+          handoff_to_human: true
+          session:
+            repair_mode: true
+
+  # --- CLIENT FRUSTRATION (4) ---
+  - id: CF01
+    tier: post_merge
+    category: CLIENT_FRUSTRATION
+    session:
+      chat_id: cf01
+      awaiting_owner: true
+      chosen: CHOSEN
+      last_outbound_template_key: client_waiting_owner
+      lead: { preferred_object_id: F_20260809_001 }
+    steps:
+      - message: "Ты понимаешь? Я хочу новый дом в новом районе"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["уже отправил"]
+
+  - id: CF02
+    tier: v2_target
+    category: CLIENT_FRUSTRATION
+    session: { chat_id: cf02, wants_selection: true, asked_core: true }
+    steps:
+      - message: "вы бот или человек"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["анкета"]
+
+  # Frustration starts repair, it does not spam the manager on message one.
+  - id: CF03
+    tier: v2_target
+    category: CLIENT_FRUSTRATION
+    session: { chat_id: cf03 }
+    steps:
+      - message: "бесит этот диалог"
+        update: {}
+        assert:
+          handoff_to_human: false
+          session:
+            repair_mode: true
+      - message: "вы издеваетесь"
+        update: {}
+        assert:
+          handoff_to_human: false
+      - message: "это бессмысленно"
+        update: {}
+        assert:
+          handoff_to_human: true
+
+  - id: CF04
+    tier: post_merge
+    category: CLIENT_FRUSTRATION
+    session:
+      chat_id: cf04
+      awaiting_owner: true
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001 }
+    steps:
+      - message: "ну что там блин"
+        update: {}
+        assert:
+          reply_contains: ["владельц"]
+
+  # --- BOOKING (5) ---
+  - id: BK01
+    tier: baseline
+    category: BOOKING
+    session: { chat_id: bk01, chosen: CHOSEN, owner_verdict: free, booking_intent: true, lead: { preferred_object_id: F_20260809_001, guests: 2, full_name: "Иван Иванов", citizenship: "Россия", whatsapp: "+66123456789" } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          handoff_to_human: true
+
+  - id: BK02
+    tier: baseline
+    category: BOOKING
+    session: { chat_id: bk02, chosen: CHOSEN, owner_verdict: free, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "да бронирую"
+        update: {}
+        assert:
+          reply_contains: ["сколько человек"]
+
+  - id: BK03
+    tier: baseline
+    category: BOOKING
+    session: { chat_id: bk03, chosen: CHOSEN, owner_verdict: free, booking_intent: true, lead: { preferred_object_id: F_20260809_001, guests: 2 } }
+    steps:
+      - message: "Иван Иванов"
+        update: { full_name: "Иван Иванов" }
+        assert:
+          reply_contains: ["гражданство"]
+
+  - id: BK04
+    tier: baseline
+    category: BOOKING
+    session: { chat_id: bk04, booking_confirmed: true, handoff_to_human: true, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "когда просмотр"
+        update: {}
+        assert:
+          reply_contains: ["менеджер"]
+
+  - id: BK05
+    tier: baseline
+    category: BOOKING
+    session: { chat_id: bk05, chosen: CHOSEN, owner_verdict: free, booking_intent: true, lead: { preferred_object_id: F_20260809_001, guests: 2, full_name: "Test", citizenship: "RU" } }
+    steps:
+      - message: "+66987654321"
+        update: { whatsapp: "+66987654321" }
+        assert:
+          handoff_to_human: true
+
+  # --- WA / TELEGRAM channel metadata (4) ---
+  - id: WA01
+    tier: baseline
+    category: WA
+    session: { chat_id: wa01, lead: { source_channel: whatsapp } }
+    steps:
+      - message: "привет"
+        update: {}
+        assert:
+          lead: { source_channel: whatsapp }
+
+  - id: WA02
+    tier: baseline
+    category: WA
+    session: { chat_id: wa02, lead: { source_channel: whatsapp, preferred_object_id: F_20260809_001 }, chosen: CHOSEN }
+    steps:
+      - message: "даты 1 августа"
+        update: { check_in: "2026-08-01" }
+        assert:
+          lead: { source_channel: whatsapp }
+
+  - id: TG01
+    tier: baseline
+    category: TELEGRAM
+    session: { chat_id: tg01, lead: { source_channel: telegram } }
+    steps:
+      - message: "здравствуйте"
+        update: {}
+        assert:
+          reply_contains: ["объект"]
+
+  - id: TG02
+    tier: baseline
+    category: TELEGRAM
+    session: { chat_id: tg02, lead: { source_channel: telegram }, wants_selection: true }
+    steps:
+      - message: "ищу виллу"
+        update: {}
+        assert:
+          wants_selection: true
+
+  # --- KNOWLEDGE AUTHORITY (3) — harness imports ---
+  - id: KA01
+    tier: baseline
+    category: KNOWLEDGE_AUTHORITY
+    session: { chat_id: ka01, chosen: FB_SHORT, asked_core: true, lead: { preferred_object_id: F_20260801_001, stay_months: 3, check_in: "2026-09-01" } }
+    steps:
+      - message: "3 месяца"
+        update: { stay_months: 3 }
+        assert:
+          reply_contains: ["6 месяцев"]
+
+  - id: KA02
+    tier: baseline
+    category: KNOWLEDGE_AUTHORITY
+    session: { chat_id: ka02, chosen: FB_SHORT, asked_core: true, lead: { preferred_object_id: F_20260801_001, stay_months: 3, check_in: "2026-09-01" } }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          reply_contains: ["6 месяцев"]
+
+  - id: KA03
+    tier: baseline
+    category: KNOWLEDGE_AUTHORITY
+    session: { chat_id: ka03, handoff_to_human: true }
+    steps:
+      - message: "привет"
+        update: {}
+        assert:
+          reply_contains: ["менеджер"]
+
+  # --- FAILURE / EDGE (5) ---
+  - id: FE01
+    tier: baseline
+    category: FAILURE_EDGE
+    session: { chat_id: fe01 }
+    steps:
+      - message: ""
+        update: {}
+        assert:
+          reply_contains: ["объект"]
+
+  - id: FE02
+    tier: baseline
+    category: FAILURE_EDGE
+    session: { chat_id: fe02, chosen: CHOSEN, asked_core: true, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "???"
+        update: {}
+        assert:
+          reply_contains: ["заезд"]
+
+  - id: FE03
+    tier: baseline
+    category: FAILURE_EDGE
+    session: { chat_id: fe03, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 60000, districts: [Раваи] } }
+    steps:
+      - message: "подумаю"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["бронь"]
+
+  - id: FE04
+    tier: baseline
+    category: FAILURE_EDGE
+    session: { chat_id: fe04, chosen: CHOSEN, owner_verdict: busy, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01" }, asked_core: true }
+    steps:
+      - message: "ок"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["бронь"]
+
+  - id: FE05
+    tier: baseline
+    category: FAILURE_EDGE
+    session: { chat_id: fe05, asked_object_source: true }
+    steps:
+      - message: "конкретный объект с вашего поста"
+        update: {}
+        assert:
+          reply_contains: ["ссылку", "пост"]
+
+  # --- WAVE 2 progressive evals (7) ---
+  - id: W2A
+    tier: wave2
+    category: PROGRESSIVE_QUALIFICATION
+    session: { chat_id: w2a, wants_selection: true }
+    steps:
+      - message: "Нужна вилла в Банг Тао, 4 спальни, на 6 месяцев, бюджет 200k"
+        update: { districts: [Банг Тао], bedrooms: 4, stay_months: 6, budget: 200000 }
+        assert:
+          forbidden_reply_contains: ["Бюджет в месяц", "• Район", "• Количество спален"]
+          reply_contains: ["заезд"]
+
+  - id: W2B
+    tier: wave2
+    category: PROGRESSIVE_QUALIFICATION
+    session: { chat_id: w2b }
+    steps:
+      - message: "Нужен дом"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["• Бюджет", "• Район", "• Количество спален"]
+          reply_contains: ["?"]
+
+  - id: W2C
+    tier: wave2
+    category: SPECIFIC_OBJECT
+    session: { chat_id: w2c, chosen: CHOSEN, lead: { preferred_object_id: F_20260809_001, check_in: "2026-08-01", guests: 2, stay_months: 6 } }
+    steps:
+      - message: "интересует этот вариант"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["Бюджет в месяц", "Район"]
+
+  - id: W2D
+    tier: wave2
+    category: PROGRESSIVE_QUALIFICATION
+    session: { chat_id: w2d, wants_selection: true, lead: { check_in: "2026-08-01", districts: [Раваи] } }
+    steps:
+      - message: "покажите что есть"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["Бюджет в месяц", "Район"]
+          reply_contains: ["проживать"]
+
+  - id: W2E
+    tier: wave2
+    category: NO_REASK
+    session: { chat_id: w2e, wants_selection: true }
+    steps:
+      - message: "Банг Тао, 4 спальни, 200 тысяч"
+        update: { districts: [Банг Тао], bedrooms: 4, budget: 200000 }
+        assert:
+          lead: { bedrooms: 4, budget: 200000 }
+          forbidden_reply_contains: ["Бюджет в месяц"]
+          reply_contains: ["заезд"]
+
+  - id: W2F
+    tier: wave2
+    category: CORRECTIONS
+    session: { chat_id: w2f, wants_selection: true, lead: { check_in: "2026-08-01", guests: 2, budget: 100000, districts: [Раваи] }, asked_core: true }
+    steps:
+      - message: "теперь Банг Тао"
+        update: { districts: [Банг Тао] }
+        assert:
+          lead: { check_in: "2026-08-01", guests: 2 }
+          forbidden_reply_contains: ["Бюджет в месяц"]
+
+  - id: W2G
+    tier: wave2
+    category: BOOKING
+    session: { chat_id: w2g, chosen: CHOSEN, owner_verdict: free, lead: { preferred_object_id: F_20260809_001 } }
+    steps:
+      - message: "да бронирую"
+        update: {}
+        assert:
+          reply_contains: ["сколько человек"]
+
+  # ==========================================================================
+  # WAVE 3 — QUALIFICATION POLICY V2
+  # confidence · corrections · contradictions · hard/soft · reactions ·
+  # rejected memory · repair · handoff · temperature · morphology
+  # ==========================================================================
+
+  # --- SLOT CONFIDENCE (4) ---
+  - id: W3CONF01
+    tier: wave3
+    category: CONFIDENCE
+    session: { chat_id: w3conf01, wants_selection: true }
+    steps:
+      - message: "не 150, а 200 тысяч"
+        update: {}
+        assert:
+          lead: { budget: 200000 }
+          slot_confidence: { budget: CONFIRMED }
+
+  - id: W3CONF02
+    tier: wave3
+    category: CONFIDENCE
+    session: { chat_id: w3conf02, wants_selection: true }
+    steps:
+      - message: "думаю где-то тысяч 90"
+        update: { budget: 90000 }
+        assert:
+          lead: { budget: 90000 }
+          slot_confidence: { budget: INFERRED }
+
+  # Explicit correction must be able to overwrite an inferred value.
+  - id: W3CONF03
+    tier: wave3
+    category: CONFIDENCE
+    session: { chat_id: w3conf03, wants_selection: true }
+    steps:
+      - message: "бюджет около 150"
+        update: { budget: 150000 }
+        assert:
+          slot_confidence: { budget: INFERRED }
+      - message: "не 150, а 200 тысяч"
+        update: {}
+        assert:
+          lead: { budget: 200000 }
+          slot_confidence: { budget: CONFIRMED }
+
+  # Unset slots stay UNKNOWN — they are the ones the planner may ask about.
+  - id: W3CONF04
+    tier: wave3
+    category: CONFIDENCE
+    session: { chat_id: w3conf04, wants_selection: true }
+    steps:
+      - message: "здравствуйте"
+        update: {}
+        assert:
+          slot_confidence: { budget: UNKNOWN, districts: UNKNOWN, check_in: UNKNOWN }
+
+  # --- CORRECTIONS (4) ---
+  - id: W3COR01
+    tier: wave3
+    category: CORRECTIONS
+    session:
+      chat_id: w3cor01
+      wants_selection: true
+      asked_core: true
+      lead: { budget: 150000, districts: [Раваи], guests: 2, check_in: "2026-09-01" }
+    steps:
+      - message: "не 150, а 200 тысяч"
+        update: {}
+        assert:
+          lead: { budget: 200000, districts: [Раваи], guests: 2, check_in: "2026-09-01" }
+
+  - id: W3COR02
+    tier: wave3
+    category: CORRECTIONS
+    session:
+      chat_id: w3cor02
+      wants_selection: true
+      asked_core: true
+      lead: { budget: 150000, districts: [Банг Тао], guests: 2, check_in: "2026-09-01" }
+    steps:
+      - message: "не Банг Тао, теперь Раваи"
+        update: {}
+        assert:
+          lead: { budget: 150000, districts: [Раваи], guests: 2, check_in: "2026-09-01" }
+
+  - id: W3COR03
+    tier: wave3
+    category: CORRECTIONS
+    session:
+      chat_id: w3cor03
+      wants_selection: true
+      asked_core: true
+      lead: { budget: 150000, districts: [Раваи], guests: 2, check_in: "2026-09-01" }
+    steps:
+      - message: "нас будет не 2, а 4"
+        update: {}
+        assert:
+          lead: { guests: 4, budget: 150000, districts: [Раваи] }
+
+  # A criteria correction archives the active owner request instead of
+  # being blocked by it (policy §G).
+  - id: W3COR04
+    tier: wave3
+    category: CORRECTIONS
+    session:
+      chat_id: w3cor04
+      chosen: CHOSEN
+      awaiting_owner: true
+      lead: { preferred_object_id: F_20260809_001, budget: 150000 }
+    steps:
+      - message: "не 150, а 200 тысяч"
+        update: {}
+        assert:
+          lead: { budget: 200000 }
+          session: { awaiting_owner: false }
+          pending_owner_object: F_20260809_001
+
+  # --- CONTRADICTIONS (3) ---
+  # Ambiguous stay conflict → exactly one narrow question, no questionnaire.
+  - id: W3CD01
+    tier: wave3
+    category: CONTRADICTIONS
+    session:
+      chat_id: w3cd01
+      wants_selection: true
+      asked_core: true
+      lead: { check_in: "2026-09-01", stay_months: 12, guests: 2 }
+    steps:
+      - message: "до декабря"
+        update: { check_out: "2026-12-01" }
+        assert:
+          reply_contains: ["срок изменился"]
+          forbidden_reply_contains: ["Бюджет в месяц", "Сколько спален"]
+
+  # Explicit correction of the same slot → no clarification at all.
+  - id: W3CD02
+    tier: wave3
+    category: CONTRADICTIONS
+    session:
+      chat_id: w3cd02
+      wants_selection: true
+      asked_core: true
+      lead: { check_in: "2026-09-01", stay_months: 12, guests: 2 }
+    steps:
+      - message: "не на год, а на 3 месяца"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["срок изменился"]
+
+  # After the client answers, the conflict resolves and the flow continues.
+  - id: W3CD03
+    tier: wave3
+    category: CONTRADICTIONS
+    session:
+      chat_id: w3cd03
+      wants_selection: true
+      asked_core: true
+      lead: { check_in: "2026-09-01", stay_months: 12, guests: 2 }
+    steps:
+      - message: "до декабря"
+        update: { check_out: "2026-12-01" }
+        assert:
+          reply_contains: ["срок изменился"]
+      - message: "да, до декабря"
+        update: {}
+        assert:
+          forbidden_reply_contains: ["срок изменился"]
+          slot_confidence: { stay_months: CONFIRMED }
+
+  # --- HARD VS SOFT (4) ---
+  - id: W3HS01
+    tier: wave3
+    category: HARD_SOFT
+    session: { chat_id: w3hs01, wants_selection: true }
+    steps:
+      - message: "только Банг Тао"
+        update: { districts: [Банг Тао] }
+        assert:
+          hard_constraints: [districts]
+
+  - id: W3HS02
+    tier: wave3
+    category: HARD_SOFT
+    session: { chat_id: w3hs02, wants_selection: true }
+    steps:
+      - message: "лучше Банг Тао"
+        update: { districts: [Банг Тао] }
+        assert:
+          soft_preferences: [districts]
+
+  - id: W3HS03
+    tier: wave3
+    category: HARD_SOFT
+    session: { chat_id: w3hs03, wants_selection: true }
+    steps:
+      - message: "бюджет не выше 200к"
+        update: { budget: 200000 }
+        assert:
+          hard_constraints: [budget]
+
+  - id: W3HS04
+    tier: wave3
+    category: HARD_SOFT
+    session: { chat_id: w3hs04, wants_selection: true }
+    steps:
+      - message: "желательно бюджет до 200к"
+        update: { budget: 200000 }
+        assert:
+          soft_preferences: [budget]
+
+  # --- OBJECT REACTIONS (5) ---
+  - id: W3RE01
+    tier: wave3
+    category: REACTIONS
+    session:
+      chat_id: w3re01
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, check_in: "2026-09-01", guests: 2 }
+    steps:
+      - message: "этот нравится"
+        update: {}
+        assert:
+          liked_object_ids: [F_20260809_001]
+
+  - id: W3RE02
+    tier: wave3
+    category: REACTIONS
+    session:
+      chat_id: w3re02
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, check_in: "2026-09-01", guests: 2, budget: 60000 }
+    steps:
+      - message: "этот не подходит"
+        update: {}
+        assert:
+          rejected_object_ids: [F_20260809_001]
+          rejected_not_offered: [F_20260809_001]
+
+  - id: W3RE03
+    tier: wave3
+    category: REACTIONS
+    session:
+      chat_id: w3re03
+      chosen: CHOSEN
+      lead: { preferred_object_id: F_20260809_001, check_in: "2026-09-01", guests: 2, budget: 60000 }
+    steps:
+      - message: "слишком дорого"
+        update: {}
+        assert:
+          rejected_object_ids: [F_20260809_001]
+          negative_preference_kinds: [price]
+
+  - id: W3RE04
+    tier: wave3
+    category: REACTIONS
+    session:
+      chat_id: w3re04
+      wants_selection: true
+      asked_core: true
+      lead: { check_in: "2026-09-01", guests: 2, districts: [Раваи] }
+    steps:
+      - message: "слишком далеко"
+        update: {}
+        assert:
+          negative_preference_kinds: [location]
+
+  - id: W3RE05
+    tier: wave3
+    category: REACTIONS
+    session:
+      chat_id: w3re05
+      wants_selection: true
+      asked_core: true
+      lead: { check_in: "2026-09-01", guests: 2 }
+    steps:
+      - message: "хочу современнее"
+        update: {}
+        assert:
+          positive_preference_kinds: [style]
+
+  # --- REJECTED OBJECT MEMORY (1) ---
+  # Rejected object must not come back in the next shortlist.
+  - id: W3RM01
+    tier: wave3
+    category: REJECTED_MEMORY
+    session:
+      chat_id: w3rm01
+      wants_selection: true
+      asked_core: true
+      offered_alternatives: true
+      shown_object_ids: [F_20260809_002]
+      rejected_object_ids: [F_20260809_002]
+      lead: { check_in: "2026-09-01", guests: 2 }
+    steps:
+      - message: "покажите ещё варианты"
+        update: { wants_alternatives: true }
+        assert:
+          rejected_not_offered: [F_20260809_002]
+
+  # --- REPAIR (3) ---
+  - id: W3RP01
+    tier: wave3
+    category: REPAIR
+    session:
+      chat_id: w3rp01
+      chosen: CHOSEN
+      awaiting_owner: true
+      lead: { preferred_object_id: F_20260809_001 }
+    steps:
+      - message: "ты понимаешь? я хочу новый дом"
+        update: {}
+        assert:
+          handoff_to_human: false
+          session: { repair_mode: true, awaiting_owner: false }
+          forbidden_reply_contains: ["Я уже отправил запрос владельцу"]
+
+  # One misunderstanding must never escalate.
+  - id: W3RP02
+    tier: wave3
+    category: REPAIR
+    session: { chat_id: w3rp02, wants_selection: true }
+    steps:
+      - message: "ты не понял"
+        update: {}
+        assert:
+          handoff_to_human: false
+          session: { misunderstanding_count: 1 }
+
+  - id: W3RP03
+    tier: wave3
+    category: REPAIR
+    session: { chat_id: w3rp03, wants_selection: true }
+    steps:
+      - message: "ты не понял"
+        update: {}
+        assert: { handoff_to_human: false }
+      - message: "я уже сказал"
+        update: {}
+        assert: { handoff_to_human: false }
+      - message: "я не это имею в виду"
+        update: {}
+        assert:
+          handoff_to_human: true
+          handoff_note_contains: ["[HANDOFF]", "REPAIR_THRESHOLD_EXCEEDED"]
+
+  # --- STRUCTURED HANDOFF (1) ---
+  - id: W3HO01
+    tier: wave3
+    category: HANDOFF
+    session:
+      chat_id: w3ho01
+      chosen: CHOSEN
+      shown_object_ids: [F_20260809_002]
+      rejected_object_ids: [F_20260809_002]
+      lead: { preferred_object_id: F_20260809_001, check_in: "2026-09-01", guests: 2, budget: 90000 }
+    steps:
+      - message: "позовите менеджера"
+        update: {}
+        assert:
+          handoff_to_human: true
+          handoff_note_contains:
+            - "[HANDOFF]"
+            - "Hard constraints:"
+            - "Soft preferences:"
+            - "Shown objects:"
+            - "Rejected:"
+            - "Pending owner checks:"
+            - "Lead temperature:"
+            - "Next best action:"
+            - "F_20260809_002"
+
+  # --- LEAD TEMPERATURE (3) ---
+  - id: W3LT01
+    tier: wave3
+    category: TEMPERATURE
+    session: { chat_id: w3lt01 }
+    steps:
+      - message: "здравствуйте, интересует аренда"
+        update: {}
+        assert:
+          lead_temperature: COLD
+
+  - id: W3LT02
+    tier: wave3
+    category: TEMPERATURE
+    session:
+      chat_id: w3lt02
+      wants_selection: true
+      asked_core: true
+      lead: { check_in: "2026-09-01", guests: 2, budget: 90000, districts: [Раваи] }
+    steps:
+      - message: "покажите варианты"
+        update: { wants_alternatives: true }
+        assert:
+          lead_temperature: WARM
+
+  - id: W3LT03
+    tier: wave3
+    category: TEMPERATURE
+    session:
+      chat_id: w3lt03
+      chosen: CHOSEN
+      awaiting_owner: true
+      lead: { preferred_object_id: F_20260809_001, check_in: "2026-09-01", guests: 2, budget: 90000 }
+    steps:
+      - message: "что там по владельцу?"
+        update: {}
+        assert:
+          lead_temperature: HOT
+          next_best_action: WAIT_OWNER
+
+  # --- NEXT BEST ACTION V2 (2) ---
+  - id: W3NBA01
+    tier: wave3
+    category: NEXT_BEST_ACTION
+    session: { chat_id: w3nba01, wants_selection: true }
+    steps:
+      - message: "ты не понял меня"
+        update: {}
+        assert:
+          next_best_action: REPAIR_DIALOGUE
+
+  - id: W3NBA02
+    tier: wave3
+    category: NEXT_BEST_ACTION
+    session: { chat_id: w3nba02, wants_selection: true }
+    steps:
+      - message: "нужен живой человек"
+        update: {}
+        assert:
+          next_best_action: HANDOFF_HUMAN
+
+  # --- RUSSIAN MORPHOLOGY (3) ---
+  - id: W3LANG01
+    tier: wave3
+    category: LANGUAGE
+    session: { chat_id: w3lang01, wants_selection: true, asked_core: true }
+    steps:
+      - message: "нужна 1 спальня"
+        update: { bedrooms: 1 }
+        assert:
+          reply_contains: ["1 спальня"]
+          forbidden_reply_contains: ["1 спален", "1 спальни"]
+
+  - id: W3LANG02
+    tier: wave3
+    category: LANGUAGE
+    session: { chat_id: w3lang02, wants_selection: true, asked_core: true }
+    steps:
+      - message: "нужно 2 спальни"
+        update: { bedrooms: 2 }
+        assert:
+          reply_contains: ["2 спальни"]
+          forbidden_reply_contains: ["2 спален"]
+
+  - id: W3LANG03
+    tier: wave3
+    category: LANGUAGE
+    session: { chat_id: w3lang03, wants_selection: true, asked_core: true }
+    steps:
+      - message: "нужно 5 спален"
+        update: { bedrooms: 5 }
+        assert:
+          reply_contains: ["5 спален"]
+          forbidden_reply_contains: ["5 спальни", "5 спальня"]

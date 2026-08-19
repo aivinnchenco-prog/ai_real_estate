@@ -116,12 +116,12 @@ class Listing:
         price, _status = self.get_price_for_month(check_in)
         if price is None:
             return ""
+        from .morphology import nights_word
+
         per_period = round(price / 30 * nights / 100) * 100
         period_text = f"{per_period:,.0f} THB".replace(",", " ")
         month_text = f"{price:,.0f} THB/мес".replace(",", " ")
-        word = ("ночь" if nights % 10 == 1 and nights % 100 != 11
-                else "ночи" if nights % 10 in (2, 3, 4) and nights % 100 not in (12, 13, 14)
-                else "ночей")
+        word = nights_word(nights)
         return (f"{period_text} за {nights} {word} "
                 f"(из расчёта {month_text}), точную цену на ваш период "
                 f"уточню у владельца")

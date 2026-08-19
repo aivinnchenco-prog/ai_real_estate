@@ -155,8 +155,12 @@ def test_envoy_infra_import_does_not_start_playwright_or_read_owners_json(monkey
         assert real_path.stat().st_mtime  # smoke: real file untouched by import
 
 
-def test_notary_booking_doc_paths():
+def test_notary_booking_doc_paths(monkeypatch):
+    for key in ("AGENT8_CONTRACTS_DIR", "OPENHOME_CONTRACTS_DIR"):
+        monkeypatch.delenv(key, raising=False)
+    import importlib
     from agent8_notary import booking_doc
+    importlib.reload(booking_doc)
 
     qualifier_root = Path(__file__).resolve().parents[1]
     assert booking_doc._QUALIFIER_ROOT == qualifier_root
@@ -168,8 +172,11 @@ def test_notary_booking_doc_paths():
     assert expected_config == qualifier_root.parent / "config" / "project.json"
 
 
-def test_owner_registry_path_contract():
+def test_owner_registry_path_contract(monkeypatch):
+    monkeypatch.delenv("AGENT7_OWNERS_PATH", raising=False)
+    import importlib
     from agent7_envoy import owner_registry
+    importlib.reload(owner_registry)
 
     qualifier_root = Path(__file__).resolve().parents[1]
     assert owner_registry._PATH == qualifier_root / "data" / "owners.json"

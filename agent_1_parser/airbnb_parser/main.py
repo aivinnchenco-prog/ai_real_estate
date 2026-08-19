@@ -34,7 +34,7 @@ _queue_poll_task = None
 BOT_TOKEN = config.TG_BOT_TOKEN
 MAX_TEXT_LENGTH = 4096
 MAX_CAPTION_LENGTH = 1024
-USERS_FILE = 'Users.txt'
+USERS_FILE = os.getenv('AGENT1_USERS_FILE') or 'Users.txt'
 
 def load_users():
     """Loads users (ID and comment) from the users file."""

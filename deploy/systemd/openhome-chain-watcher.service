@@ -1,0 +1,25 @@
+[Unit]
+Description=Open Home chain watcher (Agent 2/3/4 Notion-gated)
+After=network-online.target openhome-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app/agent_2_registrar/_import/assistant-media
+Environment=PYTHONUNBUFFERED=1
+Environment=HOME=/opt/openhome
+Environment=PATH=/opt/openhome/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=CHAIN_WATCHER_LOG=/opt/openhome/runtime/logs/chain_watcher.log
+Environment=CHAIN_WATCHER_PIDFILE=/opt/openhome/runtime/chain_watcher.pid
+EnvironmentFile=-/opt/openhome/.env
+ExecStart=/opt/openhome/venv/bin/python scripts/chain_runner.py --watch
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openhome-chain-watcher
+
+[Install]
+WantedBy=multi-user.target

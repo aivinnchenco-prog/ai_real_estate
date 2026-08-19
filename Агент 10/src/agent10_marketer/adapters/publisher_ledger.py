@@ -6,6 +6,7 @@ Agent 10 never writes lifecycle rows.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,9 @@ _LEDGER_MODULE = _REPO_ROOT / "agent_4_publisher" / "scripts" / "publication_led
 
 
 def default_publisher_ledger_path() -> Path:
+    override = (os.getenv("PUBLISHER_LEDGER_PATH") or "").strip()
+    if override:
+        return Path(override).expanduser()
     return _DEFAULT_LEDGER
 
 

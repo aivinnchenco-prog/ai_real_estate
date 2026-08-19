@@ -14,6 +14,18 @@ This is **not** the public marketing website (separate VPS).
 | Entrypoint | `agent_6_qualifier/scripts/amo_chat_webhook_serve.py` |
 | Service | `openhome-api.service` |
 
+## Canonical layout
+
+| Role | Path |
+|------|------|
+| APP | `/opt/openhome/app` |
+| ENV | `/opt/openhome/.env` |
+| RUNTIME | `/opt/openhome/runtime` |
+| VENV | `/opt/openhome/venv` |
+| BACKUPS | `/opt/openhome/backups` |
+
+Code deploys into APP. Mutable production state lives in RUNTIME. Secrets live in ENV. Do not rsync `--delete` into `/opt/openhome`.
+
 **Live outreach stays OFF after deploy.** Enabling Agent7 / amo chat live is a later step.
 
 ---
@@ -33,13 +45,14 @@ This is **not** the public marketing website (separate VPS).
 ssh <your-user>@72.60.108.152
 ```
 
-Copy the project onto the server (example):
+Copy the project onto the server (example). Dest must be **`/opt/openhome/app`**, never `/opt/openhome` (rsync `--delete` would wipe runtime, `.env`, backups):
 
 ```bash
 sudo mkdir -p /opt/openhome
 sudo chown "$USER":"$USER" /opt/openhome
 # from your laptop (example — run locally, not inside Cursor auto-deploy):
-# rsync -a --exclude '.git' --exclude '.venv' --exclude '**/.env' \
+# rsync -a --delete --exclude '.git' --exclude '.venv' --exclude '**/.env' \
+#   --exclude '*.session' --exclude '**/publications.sqlite3' \
 #   "/path/to/Real Estate Agent - refactor/" user@72.60.108.152:/opt/openhome/app/
 ```
 
@@ -51,7 +64,7 @@ Or clone/rsync however you normally ship this monorepo. Do **not** copy filled `
 
 ```bash
 sudo useradd --system --create-home --home-dir /opt/openhome --shell /usr/sbin/nologin openhome || true
-sudo mkdir -p /opt/openhome/{app,venv,runtime/browser_profiles,runtime/agent7_browser_failures,logs}
+sudo mkdir -p /opt/openhome/{app,venv,backups,runtime/{browser_profiles,agent7_browser_failures,publisher,sessions,contracts,state,stores,logs},logs}
 sudo chown -R openhome:openhome /opt/openhome
 ```
 
@@ -234,8 +247,9 @@ Public: `22/tcp`, `80/tcp`, `443/tcp`.
 |---|---|
 | `/opt/openhome/app` code | yes |
 | `/opt/openhome/.env` | encrypted / restricted only |
+| `/opt/openhome/runtime/` | yes (sqlite, sessions, contracts, stores, browser profiles) |
 | `/opt/openhome/runtime/browser_profiles` | restricted; contains session cookies — **not** public backups |
-| journald logs | ok |
+| `/opt/openhome/backups` | keep timestamped copies; do not prune blindly |
 
 ---
 
