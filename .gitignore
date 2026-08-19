@@ -8,6 +8,10 @@
 credentials/
 **/credentials/
 agent_6_qualifier/deploy/amo_chat_fb_credentials.txt
+# Playwright storage state — это живые куки Facebook, а не конфиг
+**/fb_storage_state.json
+**/fb_storage_state.json.*
+*.backup-cursor-*
 
 # Виртуальные окружения и зависимости
 .venv*/
@@ -52,14 +56,23 @@ agent_3_director/data/
 
 # Runtime-логи отложенной синхронизации Агента 4
 agent_4_publisher/data/deferred_sync/
+agent_4_publisher/data/chatplace_jobs/
 
-# Publisher social (телефон): runtime state / media / locks
-agent_4_publisher_social/data/media/
-agent_4_publisher_social/data/jobs/
-agent_4_publisher_social/data/logs/
-agent_4_publisher_social/data/state.json
-agent_4_publisher_social/data/*.lock
-agent_4_publisher_social/data/*.lock.*
+# Runtime-состояние цепочки Агента 2 (счётчики уведомлений, локи монтажа)
+agent_2_registrar/_import/assistant-media/data/error_notify_state.json
+agent_2_registrar/_import/assistant-media/data/*.lock
+
+# Runtime серверных модулей, забранных с VPS
+contact_role/data/
+"Агент 10"/data/
+agent_1_parser/airbnb_parser/data/
+agent_1_parser/airbnb_parser/Logs/
+
+# Publisher social (телефон): весь runtime, включая профили браузера и их бэкапы.
+# Раньше перечисляли подкаталоги поимённо, и копия Chrome-профиля на 2000 файлов
+# оказалась вне правил.
+agent_4_publisher_social/data/*
+!agent_4_publisher_social/data/.gitkeep
 agent_4_publisher_social/.env
 agent_4_publisher_social/runner.env
 
@@ -80,5 +93,12 @@ agent_4_publisher/.fb_marketplace_profile/
 Монтаж локал/
 HANDOFF_*.md
 
+# Музыкальная библиотека для рилсов: исходники mp3 живут в R2
+# (agent_3_director/scripts/upload_music_library.mjs), в git им не место.
+Список аудио файлом на рилс монтаж интерьер/
+
 # Availability Service local SQLite / runtime
 availability_service/data/
+
+# Локальные бэкапы перед scripts/deploy.sh --pull
+.deploy-backups/
