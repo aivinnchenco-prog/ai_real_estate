@@ -373,11 +373,16 @@ export async function selectCarouselPhotos(imageItems, cfg, { exteriorRatio = 0.
 
   if (isGeminiSelectorAvailable(cfg)) {
     try {
-      const selected = await geminiSelectDiverse(imageItems, cfg, { exteriorRatio });
-      const picked = selectWithExteriorRatio(selected, topK, exteriorRatio);
+      // Как и у куратора: сначала расширенный пул проходных кадров, потом
+      // пропорция. Просить у Gemini сразу ровно topK с квотой экстерьера нельзя —
+      // квота заставляет добирать пустые подъездные дорожки и глухие стены.
+      const poolSize = Math.min(imageItems.length, topK * 2);
+      const candidates = await geminiSelectDiverse(imageItems, cfg, { exteriorRatio, poolSize });
+      const picked = selectWithExteriorRatio(candidates, topK, exteriorRatio);
       const exteriorCount = picked.filter((item) => isExteriorCategory(item.category)).length;
       console.log(
-        `Carousel select: Gemini, ${picked.length} images (${exteriorCount} exterior / ${picked.length - exteriorCount} interior)`
+        `Carousel select: Gemini, ${picked.length} of ${candidates.length} candidates ` +
+          `(${exteriorCount} exterior / ${picked.length - exteriorCount} interior)`
       );
       return picked.map((item) => item.key);
     } catch (err) {

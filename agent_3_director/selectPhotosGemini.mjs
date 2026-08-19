@@ -36,8 +36,12 @@ export function isGeminiSelectorAvailable(cfg = {}) {
 /**
  * Валидация ответа Gemini: только ключи из пула, без дублей, не больше topK.
  * Экспортирована отдельно для юнит-тестов (чистая функция, без сети).
+ *
+ * heroFirst=false для режима пула кандидатов: там порядок = ранжирование по
+ * качеству, и поднимать экстерьер наверх нельзя — иначе слабый кадр обгонит
+ * сильные ещё до того, как отработает пропорция карусели.
  */
-export function normalizeGeminiSelection(raw, poolKeys, topK) {
+export function normalizeGeminiSelection(raw, poolKeys, topK, { heroFirst = true } = {}) {
   const list = Array.isArray(raw) ? raw : raw?.selected;
   if (!Array.isArray(list)) {
     throw new Error("Gemini selector: response has no 'selected' array");
@@ -54,7 +58,9 @@ export function normalizeGeminiSelection(raw, poolKeys, topK) {
     if (out.length >= topK) break;
   }
   // 1-й кадр — экстерьер/вид, если Gemini выбрал такой, но поставил не первым
-  const heroIdx = out.findIndex((i) => i.category === "exterior" || i.category === "view");
+  const heroIdx = heroFirst
+    ? out.findIndex((i) => i.category === "exterior" || i.category === "view")
+    : -1;
   if (heroIdx > 0) {
     const [hero] = out.splice(heroIdx, 1);
     out.unshift(hero);
@@ -90,22 +96,47 @@ async function downloadImages(imageItems) {
   return results;
 }
 
-function buildPrompt(topK, { exteriorRatio = null } = {}) {
+/**
+ * poolMode — режим пула кандидатов для карусели: просим НЕ ровно limit кадров,
+ * а все проходные, отранжированные по качеству. Пропорцию экстерьер/интерьер
+ * добирает уже selectWithExteriorRatio(). Так квота не может протащить слабый
+ * кадр: чего нет в пуле, того нет и в карусели.
+ */
+function buildPrompt(limit, { exteriorRatio = null, poolMode = false } = {}) {
+  const intro = poolMode
+    ? [
+        "You are a photo curator for a vertical 4:5 Instagram real-estate carousel.",
+        `From the property photos below, return every photo that is good enough to publish, ranked BEST FIRST, at most ${limit}.`,
+        "Return fewer if fewer are acceptable — never pad the list with weak photos to reach the limit.",
+      ]
+    : [
+        "You are a photo curator for a vertical (9:16) Instagram real-estate video.",
+        `From the property photos below, select the BEST ${limit} photos (fewer only if there are not enough acceptable ones).`,
+      ];
+
   const carouselRule =
     exteriorRatio == null
       ? []
       : [
-          `7. This is an Instagram carousel: select about ${Math.round(exteriorRatio * 100)}% exterior shots and ${100 - Math.round(exteriorRatio * 100)}% interior shots.`,
-          "Treat facade, building grounds, pool, terrace/garden and scenic balcony views as exterior. If there are not enough acceptable photos in either group, fill the remaining slots from the other group.",
+          "7. Slides are cropped to a 4:5 vertical frame, so prefer photos whose subject survives losing the left and right edges.",
+          "8. A bathroom qualifies only on the vanity or shower angle — never a shot where the toilet is the main subject.",
+          `9. About ${Math.round(exteriorRatio * 100)}% of the carousel will be exterior slides, so label categories carefully and include every acceptable exterior shot among the candidates. Treat facade, building grounds, pool, terrace/garden and scenic balcony views as exterior.`,
+          "Quality still wins: an empty driveway, a parking bay, a blank wall or a bare corner of the plot is NOT an acceptable exterior — leave it out even if that means fewer exterior candidates.",
         ];
+
+  const order = poolMode
+    ? "Order the selected array by how good the photo is, best first."
+    : "Order the selected array in the sequence the photos should appear in the video (exterior/view first, then a natural walkthrough).";
+
   return [
-    "You are a photo curator for a vertical (9:16) Instagram real-estate video.",
-    `From the property photos below, select the BEST ${topK} photos (fewer only if there are not enough acceptable ones).`,
+    ...intro,
     "",
     "Rules:",
     "1. Instagram quality only: sharp, bright, well-composed, spacious-looking shots.",
     "2. REJECT junk: close-ups of appliances (hair dryer, kettle), dishes/cutlery, a single chair or piece of furniture, power outlets, documents, screenshots, maps, floor plans, logos, blurry or dark photos, random trees, empty beach or street shots that do not showcase the property.",
-    "3. The FIRST selected photo must be the building exterior or the best view shot, if any acceptable one exists.",
+    poolMode
+      ? "3. Rank on quality alone — do not promote a photo just because it is an exterior."
+      : "3. The FIRST selected photo must be the building exterior or the best view shot, if any acceptable one exists.",
     "4. Maximum ONE photo per physical location. Two different bedrooms are different locations; two angles of the same room are duplicates — pick the better one.",
     "5. No near-duplicate frames.",
     "6. Prefer covering diverse spaces: exterior, view, pool, living room, dining, kitchen, bedrooms, bathroom, terrace/garden.",
@@ -113,7 +144,7 @@ function buildPrompt(topK, { exteriorRatio = null } = {}) {
     "",
     "Each image is preceded by a line 'KEY: <filename>'. Return the exact keys.",
     'Category must be one of: exterior, view, pool, living, dining, kitchen, bedroom, bathroom, garden, other.',
-    "Order the selected array in the sequence the photos should appear in the video (exterior/view first, then a natural walkthrough).",
+    order,
   ].join("\n");
 }
 
@@ -158,18 +189,27 @@ async function callGemini(model, apiKey, body) {
 /**
  * @param {{key: string, url: string}[]} imageItems
  * @param {object} cfg — seedance.json / wan.json
+ * @param {{exteriorRatio?: number|null, poolSize?: number|null}} opts
+ *        poolSize — вернуть пул кандидатов такого размера (ранжирован по
+ *        качеству) вместо готового топ-K; пропорцию накладывает вызывающий.
  * @returns {Promise<{key: string, category: string}[]>}
  */
-export async function geminiSelectDiverse(imageItems, cfg, { exteriorRatio = null } = {}) {
+export async function geminiSelectDiverse(
+  imageItems,
+  cfg,
+  { exteriorRatio = null, poolSize = null } = {}
+) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");
   const model = cfg.gemini_selector?.model || process.env.GEMINI_MODEL || DEFAULT_MODEL;
   const topK = Math.min(cfg.image_count || 9, cfg.max_images_per_request || 9);
+  const poolMode = Number.isFinite(poolSize) && poolSize > topK;
+  const limit = poolMode ? poolSize : topK;
 
   const downloaded = await downloadImages(imageItems);
   if (!downloaded.length) throw new Error("Gemini selector: no images downloaded");
 
-  const parts = [{ text: buildPrompt(topK, { exteriorRatio }) }];
+  const parts = [{ text: buildPrompt(limit, { exteriorRatio, poolMode }) }];
   let total = 0;
   let included = 0;
   for (const { key, buf } of downloaded) {
@@ -209,7 +249,7 @@ export async function geminiSelectDiverse(imageItems, cfg, { exteriorRatio = nul
   }
 
   const poolKeys = downloaded.map((d) => d.key);
-  const selection = normalizeGeminiSelection(parsed, poolKeys, topK);
+  const selection = normalizeGeminiSelection(parsed, poolKeys, limit, { heroFirst: !poolMode });
   if (!selection.length) throw new Error("Gemini selector: 0 valid keys in response");
   return selection;
 }

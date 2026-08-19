@@ -204,7 +204,9 @@ export async function buildCarousel({
 
   const tmpDir = mkdtempSync(join(tmpdir(), "carousel-"));
   try {
-    const maxPhotos = withHook ? MAX_SLIDES - 1 : MAX_SLIDES;
+    // Лучший кадр уходит под хук-обложку и в фото-слайдах больше не повторяется,
+    // поэтому качаем полный лимит: иначе последний отобранный кадр пропадёт.
+    const maxPhotos = MAX_SLIDES;
     const photoLocals = [];
     for (let i = 0; i < photoKeys.length && photoLocals.length < maxPhotos; i++) {
       const local = join(tmpDir, `photo_${i}${photoKeys[i].slice(photoKeys[i].lastIndexOf("."))}`);
@@ -238,7 +240,9 @@ export async function buildCarousel({
 
     // --- фото-слайды: первый — с тремя бейджами, остальные — только лого + контакты ---
     const slides = [];
-    photoLocals.forEach((photoPath, idx) => {
+    const photoSlideSources =
+      withHook && photoLocals.length > 1 ? photoLocals.slice(1) : photoLocals;
+    photoSlideSources.forEach((photoPath, idx) => {
       const n = firstPhotoSlideNo + idx;
       if (n > MAX_SLIDES) return;
       slides.push({
