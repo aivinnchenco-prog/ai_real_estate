@@ -32,6 +32,31 @@ async function downloadImages(imageUrls, tmpDir) {
   return paths;
 }
 
+function extractUploadId(output) {
+  const text = output.trim();
+  try {
+    const data = JSON.parse(text);
+    const id = data?.id || data?.upload_id;
+    if (id) return String(id);
+  } catch {
+    /* fall through */
+  }
+  const match = text.match(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+  );
+  if (match) return match[0];
+  throw new Error(`CLI upload has no id: ${text.slice(0, 400)}`);
+}
+
+function uploadLocalImage(bin, localPath) {
+  const out = execFileSync(
+    bin,
+    ["upload", "create", localPath, "--json", "--no-color"],
+    { encoding: "utf8", timeout: 120_000 }
+  );
+  return extractUploadId(out);
+}
+
 function extractVideoUrl(output) {
   const text = output.trim();
 
@@ -72,6 +97,13 @@ export async function generateSeedanceViaCli({ imageUrls, prompt, cfg }) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hf-seedance-"));
   try {
     const localPaths = await downloadImages(imageUrls, tmpDir);
+    const uploadIds = [];
+    for (const localPath of localPaths) {
+      const id = uploadLocalImage(bin, localPath);
+      console.log(`Higgsfield upload: ${path.basename(localPath)} → ${id}`);
+      uploadIds.push(id);
+    }
+
     const args = [
       "generate",
       "create",
@@ -98,11 +130,11 @@ export async function generateSeedanceViaCli({ imageUrls, prompt, cfg }) {
     if (cfg.genre) args.push("--genre", cfg.genre);
     if (cfg.generate_audio === false) args.push("--generate_audio", "false");
 
-    for (const p of localPaths) {
-      args.push("--image", p);
+    for (const id of uploadIds) {
+      args.push("--image", id);
     }
 
-    console.log(`Higgsfield CLI: seedance_2_0, ${localPaths.length} images`);
+    console.log(`Higgsfield CLI: seedance_2_0, ${uploadIds.length} images (pre-uploaded)`);
     const out = execFileSync(bin, args, {
       encoding: "utf8",
       maxBuffer: 20 * 1024 * 1024,
