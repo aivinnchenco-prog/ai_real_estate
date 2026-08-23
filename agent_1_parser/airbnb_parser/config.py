@@ -143,6 +143,13 @@ OWNER_WEB_SEARCH = os.getenv('OWNER_WEB_SEARCH', 'true').lower() in ('1', 'true'
 # Корень проекта fb_parser; пусто = авто-поиск в монорепе
 FB_PARSER_ROOT = os.getenv('FB_PARSER_ROOT', '')
 FB_PARSER_BACKEND = os.getenv('FB_PARSER_BACKEND', 'crawl4ai')
+# Явный Python FB-парсера (.venv311). Пусто = только fb_parser/.venv311/bin/python
+# (без тихого fallback на Python бота — иначе ModuleNotFoundError: requests).
+FB_PARSER_PYTHON = os.getenv('FB_PARSER_PYTHON', '')
+# Корень монорепы для PYTHONPATH (openhome_shared). Пусто = авто-поиск.
+OPENHOME_APP_ROOT = os.getenv('OPENHOME_APP_ROOT', '')
+# Аварийно разрешить не-3.11, если crawl4ai всё же ставили на другой минор.
+FB_PARSER_ALLOW_NON311 = os.getenv('FB_PARSER_ALLOW_NON311', '').lower() in ('1', 'true', 'yes')
 
 # Очередь задач Claude → Cursor
 TASK_QUEUE_DB = os.getenv('TASK_QUEUE_DB', 'data/agent_tasks.db')

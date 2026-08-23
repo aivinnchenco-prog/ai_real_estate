@@ -22,7 +22,8 @@
   },
   "music": {
     "enabled": true,
-    "r2_prefix": "music/"
+    "r2_prefix": "music/",
+    "rotation_key": "music/_rotation.json"
   },
   "prompt": "Camera dolly moves straight forward along the central axis, directly ahead into the depth of the room, perfectly centered. Constant slow speed. Strictly no lateral movement, no sideways drift, no panning, no tilting, no rotation, no zoom bursts. No object animation, no moving furniture, no people. Static interior scene, only smooth forward camera motion. Photorealistic, bright natural lighting."
 }

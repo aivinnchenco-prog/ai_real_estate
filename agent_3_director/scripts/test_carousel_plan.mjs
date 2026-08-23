@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import {
   assertUniqueCarouselSources,
+  formatPhoneLabel,
+  PHONE_LABEL,
   planCarouselSlides,
 } from "../carouselSlides.mjs";
 
@@ -99,6 +101,16 @@ function locals(n) {
   }
   assert("duplicate source throws clear error", threw);
 }
+
+assert(
+  "carousel footer phone is 4002, not 4001",
+  PHONE_LABEL === "+66 62 512 4002" && !PHONE_LABEL.includes("4001")
+);
+assert(
+  "project whatsapp formats to carousel footer",
+  formatPhoneLabel("+66625124002") === "+66 62 512 4002"
+);
+assert("old public number 4001 is not used", formatPhoneLabel("+66625124001") !== PHONE_LABEL);
 
 console.log(`\n${ok}/${ok + fail} passed`);
 process.exit(fail ? 1 : 0);

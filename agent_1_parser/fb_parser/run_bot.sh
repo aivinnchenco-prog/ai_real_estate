@@ -18,4 +18,9 @@ if [ -z "$VENV" ]; then
 fi
 
 source "$VENV/bin/activate"
+APP_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+if [ -d "$APP_ROOT/openhome_shared" ]; then
+  export PYTHONPATH="${APP_ROOT}${PYTHONPATH:+:$PYTHONPATH}"
+  export OPENHOME_APP_ROOT="${OPENHOME_APP_ROOT:-$APP_ROOT}"
+fi
 exec python agent1b/tg_bot.py

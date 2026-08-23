@@ -102,18 +102,19 @@ Legend: **R**=required for intended core prod · **O**=optional/agent-specific �
 
 ## Telegram
 
-| name | R/O | class | S | default | P |
-|------|-----|-------|---|---------|---|
-| TG_API_ID | R | A | NO | — | YES |
-| TG_API_HASH | R | A | YES | — | YES |
-| TG_PHONE | R | A | NO | — | YES |
-| TG_SESSION | R | A | NO | session name | YES |
-| TG_EXPECTED_USER_ID / USERNAME | O | A | NO | — | YES |
-| TG_BOT_TOKEN / TELEGRAM_BOT_TOKEN | O | A | YES | — | PARTIAL |
-| TG_BOT_TOKEN_AGENT1 | O | A | YES | — | YES |
-| TG_BOT_TOKEN_FB_PARSER | O | A | YES | — | PARTIAL |
-| TG_BOT_TOKEN_PUBLISHER | O | A | YES | — | PARTIAL |
-| ERROR_BOT_TOKEN / ERROR_CHAT_ID | O | A | YES | — | PARTIAL |
+| name | R/O | class | S | default | P | notes |
+|------|-----|-------|---|---------|---|---------|
+| TG_API_ID | R | A | NO | — | YES | |
+| TG_API_HASH | R | A | YES | — | YES | |
+| TG_PHONE | R | A | NO | — | YES | |
+| TG_SESSION | R | A | NO | session name | YES | |
+| TG_EXPECTED_USER_ID / USERNAME | O | A | NO | — | YES | |
+| TG_BOT_TOKEN / TELEGRAM_BOT_TOKEN | O | C | YES | — | PARTIAL | Dangerous alias in shared `/opt/openhome/.env`. Publisher must not use it. |
+| TG_BOT_TOKEN_AGENT1 | R | A | YES | — | YES | Agent 1 Airbnb/FB intake bot |
+| TG_BOT_TOKEN_FB_PARSER | O | C | YES | — | PARTIAL | Unused leftover (`fb_parser_mrkt_bot`). Do not map to publisher. |
+| TG_BOT_TOKEN_PUBLISHER | R | A | YES | — | PARTIAL | Agent 4 showcase bot (`trip_home_phuket_bot`); must be channel admin |
+| TELEGRAM_CHANNEL | R | A | NO | @OpenHome_th | PARTIAL | Showcase channel; empty → publisher.json fallback |
+| ERROR_BOT_TOKEN / ERROR_CHAT_ID | O | A | YES | — | PARTIAL | |
 
 Sessions (files): `/opt/openhome/runtime/sessions/*.session` (`TG_SESSION_DIR`). Do not keep production sessions under `/opt/openhome/app`.
 
@@ -124,6 +125,9 @@ Sessions (files): `/opt/openhome/runtime/sessions/*.session` (`TG_SESSION_DIR`).
 | AGENT7_BROWSER_PROFILES_DIR | R | A | NO | /opt/openhome/runtime/browser_profiles | YES |
 | AGENT7_BROWSER_FAILURES_DIR | R | A | NO | …/agent7_browser_failures | YES |
 | FB_BROWSER_PROFILE | R | A | NO | facebook_owner_outreach path | YES |
+| FB_PARSER_ROOT | O | A | NO | /opt/openhome/app/agent_1_parser/fb_parser | YES (path; venv via ensure_venv.sh) |
+| FB_PARSER_PYTHON | O | A | NO | …/fb_parser/.venv311/bin/python | YES (must be 3.11 venv, never /opt/openhome/venv) |
+| FB_PARSER_BACKEND | O | A | NO | crawl4ai | YES |
 | AGENT7_FACEBOOK_PROFILE_DIR | R | A | NO | same | YES |
 | AGENT7_AIRBNB_PROFILE_DIR | R | A | NO | airbnb_owner_outreach | YES (path set; profile MISSING) |
 | AGENT7_OWNER_REQUEST_STORE_PATH | R | A | NO | runtime/stores | YES |
@@ -150,6 +154,8 @@ Sessions (files): `/opt/openhome/runtime/sessions/*.session` (`TG_SESSION_DIR`).
 | OPENHOME_API_PRODUCTION | true |
 | OPENHOME_ENV_FILE | /opt/openhome/.env |
 | AGENT2_ROOT | /opt/openhome/app/agent_2_registrar/_import/assistant-media |
+| FB_PARSER_ROOT | /opt/openhome/app/agent_1_parser/fb_parser |
+| FB_PARSER_PYTHON | /opt/openhome/app/agent_1_parser/fb_parser/.venv311/bin/python |
 | PUBLISHER_LEDGER_PATH | /opt/openhome/runtime/publisher/publications.sqlite3 |
 | PUBLISHER_PMP_STATE_PATH | /opt/openhome/runtime/publisher/postmypost_publications.json |
 | TG_SESSION_DIR | /opt/openhome/runtime/sessions |

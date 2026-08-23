@@ -29,6 +29,36 @@
         "chat_id": "1185710165",
         "event": "CLIENT_CONVERSATION_STARTED"
       }
+    },
+    "wa:+66987654321": {
+      "contact_key": "wa:+66987654321",
+      "phone": "+66987654321",
+      "canonical_role": "CLIENT",
+      "role_source": "AGENT6_INBOUND",
+      "role_confidence": null,
+      "role_set_at": "2026-08-15T11:11:15+00:00",
+      "role_updated_at": "2026-08-19T12:15:19+00:00",
+      "locked_by_manual_override": false,
+      "metadata": {
+        "event": "CLIENT_CONVERSATION_STARTED",
+        "channel": "whatsapp",
+        "chat_id": "wa_66987654321"
+      }
+    },
+    "wa:+66625124002": {
+      "contact_key": "wa:+66625124002",
+      "phone": "+66625124002",
+      "canonical_role": "CLIENT",
+      "role_source": "AGENT6_INBOUND",
+      "role_confidence": null,
+      "role_set_at": "2026-08-15T11:11:17+00:00",
+      "role_updated_at": "2026-08-19T12:15:19+00:00",
+      "locked_by_manual_override": false,
+      "metadata": {
+        "event": "CLIENT_CONVERSATION_STARTED",
+        "channel": "whatsapp",
+        "chat_id": "wa_66625124002"
+      }
     }
   }
 }

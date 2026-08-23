@@ -1,0 +1,12 @@
+[Unit]
+Description=Send FB Groups/Marketplace daily report at 18:00 Asia/Bangkok
+
+[Timer]
+# 18:00 Bangkok = 11:00 UTC, без перехода на летнее время.
+OnCalendar=*-*-* 11:05:00
+AccuracySec=1min
+Persistent=true
+Unit=openhome-fb-daily-report.service
+
+[Install]
+WantedBy=timers.target

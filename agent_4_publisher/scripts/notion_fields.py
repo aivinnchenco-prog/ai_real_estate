@@ -28,6 +28,7 @@ DESCRIPTION = "Описание"
 DESCRIPTION_FB_MARKETPLACE = "Описание для FB Marketplace"
 DESCRIPTION_TELEGRAM = "Описание для Telegram"
 DESCRIPTION_SOCIAL = "Описание соц.сети"
+DESCRIPTION_X = "Описание X.com"
 CTA_INSTAGRAM = "CTA Instagram"
 
 # --- Видео (пишет Агент_3 Director) ---

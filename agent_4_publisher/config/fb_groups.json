@@ -8,15 +8,26 @@
   },
   "groups_file": "config/fb_groups_list.txt",
   "groups": [],
+  "continue_on_group_error": true,
+  "$comment_continue_on_group_error": "Если пост в одну группу упал (композер, JOIN_PENDING, таймаут, непонятная ошибка) — пишем в лог и идём к следующей. Весь список не останавливаем. Стоп только если сессия FB мертва (AUTH_REQUIRED).",
   "limits": {
-    "max_groups_per_run": 2,
-    "max_posts_per_day_total": 2,
-    "min_minutes_between_posts": 90,
-    "min_minutes_between_posts_same_group": 2880,
-    "minutes_between_groups": [
-      8,
-      18
-    ]
+    "max_groups_per_run": 20,
+    "$comment_max_groups": "Потолок групп за один заход браузера. Реальный размер пачки — daily_group_posts_budget / число объектов в очереди.",
+    "daily_group_posts_budget": 50,
+    "$comment_budget": "Сколько постов в группы с аккаунта за сутки. Не все объекты во все группы: пачка режется под бюджет.",
+    "min_groups_per_object": 4,
+    "max_groups_per_object": 12,
+    "sparse_queue_max_groups": 20,
+    "sparse_queue_objects": 2,
+    "$comment_sparse": "Если в очереди 1–2 объекта — пачка до 20, чтобы список групп не остывал. 5 объектов и 50 групп → по 10. 6-й начинает круг заново.",
+    "max_posts_per_day_total": 15,
+    "$comment_max_posts_per_day_total": "Потолок разных объектов за день. Основной ограничитель — daily_group_posts_budget.",
+    "minutes_between_groups": [2, 2.5, 3, 3.5, 4, 4.5, 5],
+    "$comment_minutes_between_groups": "Пауза между группами одного объекта: случайно 2–5 мин.",
+    "minutes_between_objects": [30, 31, 32, 33, 34, 35],
+    "$comment_minutes_between_objects": "После пачки объекта — тишина 30–35 мин, затем следующий.",
+    "min_minutes_same_object_same_group": 30,
+    "$comment_same_object_same_group": "Не постить тот же объект в ту же группу повторно раньше чем через 30 мин."
   },
   "media": {
     "max_images": 10,
@@ -50,6 +61,7 @@
       "fb_groups_locked": "fb_groups_locked",
       "fb_groups_taken_at": "fb_groups_taken_at",
       "fb_groups_log": "fb_groups_log",
+      "fb_groups_done": "phone_fb_groups_done",
       "publish_error": "last_error",
       "error_count": "error_count"
     },

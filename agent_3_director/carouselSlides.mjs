@@ -13,7 +13,7 @@
  *   ВСЕ фото с бренд-шаблоном (лого + контакты);
  *   на первом лучшем фото дополнительно хук с ценой.
  */
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join, resolve } from "path";
 import { tmpdir } from "os";
 import { ROOT } from "./env.mjs";
@@ -27,7 +27,28 @@ const SLIDE_WIDTH = 1080;
 const SLIDE_HEIGHT = 1350;
 const MAX_SLIDES = 9;
 const TG_LABEL = "TG @OpenHome_th";
-const PHONE_LABEL = "+66 62 512 4002";
+const FALLBACK_PHONE = "+66625124002";
+
+export function formatPhoneLabel(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (digits.startsWith("66") && digits.length >= 11) {
+    return `+66 ${digits.slice(2, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 11)}`;
+  }
+  return "+66 62 512 4002";
+}
+
+function loadAgencyWhatsapp() {
+  const path = resolve(ROOT, "..", "config", "project.json");
+  if (!existsSync(path)) return FALLBACK_PHONE;
+  try {
+    const project = JSON.parse(readFileSync(path, "utf8"));
+    return project?.contacts?.whatsapp || project?.agency?.phone || FALLBACK_PHONE;
+  } catch {
+    return FALLBACK_PHONE;
+  }
+}
+
+export const PHONE_LABEL = formatPhoneLabel(loadAgencyWhatsapp());
 
 // «Приватные» типы жилья: своя вилла/дом → Private Pool / Private Parking.
 // Кондо, апартаменты, квартиры → Shared (общие бассейн и парковка).

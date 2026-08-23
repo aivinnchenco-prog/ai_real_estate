@@ -3,8 +3,11 @@
 Три колонки:
   «Описание для Telegram» / «Описание для FB Marketplace» — длинный пост
     (промпт config/prompts/agent2_description_prompt.txt, лимит ~964);
-  «Описание соц.сети» — короткий тизер без цены
-    (промпт agent2_social_description_prompt.txt, лимит 280).
+  «Описание соц.сети» — тизер для IG/TikTok/FB/Threads/LinkedIn/YouTube
+    (промпт agent2_social_description_prompt.txt, лимит 700), с типом аренды
+    в первой строке;
+  «Описание X.com» — короткий тизер только для X
+    (промпт agent2_x_description_prompt.txt, лимит 280).
 
 Порядок работы: заполняем промпт фактами → LLM (Gemini, затем Claude — что
 настроено в env) → обязательная код-проверка длины (description_validator),
@@ -28,6 +31,7 @@ from description_validator import (
     calculate_max_guests,
     validate_and_fit,
     validate_and_fit_social,
+    validate_and_fit_x,
 )
 
 _CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
@@ -109,6 +113,18 @@ def translate_to_russian(text: str) -> str | None:
 
 # ---------- контекст объекта ----------
 
+
+def rent_type_label(rent_type: str | None, object_id: str = "") -> str:
+    """Краткосрочная аренда / Долгосрочная аренда — для первой строки поста."""
+    raw = (rent_type or "").lower()
+    oid = (object_id or "").upper()
+    if "краткоср" in raw or oid.startswith("A_"):
+        return "Краткосрочная аренда"
+    if "долгоср" in raw or oid.startswith("F_"):
+        return "Долгосрочная аренда"
+    return ""
+
+
 def resolve_max_guests(draft, parsed_meta: dict | None = None) -> tuple[int, bool]:
     """(вместимость, указана_ли_хозяином).
 
@@ -137,6 +153,7 @@ def build_context(
     """Все подстановки для обоих промптов."""
     max_guests, guests_explicit = resolve_max_guests(draft, parsed_meta)
     amenities = list(draft.amenities or [])
+    rent_type = getattr(draft, "rent_type", None) or getattr(draft, "rental_type", None) or ""
     return {
         "raw_description": description.strip()[:4000],
         "property_type": draft.housing_type or "Жильё",
@@ -156,6 +173,14 @@ def build_context(
         "top_amenity": amenities[0] if amenities else "",
         "whatsapp_contact": contacts.get("whatsapp", ""),
         "tg_contact": contacts.get("telegram", "ТГ"),
+        "rent_type": rent_type,
+        "rent_type_label": rent_type_label(str(rent_type), object_id),
+        # алиасы ключей, которые ждут промпты
+        "project_name": complex_name or "",
+        "max_guests": max_guests,
+        "top_amenity": amenities[0] if amenities else "",
+        "object_id": object_id,
+        "rooms": draft.rooms or "",
     }
 
 
@@ -207,27 +232,65 @@ def finalize_long(text: str, ctx: dict) -> str:
 
 
 def template_social(ctx: dict) -> str:
+    """Тизер для IG/TikTok/FB/Threads — с типом аренды и переносами строк."""
     region = ctx.get("region", "Пхукет")
-    parts = [f"{ctx['property_type']} в Аренду, {region}!"]
-    if ctx["project_name"]:
+    lines: list[str] = []
+    label = (ctx.get("rent_type_label") or "").strip()
+    if label:
+        lines.append(label)
+        lines.append("")
+    lines.append(f"{ctx['property_type']} в аренду, {region}")
+    if ctx.get("project_name"):
         hook = str(ctx["project_name"]).upper()
-        if ctx["rooms"]:
+        if ctx.get("rooms"):
             hook += f" {ctx['rooms']}BR"
-        if ctx["view"]:
+        if ctx.get("view"):
+            hook += f" с видом: {ctx['view']}"
+        lines.append(hook)
+    if ctx.get("district") and ctx["district"] != region:
+        lines.append(f"{ctx['district']}, {region}")
+    if ctx.get("rooms"):
+        lines.append(f"{ctx['rooms']} спальни, до {ctx['max_guests']} гостей")
+    amenities = [a.strip() for a in str(ctx.get("amenities_list") or "").split(",") if a.strip()]
+    if amenities and ctx.get("amenities_list") != "нет данных":
+        lines.append(", ".join(amenities[:4]))
+    elif ctx.get("top_amenity"):
+        lines.append(str(ctx["top_amenity"]))
+    lines.append("")
+    lines.append(f"Подробности в {ctx['tg_contact']}")
+    lines.append("Цена меняется с сезонностью.")
+    if ctx.get("whatsapp_contact"):
+        lines.append(f"Бронь в WhatsApp {ctx['whatsapp_contact']}")
+    return "\n".join(lines).strip()
+
+
+def template_x(ctx: dict) -> str:
+    """Плотный тизер 280 символов только для X.com."""
+    region = ctx.get("region", "Пхукет")
+    parts: list[str] = []
+    label = (ctx.get("rent_type_label") or "").strip()
+    if label:
+        parts.append(f"{label}.")
+    parts.append(f"{ctx['property_type']} в аренду, {region}!")
+    if ctx.get("project_name"):
+        hook = str(ctx["project_name"]).upper()
+        if ctx.get("rooms"):
+            hook += f" {ctx['rooms']}BR"
+        if ctx.get("view"):
             hook += f" с видом: {ctx['view']}"
         parts.append(hook + " 🌴")
-    if ctx["district"] != region:
+    if ctx.get("district") and ctx["district"] != region:
         parts.append(f"{ctx['district']}, {region}.")
-    else:
+    elif not ctx.get("project_name"):
         parts.append(f"{region}.")
-    if ctx["rooms"]:
+    if ctx.get("rooms"):
         parts.append(f"{ctx['rooms']} спальни, до {ctx['max_guests']} гостей.")
-    if ctx["top_amenity"]:
+    if ctx.get("top_amenity"):
         parts.append(f"{ctx['top_amenity']}.")
-    parts.append(f"Больше информации в {ctx['tg_contact']}.")
+    parts.append(f"Подробности в {ctx['tg_contact']}.")
     parts.append("Цена меняется с сезонностью.")
-    if ctx["whatsapp_contact"]:
-        parts.append(f"Бронь в WhatsApp {ctx['whatsapp_contact']}")
+    if ctx.get("whatsapp_contact"):
+        parts.append(f"WhatsApp {ctx['whatsapp_contact']}")
     return " ".join(parts)
 
 
@@ -241,7 +304,14 @@ def generate_long_description(ctx: dict) -> str:
 
 
 def generate_social_description(ctx: dict) -> str:
-    """Короткий тизер (соц.сети, 280): LLM, иначе шаблон; всегда через валидатор."""
+    """Тизер для соцсетей кроме X (лимит 700): LLM, иначе шаблон; всегда через валидатор."""
     prompt = fill_template(load_prompt("agent2_social_description_prompt.txt"), ctx)
     text = call_llm(prompt) or template_social(ctx)
     return validate_and_fit_social(text, ctx["object_id"])
+
+
+def generate_x_description(ctx: dict) -> str:
+    """Короткий тизер для X.com (лимит 280): LLM, иначе шаблон; всегда через валидатор."""
+    prompt = fill_template(load_prompt("agent2_x_description_prompt.txt"), ctx)
+    text = call_llm(prompt) or template_x(ctx)
+    return validate_and_fit_x(text, ctx["object_id"])

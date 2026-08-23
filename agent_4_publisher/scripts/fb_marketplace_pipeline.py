@@ -36,31 +36,61 @@ import publish_pipeline as pp
 import fb_groups_pipeline as fgg  # браузер, профиль, задержки, фото, состояние лимитов
 import fb_account_guard as guard  # общий предохранитель FB-аккаунта
 
-# Метки полей формы (EN/UK/RU — язык интерфейса аккаунта может меняться)
-LABEL_RENT_OR_SALE = re.compile(r"продаж або оренда|home for sale or rent|продажа или аренда", re.I)
-LABEL_PROPERTY_TYPE = re.compile(
-    r"property type|rental type|тип нерухомості|тип оренди|тип недвижимости|тип аренды", re.I
+# Метки полей формы (EN/UK/RU — язык интерфейса аккаунта может меняться).
+# RU Marketplace: «Продажа или аренда недвижимости», «Тип объекта», «Число спален».
+LABEL_RENT_OR_SALE = re.compile(
+    r"продаж(а|у)? или аренда|продаж або оренда|home for sale or rent|"
+    r"sale or rent|rent or sale|продаж чи оренда",
+    re.I,
 )
-LABEL_BEDROOMS = re.compile(r"number of bedrooms|кількість спалень|количество спален", re.I)
-LABEL_BATHROOMS = re.compile(r"number of bathrooms|кількість ванних|количество ванных|сануз", re.I)
+LABEL_PROPERTY_TYPE = re.compile(
+    r"property type|rental type|object type|тип объекта|тип об'єкта|"
+    r"тип нерухомості|тип оренди|тип недвижимости|тип аренды|тип житла",
+    re.I,
+)
+LABEL_BEDROOMS = re.compile(
+    r"number of bedrooms|кількість спалень|количество спален|число спален|спальн",
+    re.I,
+)
+LABEL_BATHROOMS = re.compile(
+    r"number of bathrooms|кількість ванних|количество ванных|число ванных|"
+    r"сануз|ванн(ых|их)|bathrooms",
+    re.I,
+)
 LABEL_PRICE = re.compile(r"^(ціна|price|цена)", re.I)
 LABEL_DESCRIPTION = re.compile(
-    r"property description|rental description|опис (нерухомості|житла|оренди)|описание", re.I
+    r"property description|rental description|опис (нерухомості|житла|оренди)|описание",
+    re.I,
 )
 LABEL_SQM = re.compile(r"квадратні метри|square meters|квадратные метры", re.I)
+LABEL_DATES = re.compile(
+    r"доступн(ые|і)? дат|available dates|available from|availability|"
+    r"дата (доступ|заезд|заїзд)",
+    re.I,
+)
 LABEL_ADDRESS = re.compile(r"адреса|address|адрес|location|розташування|местоположение", re.I)
 
-OPTION_RENT = re.compile(r"^(rent|в оренду|оренда|аренда|в аренду)$", re.I)
+OPTION_RENT = re.compile(
+    r"^(for )?rent$|^(в )?(оренду|оренда|аренду|аренда)$|^сдать$|^здати( в оренду)?$",
+    re.I,
+)
 PROPERTY_TYPE_OPTIONS = {
-    "house": re.compile(r"будинок|house|дом", re.I),
+    "house": re.compile(
+        r"(?<!town)house|(?:^|\s)(?:дом|будинок)(?:\s|$)|вілла|вилла|\bvilla\b|частн",
+        re.I,
+    ),
     "townhouse": re.compile(r"таунхаус|townhouse", re.I),
-    "apartment": re.compile(r"квартира|апартаменти|apartment|condo|кондо", re.I),
-    # в форме всего 3 типа: квартира/будинок/таунхаус; room маппим на квартиру
-    "room": re.compile(r"квартира|apartment", re.I),
+    "apartment": re.compile(r"квартира|апартаменти|апартаменты|apartment|condo|кондо", re.I),
+    # в форме обычно 3 типа: квартира/дом/таунхаус; room маппим на квартиру
+    "room": re.compile(r"квартира|apartment|комната|кімната|room", re.I),
 }
 
-NEXT_BUTTON_RE = re.compile(r"^(далі|next|далее)$", re.I)
-PUBLISH_BUTTON_RE = re.compile(r"^(опублікувати|publish|опубликовать)$", re.I)
+NEXT_BUTTON_RE = re.compile(r"^(далі|next|далее|continue|продолжить|продовжити)$", re.I)
+PUBLISH_BUTTON_RE = re.compile(
+    r"^(опублікувати|publish( listing)?|опубликовать( объявление)?|"
+    r"отправить|надіслати|post)$",
+    re.I,
+)
 ITEM_HREF_RE = re.compile(r"/marketplace/item/(\d+)")
 
 
@@ -162,10 +192,14 @@ def location_queries(page: dict[str, Any], fields: dict[str, str], cfg: dict[str
     return [q for q in queries if not (q in seen or seen.add(q))]
 
 
+def debug_shot_name(name: str) -> str:
+    return re.sub(r"[^\w.-]+", "_", name, flags=re.U).strip("_")[:80] or "shot"
+
+
 def debug_screenshot(page: Any, name: str) -> str:
     out_dir = pp.package_root() / "data" / "fb_marketplace" / "debug"
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{name}_{datetime.now(timezone.utc).strftime('%H%M%S')}.png"
+    path = out_dir / f"{debug_shot_name(name)}_{datetime.now(timezone.utc).strftime('%H%M%S')}.png"
     try:
         page.screenshot(path=str(path))
     except Exception:
@@ -177,37 +211,367 @@ def debug_screenshot(page: Any, name: str) -> str:
 # Заполнение формы
 # ---------------------------------------------------------------------------
 
-def select_combobox(page: Any, label_re: re.Pattern, option_re: re.Pattern, what: str) -> None:
-    combo = page.locator('label[role="combobox"]', has_text=label_re)
-    if not combo.count():
+def _combo_candidates(page: Any, label_re: re.Pattern, value_re: re.Pattern | None) -> list[Any]:
+    """Все разумные способы найти combobox Marketplace (label / role / соседняя подпись)."""
+    found: list[Any] = []
+    locators = [
+        page.get_by_role("combobox", name=label_re),
+        page.locator("label[role='combobox']", has_text=label_re),
+        page.locator("[role='combobox']", has_text=label_re),
+        page.locator("label").filter(has_text=label_re).locator("[role='combobox']"),
+    ]
+    if value_re is not None:
+        locators[0:0] = [page.get_by_role("combobox", name=value_re)]
+    for loc in locators:
+        try:
+            if loc.count():
+                found.append(loc.first)
+        except Exception:
+            continue
+    try:
+        labels = page.get_by_text(label_re)
+        for i in range(min(labels.count(), 8)):
+            nearby = labels.nth(i).locator("xpath=following::*[@role='combobox'][1]")
+            if nearby.count():
+                found.append(nearby.first)
+            parent_combo = labels.nth(i).locator("xpath=ancestor::*[.//*[@role='combobox']][1]//*[@role='combobox']")
+            if parent_combo.count():
+                found.append(parent_combo.first)
+    except Exception:
+        pass
+    return found
+
+
+def find_combobox(
+    page: Any, label_re: re.Pattern, value_re: re.Pattern | None = None
+) -> Any | None:
+    for combo in _combo_candidates(page, label_re, value_re):
+        try:
+            if combo.count() and combo.first.is_visible():
+                return combo.first
+        except Exception:
+            continue
+    # скрытый, но в DOM — лучше кликнуть, чем сдаться
+    for combo in _combo_candidates(page, label_re, value_re):
+        try:
+            if combo.count():
+                return combo.first
+        except Exception:
+            continue
+    return None
+
+
+def _open_option_nodes(page: Any) -> Any:
+    """Только пункты открытого списка. Глобальный [role=option] ловит чужие виджеты."""
+    scoped = page.locator(
+        "[role='listbox']:visible [role='option'], "
+        "[role='menu']:visible [role='menuitem']"
+    )
+    try:
+        if scoped.count():
+            return scoped
+    except Exception:
+        pass
+    return page.locator("[role='listbox'] [role='option'], [role='menu'] [role='menuitem']")
+
+
+def _option_locator(page: Any, option_re: re.Pattern) -> Any:
+    return _open_option_nodes(page).filter(has_text=option_re)
+
+
+def _click_option(page: Any, option: Any, cfg: dict[str, Any] | None) -> None:
+    try:
+        fgg.human_click(page, option, cfg)
+        return
+    except Exception:
+        pass
+    option.click(force=True, timeout=8000)
+
+
+def _visible_option_texts(page: Any) -> list[str]:
+    opts = _open_option_nodes(page)
+    texts: list[str] = []
+    try:
+        n = min(opts.count(), 24)
+    except Exception:
+        return texts
+    for i in range(n):
+        try:
+            t = (opts.nth(i).inner_text(timeout=800) or "").strip()
+        except Exception:
+            continue
+        if t:
+            texts.append(t.split("\n", 1)[0].strip())
+    return texts
+
+
+def _form_comboboxes(page: Any) -> Any:
+    return page.locator("[role='combobox']")
+
+
+def _dump_comboboxes(page: Any) -> str:
+    try:
+        data = page.evaluate(
+            """() => [...document.querySelectorAll('[role="combobox"]')].map((el) => ({
+              tag: el.tagName,
+              aria: (el.getAttribute('aria-label') || '').slice(0, 80),
+              text: (el.innerText || '').replace(/\\s+/g, ' ').slice(0, 80),
+            }))"""
+        )
+        return json.dumps(data, ensure_ascii=False)
+    except Exception as e:
+        return f"(dump failed: {e})"
+
+
+def _reveal_marketplace_fields(page: Any) -> None:
+    """Левая колонка формы скроллится отдельно: поля под сеткой фото не в кадре
+    и иногда не в DOM, пока не прокрутить pane."""
+    for _ in range(14):
+        try:
+            if _form_comboboxes(page).count():
+                try:
+                    _form_comboboxes(page).first.scroll_into_view_if_needed()
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
+        try:
+            moved = page.evaluate(
+                """() => {
+                  const hit = [...document.querySelectorAll('h1,h2,span,div')].find((el) => {
+                    const t = (el.innerText || '').trim();
+                    return t.length > 8 && t.length < 90 &&
+                      /новое объявление|create (a )?new listing|нове оголошення/i.test(t);
+                  });
+                  const start = hit || document.querySelector('[role="main"]') || document.body;
+                  let pane = start;
+                  while (pane && pane !== document.body) {
+                    const s = getComputedStyle(pane);
+                    if (['auto','scroll','overlay'].includes(s.overflowY)
+                        && pane.scrollHeight > pane.clientHeight + 40) {
+                      const before = pane.scrollTop;
+                      pane.scrollTop = Math.min(pane.scrollHeight, pane.scrollTop + 500);
+                      return pane.scrollTop !== before;
+                    }
+                    pane = pane.parentElement;
+                  }
+                  const nodes = [...document.querySelectorAll('div')].filter((el) => {
+                    const s = getComputedStyle(el);
+                    return ['auto','scroll','overlay'].includes(s.overflowY)
+                      && el.scrollHeight > el.clientHeight + 80
+                      && el.clientHeight > 180;
+                  });
+                  if (!nodes.length) return false;
+                  nodes.sort((a, b) => b.clientHeight - a.clientHeight);
+                  const el = nodes[0];
+                  const before = el.scrollTop;
+                  el.scrollTop = Math.min(el.scrollHeight, el.scrollTop + 500);
+                  return el.scrollTop !== before;
+                }"""
+            )
+        except Exception:
+            break
+        if not moved:
+            try:
+                page.mouse.wheel(0, 700)
+            except Exception:
+                break
+        time.sleep(0.25)
+
+
+def select_combobox(
+    page: Any,
+    label_re: re.Pattern,
+    option_re: re.Pattern,
+    what: str,
+    cfg: dict[str, Any] | None = None,
+    *,
+    fallback_index: int | None = None,
+) -> None:
+    deadline = time.time() + 25.0
+    combo = None
+    while time.time() < deadline:
+        _reveal_marketplace_fields(page)
+        combo = find_combobox(page, label_re, option_re)
+        if combo is None and fallback_index is not None:
+            loc = _form_comboboxes(page)
+            try:
+                if loc.count() > fallback_index:
+                    combo = loc.nth(fallback_index)
+            except Exception:
+                combo = None
+        if combo is not None:
+            break
+        time.sleep(0.6)
+    if combo is None:
         raise RuntimeError(
             f"MP_FIELD_NOT_FOUND: не нашёл комбобокс «{what}». "
+            f"На странице: {_dump_comboboxes(page)}. "
             "Скриншот: " + debug_screenshot(page, f"no_combo_{what}")
         )
-    combo.first.click()
-    option = page.locator('[role="listbox"] [role="option"], [role="menu"] [role="menuitem"]').filter(
-        has_text=option_re
-    )
-    option.first.wait_for(state="visible", timeout=15000)
-    option.first.click()
+    try:
+        combo.scroll_into_view_if_needed()
+    except Exception:
+        pass
 
+    # Уже выбрано нужное значение — не трогаем (иначе клик по «Аренда» не находит
+    # длинную метку «Продажа или аренда недвижимости»).
+    try:
+        current = (combo.inner_text(timeout=1500) or "").strip()
+        first_line = current.split("\n", 1)[0].strip()
+        if option_re.search(first_line) and not label_re.search(first_line):
+            return
+        accessible = (combo.get_attribute("aria-label") or "").strip()
+        if option_re.match(accessible):
+            return
+    except Exception:
+        pass
 
-def fill_labeled_input(page: Any, label_re: re.Pattern, value: str, what: str, *, textarea: bool = False) -> None:
-    label = page.locator("label", has_text=label_re)
-    if not label.count():
+    fgg.human_click(page, combo, cfg)
+    option = _option_locator(page, option_re)
+    try:
+        option.first.wait_for(state="visible", timeout=15000)
+    except Exception:
+        shown = ", ".join(_visible_option_texts(page)) or "(пусто)"
         raise RuntimeError(
-            f"MP_FIELD_NOT_FOUND: не нашёл поле «{what}». "
-            "Скриншот: " + debug_screenshot(page, f"no_field_{what}")
+            f"MP_OPTION_NOT_FOUND: в списке «{what}» нет варианта {option_re.pattern}. "
+            f"Видно: {shown}. Скриншот: " + debug_screenshot(page, f"no_option_{what}")
         )
-    selector = "textarea" if textarea else "input"
-    target = label.first.locator(selector)
-    if not target.count():
-        # input может быть соседом label внутри общего контейнера
-        target = label.first.locator("xpath=..").locator(selector)
-    if not target.count():
-        raise RuntimeError(f"MP_FIELD_NOT_FOUND: у метки «{what}» нет {selector}")
-    target.first.click()
-    target.first.fill(str(value))
+    if cfg:
+        fgg.human_delay(cfg, 0.4)
+    _click_option(page, option.first, cfg)
+
+
+def fill_labeled_input(
+    page: Any,
+    label_re: re.Pattern,
+    value: str,
+    what: str,
+    *,
+    textarea: bool = False,
+    cfg: dict[str, Any] | None = None,
+) -> None:
+    _reveal_marketplace_fields(page)
+    target = None
+    role = "textbox"
+    for attempt in (
+        page.get_by_role("textbox", name=label_re),
+        page.get_by_role("spinbutton", name=label_re),
+        page.get_by_label(label_re),
+    ):
+        try:
+            if attempt.count():
+                target = attempt.first
+                break
+        except Exception:
+            continue
+    if target is None:
+        label = page.locator("label", has_text=label_re)
+        if not label.count():
+            raise RuntimeError(
+                f"MP_FIELD_NOT_FOUND: не нашёл поле «{what}». "
+                "Скриншот: " + debug_screenshot(page, f"no_field_{what}")
+            )
+        selector = "textarea" if textarea else "input"
+        inner = label.first.locator(selector)
+        if not inner.count():
+            inner = label.first.locator("xpath=..").locator(selector)
+        if not inner.count():
+            raise RuntimeError(f"MP_FIELD_NOT_FOUND: у метки «{what}» нет {selector}")
+        target = inner.first
+        role = selector
+    try:
+        target.scroll_into_view_if_needed()
+    except Exception:
+        pass
+    if textarea or role == "textarea":
+        fgg.type_into(page, target, str(value), cfg)
+    else:
+        fgg.human_click(page, target, cfg)
+        target.fill(str(value))
+
+
+def _scroll_form_pane_down(page: Any) -> None:
+    try:
+        page.evaluate(
+            """() => {
+              const nodes = [...document.querySelectorAll('div')].filter((el) => {
+                const s = getComputedStyle(el);
+                return ['auto','scroll','overlay'].includes(s.overflowY)
+                  && el.scrollHeight > el.clientHeight + 80
+                  && el.clientHeight > 180;
+              });
+              if (!nodes.length) return;
+              nodes.sort((a, b) => b.clientHeight - a.clientHeight);
+              nodes[0].scrollTop = nodes[0].scrollHeight;
+            }"""
+        )
+    except Exception:
+        try:
+            page.mouse.wheel(0, 900)
+        except Exception:
+            pass
+
+
+def fill_square_meters(page: Any, listing: dict[str, Any], cfg: dict[str, Any]) -> None:
+    _scroll_form_pane_down(page)
+    area = listing.get("area_sqm")
+    if not area:
+        beds = int(listing.get("bedrooms") or 1)
+        area = max(beds, 1) * 40
+        print(f"[warn] площадь в Notion пустая — в форму {area} м²", flush=True)
+    try:
+        fill_labeled_input(page, LABEL_SQM, area, "площадь", cfg=cfg)
+    except RuntimeError:
+        pass
+
+
+def fill_available_dates(page: Any, cfg: dict[str, Any]) -> None:
+    """Facebook часто не активирует «Далее», пока не выбрана дата доступности."""
+    _scroll_form_pane_down(page)
+    target = None
+    for attempt in (
+        page.get_by_role("textbox", name=LABEL_DATES),
+        page.get_by_label(LABEL_DATES),
+        page.locator("label", has_text=LABEL_DATES).locator("input"),
+    ):
+        try:
+            if attempt.count():
+                target = attempt.first
+                break
+        except Exception:
+            continue
+    if target is None:
+        return
+    try:
+        target.scroll_into_view_if_needed()
+    except Exception:
+        pass
+    fgg.human_click(page, target, cfg)
+    fgg.human_delay(cfg, 0.6)
+    day = page.locator(
+        "[role='gridcell'][aria-disabled='false'], "
+        "[role='gridcell']:not([aria-disabled='true'])"
+    )
+    try:
+        if day.count():
+            pick = day.first
+            for i in range(min(day.count(), 16)):
+                cell = day.nth(i)
+                txt = (cell.inner_text(timeout=800) or "").strip()
+                if txt.isdigit():
+                    pick = cell
+                    break
+            fgg.human_click(page, pick, cfg)
+            fgg.human_delay(cfg, 0.4)
+            return
+    except Exception:
+        pass
+    try:
+        target.press("Enter")
+    except Exception:
+        pass
 
 
 def _find_location_input(page: Any) -> Any | None:
@@ -236,12 +600,13 @@ def fill_location(page: Any, queries: list[str], cfg: dict[str, Any]) -> str:
         )
     option = page.locator('[role="listbox"] [role="option"]')
     for query in queries:
-        inp.click()
-        inp.fill(query)
+        fgg.human_click(page, inp, cfg)
+        inp.fill("")
+        fgg.type_like_human(page, query, cfg)
         try:
             option.first.wait_for(state="visible", timeout=10000)
             fgg.human_delay(cfg)
-            option.first.click()
+            fgg.human_click(page, option.first, cfg)
             return query
         except Exception:
             continue
@@ -284,16 +649,41 @@ def attach_photos(page: Any, files: list[Path], cfg: dict[str, Any]) -> None:
     raise RuntimeError(f"MP_UPLOAD_TIMEOUT: загрузилось {added} из {want} превью")
 
 
-def click_button(page: Any, name_re: re.Pattern, what: str, *, timeout_s: float = 60.0) -> None:
-    btn = page.get_by_role("button", name=name_re)
+def click_button(page: Any, name_re: re.Pattern, what: str, cfg: dict[str, Any] | None = None, *, timeout_s: float = 60.0) -> None:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        if btn.count():
-            b = btn.first
-            if b.get_attribute("aria-disabled") not in ("true", "1"):
-                b.scroll_into_view_if_needed()
-                b.click()
-                return
+        btn = None
+        named = page.get_by_role("button", name=name_re)
+        try:
+            n_named = named.count()
+        except Exception:
+            n_named = 0
+        for i in range(n_named):
+            candidate = named.nth(i)
+            if fgg.control_is_enabled(candidate):
+                btn = candidate
+                break
+        if btn is None:
+            buttons = page.get_by_role("button")
+            try:
+                n = buttons.count()
+            except Exception:
+                n = 0
+            for i in range(n):
+                candidate = buttons.nth(i)
+                label = fgg.button_label(candidate)
+                if name_re.match(label) and fgg.control_is_enabled(candidate):
+                    btn = candidate
+                    break
+        if btn is not None:
+            try:
+                btn.scroll_into_view_if_needed()
+            except Exception:
+                pass
+            if what.lower() in {"опубликовать", "publish"} and cfg:
+                fgg.read_before_submit(page, cfg)
+            fgg.human_click(page, btn, cfg)
+            return
         time.sleep(1.0)
     raise RuntimeError(
         f"MP_BUTTON_DISABLED: кнопка «{what}» не активировалась. "
@@ -343,7 +733,7 @@ def find_new_listing_url(
             # клик по свежей карточке открывает панель с прямой ссылкой на item
             card = page.locator('[role="main"]').get_by_text(card_title, exact=False)
             if card.count():
-                card.first.click()
+                fgg.human_click(page, card.first, cfg)
                 time.sleep(5.0)
                 new_ids = collect_item_ids(page) - before
                 if new_ids:
@@ -366,6 +756,8 @@ def create_listing(page: Any, listing: dict[str, Any], files: list[Path], cfg: d
         timeout=nav_timeout,
     )
     fgg.human_delay(cfg, 2.0)
+    fgg.idle_scroll(page, cfg, (8, 18))
+    fgg.wander_mouse(page)
     before = collect_item_ids(page)
 
     page.goto(cfg["create_url"], wait_until="domcontentloaded", timeout=nav_timeout)
@@ -375,42 +767,58 @@ def create_listing(page: Any, listing: dict[str, Any], files: list[Path], cfg: d
             f"MP_FORM_UNAVAILABLE: редирект на {page.url} — возможно, Marketplace "
             "недоступен аккаунту. Скриншот: " + debug_screenshot(page, "form_unavailable")
         )
+    fgg.wander_mouse(page)
 
-    attach_photos(page, files, cfg)
-    fgg.human_delay(cfg)
-
-    select_combobox(page, LABEL_RENT_OR_SALE, OPTION_RENT, "аренда/продажа")
+    # Поля формы живут ПОД сеткой фото в отдельном скролле левой колонки.
+    # Сначала комбобоксы и инпуты, пока их не перекрыла загрузка 20 картинок.
+    _reveal_marketplace_fields(page)
+    select_combobox(
+        page, LABEL_RENT_OR_SALE, OPTION_RENT, "rent_or_sale", cfg, fallback_index=0
+    )
     fgg.human_delay(cfg)
 
     ptype = listing["property_type"]
-    select_combobox(page, LABEL_PROPERTY_TYPE, PROPERTY_TYPE_OPTIONS[ptype], f"тип ({ptype})")
+    select_combobox(
+        page,
+        LABEL_PROPERTY_TYPE,
+        PROPERTY_TYPE_OPTIONS[ptype],
+        f"type_{ptype}",
+        cfg,
+        fallback_index=1,
+    )
     fgg.human_delay(cfg)
 
-    fill_labeled_input(page, LABEL_BEDROOMS, listing["bedrooms"], "спальни")
+    fill_labeled_input(page, LABEL_BEDROOMS, listing["bedrooms"], "спальни", cfg=cfg)
     fgg.human_delay(cfg)
-    fill_labeled_input(page, LABEL_BATHROOMS, listing["bathrooms"], "санузлы")
+    fill_labeled_input(page, LABEL_BATHROOMS, listing["bathrooms"], "санузлы", cfg=cfg)
     fgg.human_delay(cfg)
-    fill_labeled_input(page, LABEL_PRICE, listing["price"], "цена")
+    fill_labeled_input(page, LABEL_PRICE, listing["price"], "цена", cfg=cfg)
     fgg.human_delay(cfg)
     used_query = fill_location(page, listing["location_queries"], cfg)
     listing["location_used"] = used_query
     fgg.human_delay(cfg, 2.0)
 
-    # Описание и кв.метры могут быть ниже на этом же шаге или на следующем
-    # (форма многошаговая, шаги переключает «Далі»).
-    for _ in range(4):
-        desc_label = page.locator("label", has_text=LABEL_DESCRIPTION)
-        if desc_label.count():
-            break
-        click_button(page, NEXT_BUTTON_RE, "далее", timeout_s=30.0)
-        fgg.human_delay(cfg, 2.0)
-    fill_labeled_input(page, LABEL_DESCRIPTION, listing["description"], "описание", textarea=True)
+    attach_photos(page, files, cfg)
     fgg.human_delay(cfg)
-    if listing.get("area_sqm"):
+
+    # Описание может быть на следующем шаге («Далее»).
+    for _ in range(4):
+        desc = page.locator("label", has_text=LABEL_DESCRIPTION)
         try:
-            fill_labeled_input(page, LABEL_SQM, listing["area_sqm"], "площадь")
-        except RuntimeError:
-            pass  # поле опциональное — есть не во всех вариантах формы
+            has_desc = bool(desc.count()) or bool(page.get_by_role("textbox", name=LABEL_DESCRIPTION).count())
+        except Exception:
+            has_desc = bool(desc.count())
+        if has_desc:
+            break
+        click_button(page, NEXT_BUTTON_RE, "далее", cfg, timeout_s=30.0)
+        fgg.human_delay(cfg, 2.0)
+    fill_labeled_input(
+        page, LABEL_DESCRIPTION, listing["description"], "описание", textarea=True, cfg=cfg
+    )
+    fgg.human_delay(cfg)
+    fill_square_meters(page, listing, cfg)
+    fill_available_dates(page, cfg)
+    fgg.human_delay(cfg, 1.5)
 
     debug_screenshot(page, "form_filled")
 
@@ -418,9 +826,9 @@ def create_listing(page: Any, listing: dict[str, Any], files: list[Path], cfg: d
     for _ in range(4):
         if page.get_by_role("button", name=PUBLISH_BUTTON_RE).count():
             break
-        click_button(page, NEXT_BUTTON_RE, "далее", timeout_s=30.0)
+        click_button(page, NEXT_BUTTON_RE, "далее", cfg, timeout_s=30.0)
         fgg.human_delay(cfg, 2.0)
-    click_button(page, PUBLISH_BUTTON_RE, "опубликовать", timeout_s=90.0)
+    click_button(page, PUBLISH_BUTTON_RE, "опубликовать", cfg, timeout_s=90.0)
     fgg.human_delay(cfg, 3.0)
 
     url = find_new_listing_url(page, cfg, before, listing)
@@ -504,14 +912,20 @@ def publish_marketplace(page_id: str, cfg: dict[str, Any], *, dry_run: bool, for
     status = pp.get_prop(page, fields["status"], "status")
     gallery_url = pp.get_prop(page, fields["photo"], "url") or ""
     locked = bool(pp.get_prop(page, fields["fb_marketplace_locked"], "checkbox"))
-    existing_url = pp.get_prop(page, fields["post_url_fb_marketplace"], "url")
+    done_field = fields.get("fb_marketplace_done") or "phone_fb_marketplace_done"
+    already_done = bool(pp.get_prop(page, done_field, "checkbox"))
 
-    result: dict[str, Any] = {"page_id": page_id, "object_id": object_id, "status": status}
+    result: dict[str, Any] = {
+        "page_id": page_id,
+        "object_id": object_id,
+        "status": status,
+        "fb_marketplace_done": already_done,
+    }
 
+    if already_done and not force:
+        return {**result, "skipped": True, "reason": "phone_fb_marketplace_done"}
     if locked and not force:
         return {**result, "skipped": True, "reason": "fb_marketplace_locked"}
-    if existing_url and not force:
-        return {**result, "skipped": True, "reason": f"уже опубликовано: {existing_url}"}
     if status != status_ready and not force:
         return {**result, "skipped": True, "reason": f"status={status}, ожидался {status_ready}"}
     if not gallery_url:
@@ -582,13 +996,15 @@ def publish_marketplace(page_id: str, cfg: dict[str, Any], *, dry_run: bool, for
                 context.close()
                 guard.record_session_end(branch="fb_marketplace")
     except Exception as e:
-        if not submitted:
-            pp.notion_update_fields(
-                page_id, {fields["fb_marketplace_locked"]: pp.notion_checkbox_property(False)}
-            )
         fgg.mark_failure(page_id, page, fields, f"fb_marketplace: {e}")
         raise
     finally:
+        try:
+            pp.notion_update_fields(
+                page_id, {fields["fb_marketplace_locked"]: pp.notion_checkbox_property(False)}
+            )
+        except Exception:
+            pass
         if lock_file:
             lock_file.unlink(missing_ok=True)
 
@@ -598,9 +1014,11 @@ def publish_marketplace(page_id: str, cfg: dict[str, Any], *, dry_run: bool, for
     old_log = pp.get_prop(page, log_field, "rich_text") or ""
     line = f"{now} marketplace -> {post_url or 'опубликовано, url не найден'}"
     combined = (old_log + "\n" + line).strip()[-1900:]
+    done_field = fields.get("fb_marketplace_done") or "phone_fb_marketplace_done"
 
     props: dict[str, Any] = {
         fields["publish_error"]: {"rich_text": []},
+        done_field: pp.notion_checkbox_property(True),
         log_field: {"rich_text": [{"text": {"content": combined}}]},
     }
     if post_url:
@@ -609,6 +1027,7 @@ def publish_marketplace(page_id: str, cfg: dict[str, Any], *, dry_run: bool, for
 
     result["posted"] = out
     result["saved_url"] = post_url
+    result["fb_marketplace_done"] = True
     return result
 
 
@@ -617,24 +1036,58 @@ def main() -> int:
     cfg = load_mp_config()
 
     parser = argparse.ArgumentParser(description="Notion CRM → Facebook Marketplace (Playwright)")
-    parser.add_argument("--page-id", required=True, help="Notion page ID объекта")
+    parser.add_argument("--page-id", help="Notion page ID объекта")
+    parser.add_argument("--queue", action="store_true", help="Объекты ready_to_post без phone_fb_marketplace_done")
     parser.add_argument("--dry-run", action="store_true", help="Проверка без постинга")
-    parser.add_argument("--force", action="store_true", help="Игнорировать lock и лимиты")
+    parser.add_argument("--force", action="store_true", help="Игнорировать done/lock и лимиты")
     parser.add_argument("--skip-schema-check", action="store_true", help="Пропустить проверку схемы")
     args = parser.parse_args()
 
     pp.run_schema_check(args.skip_schema_check)
 
-    try:
-        out = publish_marketplace(args.page_id, cfg, dry_run=args.dry_run, force=args.force)
-        print(json.dumps(out, indent=2, ensure_ascii=False))
-    except fgg.ProfileBusy as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return 3
-    except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return 1
-    return 0
+    page_ids: list[str] = []
+    if args.queue:
+        database_id = os.environ.get("NOTION_DATABASE_ID") or os.environ.get("NOTION_DB_ID")
+        if not database_id:
+            print("Задай NOTION_DB_ID в .env", file=sys.stderr)
+            return 1
+        fields = cfg["notion"]["fields"]
+        pages = pp.notion_query_ready(
+            database_id,
+            cfg["notion"]["statuses"]["ready"],
+            fields["status"],
+            locked_field=fields["fb_marketplace_locked"],
+            done_field=fields.get("fb_marketplace_done") or "phone_fb_marketplace_done",
+        )
+        if not pages:
+            print("Очередь пуста.")
+            return 0
+        page_ids = [p["id"] for p in pages]
+    elif args.page_id:
+        page_ids = [args.page_id]
+    else:
+        parser.error("--page-id или --queue")
+
+    exit_code = 0
+    for pid in page_ids:
+        print(f"\n--- {pid} ---")
+        try:
+            out = publish_marketplace(pid, cfg, dry_run=args.dry_run, force=args.force)
+            print(json.dumps(out, indent=2, ensure_ascii=False))
+            if out.get("skipped"):
+                reason = str(out.get("reason") or "")
+                if "лимит" in reason or "предохранитель" in reason:
+                    break
+                continue
+            break
+        except fgg.ProfileBusy as e:
+            print(f"ERROR {pid}: {e}", file=sys.stderr)
+            return 3
+        except Exception as e:
+            print(f"ERROR {pid}: {e}", file=sys.stderr)
+            exit_code = 1
+            break
+    return exit_code
 
 
 if __name__ == "__main__":

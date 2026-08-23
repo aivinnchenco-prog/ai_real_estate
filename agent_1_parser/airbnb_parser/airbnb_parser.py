@@ -697,6 +697,13 @@ class AirbnbParser:
         }.items():
             details.setdefault(key, default)
 
+        # LOCATION_DEFAULT в новых SSR часто пустой ({__typename}); coords — в node.
+        current_loc = details.get('Локация') or {}
+        if current_loc.get('latitude') is None or current_loc.get('longitude') is None:
+            fallback = self._extract_location_fallback(data)
+            if fallback:
+                details['Локация'] = fallback
+
         return details
 
     def _normalize_html_text(self, text):
@@ -719,17 +726,44 @@ class AirbnbParser:
 
         return ''
 
+    def _location_from_mapping(self, loc):
+        """Нормализует lat/lng из секции LOCATION_DEFAULT или node.pdpPresentation.location."""
+        if not isinstance(loc, dict):
+            return {}
+        lat = loc.get('latitude', loc.get('lat'))
+        lng = loc.get('longitude', loc.get('lng'))
+        if lat is None or lng is None:
+            coord = loc.get('coordinate') if isinstance(loc.get('coordinate'), dict) else {}
+            if lat is None:
+                lat = coord.get('latitude', coord.get('lat'))
+            if lng is None:
+                lng = coord.get('longitude', coord.get('lng'))
+        try:
+            if lat is None or lng is None:
+                return {}
+            return {
+                'latitude': float(lat),
+                'longitude': float(lng),
+                'subtitle': (loc.get('subtitle') or loc.get('addressTitle') or '').strip(),
+            }
+        except (TypeError, ValueError):
+            return {}
+
     def _get_location(self, section):
         """Координаты с карты листинга (секция LOCATION_DEFAULT)."""
-        sec = section.get('section') or {}
-        lat, lng = sec.get('lat'), sec.get('lng')
-        if lat is None or lng is None:
+        return self._location_from_mapping(section.get('section') or {})
+
+    def _extract_location_fallback(self, data):
+        """Airbnb 2026+: LOCATION_DEFAULT часто пустой stub; coords в node.pdpPresentation.location."""
+        try:
+            node = data['niobeClientData'][0][1]['data']['node']
+        except (KeyError, IndexError, TypeError):
             return {}
-        return {
-            'latitude': lat,
-            'longitude': lng,
-            'subtitle': sec.get('subtitle', ''),
-        }
+        pdp_loc = ((node.get('pdpPresentation') or {}).get('location')) or {}
+        loc = self._location_from_mapping(pdp_loc)
+        if loc:
+            return loc
+        return self._location_from_mapping(node.get('location') or {})
 
     def _get_host(self, section):
         """Карточка хозяина (секция MEET_YOUR_HOST): имя, аватар, «о себе», хайлайты."""

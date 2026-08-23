@@ -21,7 +21,9 @@
     "openhome-amo-task.service",
     "openhome-amo-task.timer",
     "openhome-planner-urls.service",
-    "openhome-planner-urls.timer"
+    "openhome-planner-urls.timer",
+    "openhome-fb-daily-report.service",
+    "openhome-fb-daily-report.timer"
   ],
   "nginx": "deploy/nginx/api.open-home.online.conf",
   "bootstrap": [

@@ -70,9 +70,10 @@ def telegram_status() -> str:
     has_session = bool(local or runtime)
     has_api = _present("TG_API_ID", "TG_API_HASH")
     has_bot = _present(
+        "TG_BOT_TOKEN_PUBLISHER",
+        "TG_BOT_TOKEN_AGENT1",
         "TG_BOT_TOKEN",
         "TELEGRAM_BOT_TOKEN",
-        "TG_BOT_TOKEN_AGENT1",
         "TG_BOT_TOKEN_FB_PARSER",
     )
     if has_session and has_api:

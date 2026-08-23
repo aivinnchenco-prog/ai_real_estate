@@ -73,6 +73,7 @@
       "fb_marketplace_locked": "fb_marketplace_locked",
       "fb_marketplace_taken_at": "fb_marketplace_taken_at",
       "fb_marketplace_log": "fb_marketplace_log",
+      "fb_marketplace_done": "phone_fb_marketplace_done",
       "publish_error": "last_error",
       "error_count": "error_count"
     },

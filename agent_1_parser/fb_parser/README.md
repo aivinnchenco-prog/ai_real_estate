@@ -112,7 +112,16 @@ rsync -av --exclude '.venv311' --exclude 'data/sessions' --exclude '__pycache__'
   ./ user@server:/opt/agent1b/
 ```
 
-2) On the server: install Python 3.11, create venv, install deps (see Install above).
+2) On the server: install the Python 3.11 venv (do not copy `.venv311` from a Mac — rsync of a Darwin venv looks “present” and then crashes):
+
+```bash
+sudo bash scripts/ensure_venv.sh
+```
+
+Or manually: install Python 3.11, `python3.11 -m venv .venv311`, `pip install -r requirements.txt`, `playwright install chromium`.
+
+`ensure_venv.sh` is idempotent: if the venv already imports `requests` + `playwright` + `crawl4ai` on 3.11, it exits 0 without reinstalling.
+
 
 3) Facebook session. Two options:
    - **Recommended:** copy the working `.fb_profile/` folder from this machine to the server (it is included in the rsync above). The saved cookies keep working; no login on the server needed.

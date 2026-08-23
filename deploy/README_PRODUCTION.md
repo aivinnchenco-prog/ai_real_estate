@@ -51,7 +51,7 @@ Copy the project onto the server (example). Dest must be **`/opt/openhome/app`**
 sudo mkdir -p /opt/openhome
 sudo chown "$USER":"$USER" /opt/openhome
 # from your laptop (example — run locally, not inside Cursor auto-deploy):
-# rsync -a --delete --exclude '.git' --exclude '.venv' --exclude '**/.env' \
+# rsync -a --delete --exclude '.git' --exclude '.venv' --exclude '.venv311' --exclude '**/.venv311' --exclude '**/.env' \
 #   --exclude '*.session' --exclude '**/publications.sqlite3' \
 #   "/path/to/Real Estate Agent - refactor/" user@72.60.108.152:/opt/openhome/app/
 ```
@@ -93,6 +93,15 @@ sudo -u openhome /opt/openhome/venv/bin/pip install --upgrade pip
 sudo -u openhome /opt/openhome/venv/bin/pip install -r /opt/openhome/app/agent_6_qualifier/requirements.txt
 ```
 
+FB Marketplace parser is a **separate Python 3.11 venv**. Do not install its deps into `/opt/openhome/venv` (Ubuntu 24.04 is 3.12; silent reuse of that interpreter caused `ModuleNotFoundError: requests`). Never rsync `--delete` `.venv311` — a Mac venv copied to Linux, or a later deploy wiping the server venv, will break Agent 1 FB links.
+
+```bash
+sudo FB_ROOT=/opt/openhome/app/agent_1_parser/fb_parser RUN_USER=openhome \
+  bash /opt/openhome/app/agent_1_parser/fb_parser/scripts/ensure_venv.sh
+```
+
+`install_api_server.sh` runs this after rsync (and excludes `.venv311` so `--delete` cannot wipe it).
+
 ---
 
 ## 5. Install Playwright browser deps
@@ -126,6 +135,16 @@ AGENT7_LIVE_OUTREACH_ENABLED=false
 AGENT7_FACEBOOK_MESSENGER_ENABLED=false
 AGENT7_AIRBNB_MESSAGES_ENABLED=false
 ```
+
+Telegram showcase (Agent 4, posts to the channel right after parsing):
+
+```env
+TG_BOT_TOKEN_PUBLISHER=          # trip_home_phuket_bot — must be channel admin
+TELEGRAM_CHANNEL=@OpenHome_th
+```
+
+Do **not** put a parser bot token into `TELEGRAM_BOT_TOKEN` in this shared file.
+The publisher reads `TG_BOT_TOKEN_PUBLISHER` first.
 
 Do **not** invent a new amoCRM long-lived token.
 

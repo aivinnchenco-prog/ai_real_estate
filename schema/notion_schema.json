@@ -3,98 +3,997 @@
   "database_id_env": "NOTION_DB_ID",
   "status_property": "Статус",
   "status_options": {
-    "current": ["ready_for_video", "video_in_progress", "ready_to_post", "video_failed"],
-    "planned": ["new", "structuring", "publishing", "published", "funnels_done", "needs_review", "publish_failed"]
+    "current": [
+      "ready_for_video",
+      "video_in_progress",
+      "ready_to_post",
+      "video_failed"
+    ],
+    "planned": [
+      "new",
+      "structuring",
+      "publishing",
+      "published",
+      "funnels_done",
+      "needs_review",
+      "publish_failed"
+    ]
   },
   "columns": [
-    {"exact_name": "Название объекта", "type": "title", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Объект ID", "type": "rich_text", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_4_publisher", "agent_5_usher", "agent_6_qualifier", "agent_7_envoy", "agent_8_notary"]},
-    {"exact_name": "Статус", "type": "status", "writers": ["agent_2_registrar", "agent_3_director", "agent_4_publisher"], "readers": ["agent_3_director", "agent_4_publisher", "agent_5_usher"]},
-    {"exact_name": "Дата добавления", "type": "created_time", "writers": ["notion_auto"], "readers": ["agent_2_registrar"]},
-    {"exact_name": "Тип жилья", "type": "select", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Тип аренды", "type": "select", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Количество комнат", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Количество сан.узлов", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Цена за месяц", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Цена за год", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Залог", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Адрес", "type": "rich_text", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Район", "type": "rich_text", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Google Maps", "type": "url", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Telegram контакт", "type": "rich_text", "writers": ["manual", "agent_7_envoy"], "readers": ["agent_7_envoy"]},
-    {"exact_name": "WhatsApp контакт", "type": "rich_text", "writers": ["manual", "agent_7_envoy"], "readers": ["agent_7_envoy"]},
-    {"exact_name": "Владелец / Агент", "type": "rich_text", "writers": ["manual", "agent_7_envoy"], "readers": ["agent_6_qualifier", "agent_7_envoy", "agent_8_notary", "agent_9_connector"]},
-    {"exact_name": "Вид", "type": "select", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "Год постройки", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Площадь участка (м²)", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Этаж", "type": "number", "writers": ["agent_2_registrar"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Можно с питомцами", "type": "checkbox", "writers": ["agent_2_registrar"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Описание", "type": "rich_text", "writers": ["agent_2_registrar"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Описание для FB Marketplace", "type": "rich_text", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "Описание для Telegram", "type": "rich_text", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "Описание соц.сети", "type": "rich_text", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "CTA Instagram", "type": "rich_text", "writers": ["manual", "agent_2_registrar"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "Удобства", "type": "multi_select", "writers": ["agent_2_registrar"], "readers": ["agent_4_publisher", "agent_6_qualifier"]},
-    {"exact_name": "Источник объявления", "type": "url", "writers": ["agent_2_registrar"], "readers": ["agent_6_qualifier", "agent_7_envoy"]},
-    {"exact_name": "Календарь", "type": "url", "writers": ["manual", "agent_2_registrar"], "readers": ["agent_6_qualifier", "agent_7_envoy"]},
-    {"exact_name": "Фото", "type": "url", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_4_publisher"]},
-    {"exact_name": "video_url_vertical", "type": "url", "writers": ["agent_3_director"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "video_url_Seedance", "type": "url", "writers": ["agent_3_director"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "carousel_url", "type": "url", "writers": ["agent_3_director"], "readers": ["agent_4_publisher"], "$comment": "Галерея дизайн-карусели: R2 {id}/carousel/index.html. Слайды с бейджами и колонтитулом — их постит Агент 4 вместо сырых фото."},
-    {"exact_name": "brand_open_home_url", "type": "url", "writers": ["agent_3_director"], "readers": ["manual"], "$comment": "Галерея всех фото объекта с шаблоном OpenHome: R2 {id}/brand_open_home/index.html. Без ценового хука и бейджей."},
-    {"exact_name": "post_url_FB_marketplace", "type": "url", "writers": ["agent_4_publisher"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "post_url_fb_groups", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_6_qualifier"], "$comment": "Все ссылки на посты в группах FB, по одной на строку (ветка fb_groups_pipeline)."},
-    {"exact_name": "post_url_telegram", "type": "url", "writers": ["agent_4_publisher"], "readers": ["agent_5_usher", "agent_6_qualifier"]},
-    {"exact_name": "post_url_facebook", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "post_url_linkedin", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "post_url_threads", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "post_url_tiktok", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_5_usher", "agent_6_qualifier"]},
-    {"exact_name": "post_url_tiktok_carousel", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_5_usher", "agent_6_qualifier"]},
-    {"exact_name": "post_url_x", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "post_url_youtube", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "post_url_instagram_carousel", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_5_usher", "agent_6_qualifier"]},
-    {"exact_name": "post_url_instagram_reel", "type": "url", "writers": ["agent_4_publisher", "agent_5_usher"], "readers": ["agent_5_usher", "agent_6_qualifier"]},
-    {"exact_name": "metricool_post_group_id", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_5_usher"]},
-    {"exact_name": "metricool_post_id", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_5_usher"]},
-    {"exact_name": "Дата и время публикации", "type": "date", "writers": ["agent_4_publisher", "manual"], "readers": ["agent_4_publisher", "manual"], "$comment": "Дата + время выхода поста в соцсети (Metricool, ISO с offset, TZ Asia/Bangkok). Для календарного вида Notion."},
-    {"exact_name": "agent6_carousel_done", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "agent6_video_done", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "agent6_locked", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "agent6_log", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "agent6_mode", "type": "select", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "agent6_taken_at", "type": "date", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "fb_groups_locked", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"], "$comment": "Лок ветки постинга в группы FB (fb_groups_pipeline), аналог agent6_locked."},
-    {"exact_name": "fb_groups_taken_at", "type": "date", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "fb_groups_log", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"], "$comment": "Журнал постинга по группам: url группы → url поста."},
-    {"exact_name": "fb_marketplace_locked", "type": "checkbox", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"], "$comment": "Лок ветки постинга в FB Marketplace (fb_marketplace_pipeline)."},
-    {"exact_name": "fb_marketplace_taken_at", "type": "date", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "fb_marketplace_log", "type": "rich_text", "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"], "$comment": "Журнал постинга в Marketplace."},
-    {"exact_name": "chatplace_funnel_done", "type": "checkbox", "writers": ["agent_5_usher"], "readers": ["agent_5_usher"]},
-    {"exact_name": "chatplace_funnel_id", "type": "rich_text", "writers": ["agent_5_usher"], "readers": ["agent_5_usher"]},
-    {"exact_name": "chatplace_funnel_carousel_done", "type": "checkbox", "writers": ["agent_5_usher"], "readers": ["agent_5_usher"]},
-    {"exact_name": "chatplace_funnel_carousel_id", "type": "rich_text", "writers": ["agent_5_usher"], "readers": ["agent_5_usher"]},
-    {"exact_name": "chatplace_funnel_reel_done", "type": "checkbox", "writers": ["agent_5_usher"], "readers": ["agent_5_usher"]},
-    {"exact_name": "chatplace_funnel_reel_id", "type": "rich_text", "writers": ["agent_5_usher"], "readers": ["agent_5_usher"]},
-    {"exact_name": "availability_status", "type": "select", "writers": ["agent_7_envoy"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "availability_checked_at", "type": "date", "writers": ["agent_7_envoy"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Занято до", "type": "date", "writers": ["agent_6_qualifier", "agent_7_envoy"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Будущие брони", "type": "rich_text", "writers": ["agent_6_qualifier"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Свободно", "type": "checkbox", "writers": ["agent_7_envoy"], "readers": ["agent_6_qualifier"]},
-    {"exact_name": "Монтаж", "type": "select", "writers": ["agent_1_parser", "agent_2_registrar", "manual"], "readers": ["agent_3_director"], "$comment": "Бывш. «Статус для Агент_3». ДА/НЕТ — брать ли объект на монтаж видео. Пусто = дефолт из pipeline.json (chain.default_montage). Кнопки в TG-боте Агента 1 пишут сюда."},
-    {"exact_name": "Видео-движок", "type": "select", "writers": ["agent_1_parser", "agent_2_registrar", "manual"], "readers": ["agent_3_director"], "$comment": "Нейросеть для монтажа: «Seedance 2.0» или «Wan 2.7». Обязательно при Монтаж=ДА; кнопки в TG-боте Агента 1."},
-    {"exact_name": "Публикация", "type": "select", "writers": ["agent_1_parser", "agent_2_registrar", "manual"], "readers": ["agent_4_publisher"], "$comment": "ДА/НЕТ — публиковать ли объект в соц.сети (Metricool + FB-ветки). Пусто = дефолт из pipeline.json (chain.default_publish). Монтаж=НЕТ + Публикация=ДА — карусель без видео. Кнопки в TG-боте Агента 1 пишут сюда."},
-
-    {"exact_name": "last_error", "type": "rich_text", "writers": ["agent_2_registrar", "agent_3_director", "agent_4_publisher"], "readers": ["manual"]},
-    {"exact_name": "error_count", "type": "number", "writers": ["agent_3_director", "agent_4_publisher"], "readers": ["agent_3_director"]},
-    {"exact_name": "monthly_prices", "type": "multi_select", "writers": ["agent_2_registrar"], "readers": ["agent_3_director", "agent_6_qualifier"], "$comment": "Плашка на месяц: «2026-09 · 99 200 ฿» (точная) / «2026-12 ≈ 249 500 ฿» (prorated, экстраполяция); месяцы без цены пропускаются. «Цена за месяц» и хук берут первый предстоящий месяц (после текущего календаря)."},
-    {"exact_name": "Вместимость гостей", "type": "number", "writers": ["agent_2_registrar", "manual"], "readers": ["agent_2_registrar", "agent_6_qualifier"], "$comment": "Только явное число от хозяина («до 5 гостей», sleeps 6); фолбэк-формула комнаты×2+1 в таблицу не пишется."},
-    {"exact_name": "publisher_locked", "type": "checkbox", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "publisher_taken_at", "type": "date", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "publisher_mode", "type": "select", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "publisher_log", "type": "rich_text", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "publisher_video_done", "type": "checkbox", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-    {"exact_name": "publisher_carousel_done", "type": "checkbox", "planned": true, "writers": ["agent_4_publisher"], "readers": ["agent_4_publisher"]},
-
-    {"exact_name": "Агент/Владелец (тип)", "type": "select", "options": ["Владелец", "Агент"], "writers": ["agent_9_connector"], "readers": ["agent_6_qualifier", "agent_7_envoy", "agent_8_notary", "agent_9_connector"], "$comment": "Agent 9: owner vs agent classification"}
+    {
+      "exact_name": "Название объекта",
+      "type": "title",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Объект ID",
+      "type": "rich_text",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_4_publisher",
+        "agent_5_usher",
+        "agent_6_qualifier",
+        "agent_7_envoy",
+        "agent_8_notary"
+      ]
+    },
+    {
+      "exact_name": "Статус",
+      "type": "status",
+      "writers": [
+        "agent_2_registrar",
+        "agent_3_director",
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_4_publisher",
+        "agent_5_usher"
+      ]
+    },
+    {
+      "exact_name": "Дата добавления",
+      "type": "created_time",
+      "writers": [
+        "notion_auto"
+      ],
+      "readers": [
+        "agent_2_registrar"
+      ]
+    },
+    {
+      "exact_name": "Тип жилья",
+      "type": "select",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Тип аренды",
+      "type": "select",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Количество комнат",
+      "type": "number",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Количество сан.узлов",
+      "type": "number",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Цена за месяц",
+      "type": "number",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Цена за год",
+      "type": "number",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Залог",
+      "type": "number",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Адрес",
+      "type": "rich_text",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Район",
+      "type": "rich_text",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Google Maps",
+      "type": "url",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Telegram контакт",
+      "type": "rich_text",
+      "writers": [
+        "manual",
+        "agent_7_envoy"
+      ],
+      "readers": [
+        "agent_7_envoy"
+      ]
+    },
+    {
+      "exact_name": "WhatsApp контакт",
+      "type": "rich_text",
+      "writers": [
+        "manual",
+        "agent_7_envoy"
+      ],
+      "readers": [
+        "agent_7_envoy"
+      ]
+    },
+    {
+      "exact_name": "Владелец / Агент",
+      "type": "rich_text",
+      "writers": [
+        "manual",
+        "agent_7_envoy"
+      ],
+      "readers": [
+        "agent_6_qualifier",
+        "agent_7_envoy",
+        "agent_8_notary",
+        "agent_9_connector"
+      ]
+    },
+    {
+      "exact_name": "Вид",
+      "type": "select",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "Год постройки",
+      "type": "number",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Площадь участка (м²)",
+      "type": "number",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Этаж",
+      "type": "number",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Можно с питомцами",
+      "type": "checkbox",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Описание",
+      "type": "rich_text",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Описание для FB Marketplace",
+      "type": "rich_text",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "Описание для Telegram",
+      "type": "rich_text",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "Описание соц.сети",
+      "type": "rich_text",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "Описание X.com",
+      "type": "rich_text",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ],
+      "$comment": "Короткий тизер только для X.com (лимит 280). Остальные соцсети берут «Описание соц.сети»."
+    },
+    {
+      "exact_name": "CTA Instagram",
+      "type": "rich_text",
+      "writers": [
+        "manual",
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "Удобства",
+      "type": "multi_select",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Источник объявления",
+      "type": "url",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_6_qualifier",
+        "agent_7_envoy"
+      ]
+    },
+    {
+      "exact_name": "Календарь",
+      "type": "url",
+      "writers": [
+        "manual",
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_6_qualifier",
+        "agent_7_envoy"
+      ]
+    },
+    {
+      "exact_name": "Фото",
+      "type": "url",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "video_url_vertical",
+      "type": "url",
+      "writers": [
+        "agent_3_director"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "video_url_Seedance",
+      "type": "url",
+      "writers": [
+        "agent_3_director"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "carousel_url",
+      "type": "url",
+      "writers": [
+        "agent_3_director"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ],
+      "$comment": "Галерея дизайн-карусели: R2 {id}/carousel/index.html. Слайды с бейджами и колонтитулом — их постит Агент 4 вместо сырых фото."
+    },
+    {
+      "exact_name": "brand_open_home_url",
+      "type": "url",
+      "writers": [
+        "agent_3_director"
+      ],
+      "readers": [
+        "manual"
+      ],
+      "$comment": "Галерея всех фото объекта с шаблоном OpenHome: R2 {id}/brand_open_home/index.html. Без ценового хука и бейджей."
+    },
+    {
+      "exact_name": "post_url_FB_marketplace",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_fb_groups",
+      "type": "rich_text",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ],
+      "$comment": "Все ссылки на посты в группах FB, по одной на строку (ветка fb_groups_pipeline)."
+    },
+    {
+      "exact_name": "post_url_telegram",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_5_usher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_facebook",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher",
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_linkedin",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher",
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_threads",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher",
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_tiktok",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher",
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_tiktok_carousel",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher",
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_x",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher",
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_youtube",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher",
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_instagram_carousel",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher",
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "post_url_instagram_reel",
+      "type": "url",
+      "writers": [
+        "agent_4_publisher",
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher",
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "metricool_post_group_id",
+      "type": "rich_text",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_5_usher"
+      ]
+    },
+    {
+      "exact_name": "metricool_post_id",
+      "type": "rich_text",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_5_usher"
+      ]
+    },
+    {
+      "exact_name": "Дата и время публикации",
+      "type": "date",
+      "writers": [
+        "agent_4_publisher",
+        "manual"
+      ],
+      "readers": [
+        "agent_4_publisher",
+        "manual"
+      ],
+      "$comment": "Дата + время выхода поста в соцсети (Metricool, ISO с offset, TZ Asia/Bangkok). Для календарного вида Notion."
+    },
+    {
+      "exact_name": "agent6_carousel_done",
+      "type": "checkbox",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "agent6_video_done",
+      "type": "checkbox",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "agent6_locked",
+      "type": "checkbox",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "agent6_log",
+      "type": "rich_text",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "agent6_mode",
+      "type": "select",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "agent6_taken_at",
+      "type": "date",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "fb_groups_locked",
+      "type": "checkbox",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ],
+      "$comment": "Лок ветки постинга в группы FB (fb_groups_pipeline), аналог agent6_locked."
+    },
+    {
+      "exact_name": "fb_groups_taken_at",
+      "type": "date",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "fb_groups_log",
+      "type": "rich_text",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ],
+      "$comment": "Журнал постинга по группам: url группы → url поста."
+    },
+    {
+      "exact_name": "fb_marketplace_locked",
+      "type": "checkbox",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ],
+      "$comment": "Лок ветки постинга в FB Marketplace (fb_marketplace_pipeline)."
+    },
+    {
+      "exact_name": "fb_marketplace_taken_at",
+      "type": "date",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "fb_marketplace_log",
+      "type": "rich_text",
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ],
+      "$comment": "Журнал постинга в Marketplace."
+    },
+    {
+      "exact_name": "chatplace_funnel_done",
+      "type": "checkbox",
+      "writers": [
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher"
+      ]
+    },
+    {
+      "exact_name": "chatplace_funnel_id",
+      "type": "rich_text",
+      "writers": [
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher"
+      ]
+    },
+    {
+      "exact_name": "chatplace_funnel_carousel_done",
+      "type": "checkbox",
+      "writers": [
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher"
+      ]
+    },
+    {
+      "exact_name": "chatplace_funnel_carousel_id",
+      "type": "rich_text",
+      "writers": [
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher"
+      ]
+    },
+    {
+      "exact_name": "chatplace_funnel_reel_done",
+      "type": "checkbox",
+      "writers": [
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher"
+      ]
+    },
+    {
+      "exact_name": "chatplace_funnel_reel_id",
+      "type": "rich_text",
+      "writers": [
+        "agent_5_usher"
+      ],
+      "readers": [
+        "agent_5_usher"
+      ]
+    },
+    {
+      "exact_name": "availability_status",
+      "type": "select",
+      "writers": [
+        "agent_7_envoy"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "availability_checked_at",
+      "type": "date",
+      "writers": [
+        "agent_7_envoy"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Занято до",
+      "type": "date",
+      "writers": [
+        "agent_6_qualifier",
+        "agent_7_envoy"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Будущие брони",
+      "type": "rich_text",
+      "writers": [
+        "agent_6_qualifier"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Свободно",
+      "type": "checkbox",
+      "writers": [
+        "agent_7_envoy"
+      ],
+      "readers": [
+        "agent_6_qualifier"
+      ]
+    },
+    {
+      "exact_name": "Монтаж",
+      "type": "select",
+      "writers": [
+        "agent_1_parser",
+        "agent_2_registrar",
+        "manual"
+      ],
+      "readers": [
+        "agent_3_director"
+      ],
+      "$comment": "Бывш. «Статус для Агент_3». ДА/НЕТ — брать ли объект на монтаж видео. Пусто = дефолт из pipeline.json (chain.default_montage). Кнопки в TG-боте Агента 1 пишут сюда."
+    },
+    {
+      "exact_name": "Видео-движок",
+      "type": "select",
+      "writers": [
+        "agent_1_parser",
+        "agent_2_registrar",
+        "manual"
+      ],
+      "readers": [
+        "agent_3_director"
+      ],
+      "$comment": "Нейросеть для монтажа: «Seedance 2.0» или «Wan 2.7». Обязательно при Монтаж=ДА; кнопки в TG-боте Агента 1."
+    },
+    {
+      "exact_name": "Публикация",
+      "type": "select",
+      "writers": [
+        "agent_1_parser",
+        "agent_2_registrar",
+        "manual"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ],
+      "$comment": "ДА/НЕТ — публиковать ли объект в соц.сети (Metricool + FB-ветки). Пусто = дефолт из pipeline.json (chain.default_publish). Монтаж=НЕТ + Публикация=ДА — карусель без видео. Кнопки в TG-боте Агента 1 пишут сюда."
+    },
+    {
+      "exact_name": "last_error",
+      "type": "rich_text",
+      "writers": [
+        "agent_2_registrar",
+        "agent_3_director",
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "manual"
+      ]
+    },
+    {
+      "exact_name": "error_count",
+      "type": "number",
+      "writers": [
+        "agent_3_director",
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_3_director"
+      ]
+    },
+    {
+      "exact_name": "monthly_prices",
+      "type": "multi_select",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_3_director",
+        "agent_6_qualifier"
+      ],
+      "$comment": "Плашка на месяц: «2026-09 · 99 200 ฿» (точная) / «2026-12 ≈ 249 500 ฿» (prorated, экстраполяция); месяцы без цены пропускаются. «Цена за месяц» и хук берут первый предстоящий месяц (после текущего календаря)."
+    },
+    {
+      "exact_name": "Вместимость гостей",
+      "type": "number",
+      "writers": [
+        "agent_2_registrar",
+        "manual"
+      ],
+      "readers": [
+        "agent_2_registrar",
+        "agent_6_qualifier"
+      ],
+      "$comment": "Только явное число от хозяина («до 5 гостей», sleeps 6); фолбэк-формула комнаты×2+1 в таблицу не пишется."
+    },
+    {
+      "exact_name": "publisher_locked",
+      "type": "checkbox",
+      "planned": true,
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "publisher_taken_at",
+      "type": "date",
+      "planned": true,
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "publisher_mode",
+      "type": "select",
+      "planned": true,
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "publisher_log",
+      "type": "rich_text",
+      "planned": true,
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "publisher_video_done",
+      "type": "checkbox",
+      "planned": true,
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "publisher_carousel_done",
+      "type": "checkbox",
+      "planned": true,
+      "writers": [
+        "agent_4_publisher"
+      ],
+      "readers": [
+        "agent_4_publisher"
+      ]
+    },
+    {
+      "exact_name": "Агент/Владелец (тип)",
+      "type": "select",
+      "options": [
+        "Владелец",
+        "Агент"
+      ],
+      "writers": [
+        "agent_9_connector"
+      ],
+      "readers": [
+        "agent_6_qualifier",
+        "agent_7_envoy",
+        "agent_8_notary",
+        "agent_9_connector"
+      ],
+      "$comment": "Agent 9: owner vs agent classification"
+    }
   ]
 }

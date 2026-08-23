@@ -454,6 +454,7 @@ def build_job_from_page(
         object_id=object_id,
         title=title,
         caption_social=notion.get_prop(page, fields["caption_social"], "rich_text") or "",
+        caption_x=_optional_rich_text(page, fields, "caption_x"),
         caption_fb=notion.get_prop(page, fields["caption_fb"], "rich_text") or "",
         cta_instagram=notion.get_prop(page, fields["cta_instagram"], "rich_text") or "",
         title_youtube_shorts=_optional_rich_text(page, fields, "title_youtube_shorts"),

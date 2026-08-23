@@ -40,13 +40,19 @@ cp .env.example .env
 Подробнее: `docs/METRICOOL_MCP.md`
 
 ### 3. Telegram
-Токен и канал в `.env` (не в `.env.example`):
+Токен витринного бота и канал в корневом `.env` (на VPS — `/opt/openhome/.env`):
 ```
-TELEGRAM_BOT_TOKEN=...
+TG_BOT_TOKEN_PUBLISHER=...
 TELEGRAM_CHANNEL=@OpenHome_th
 ```
+`TELEGRAM_BOT_TOKEN` — только fallback для локального `agent_4_publisher/.env`
+после `sync_env.py`. В едином production env его нельзя использовать: там
+может лежать чужой бот.
+
+Бот из `TG_BOT_TOKEN_PUBLISHER` должен быть **админом** канала.
 ```bash
 python3 scripts/publish_telegram.py --check-bot
+python3 scripts/publish_telegram.py --check-channel
 python3 scripts/publish_telegram.py --page-id PAGE_ID --dry-run
 python3 scripts/publish_telegram.py --page-id PAGE_ID
 ```

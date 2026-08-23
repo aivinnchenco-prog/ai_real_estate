@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -196,3 +197,85 @@ def test_threads_caption_bundle_no_triple_object_code():
         ]
     )
     assert "#A_20260810_003" in combined or "TripHomePhuket" in combined
+
+
+def test_instagram_cta_is_manager_line_without_object_code():
+    cfg = {
+        "postmypost": {
+            "comment_cta": {"enabled": True},
+            "reply_agent": {
+                "enabled": True,
+                "manager_telegram": "@OpenHome_th",
+                "manager_whatsapp": "+66625124002",
+                "by_platform": {
+                    "instagram": "Напишите менеджеру в Telegram {telegram_channel}."
+                },
+            },
+        },
+    }
+    cta = resolve_comment_cta(
+        "instagram", {"properties": {}}, {}, cfg, lambda *a: "", object_id="A_20260819_001"
+    )
+    assert cta == "Напишите менеджеру в Telegram @OpenHome_th."
+    assert "A_20260819_001" not in cta
+    assert "WhatsApp" not in cta
+
+
+def test_instagram_caption_bundle_code_once_hashtags_only_in_comment():
+    from postmypost_seo import build_postmypost_caption_bundle
+
+    cfg = json.loads(
+        (Path(__file__).resolve().parents[1] / "config" / "publisher.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    cfg.setdefault("postmypost", {})["auto_geolocation"] = False
+    oid = "A_20260819_001"
+    page = {
+        "properties": {
+            "Описание соц.сети": {
+                "type": "rich_text",
+                "rich_text": [
+                    {
+                        "plain_text": (
+                            "Вилла в Аренду, Пхукет! 3 спальни, сад. "
+                            "Больше информации в ТГ. Цена меняется с сезонностью. "
+                            f"Бронь в WhatsApp +66625124002 Объект №{oid}"
+                        )
+                    }
+                ],
+            }
+        }
+    }
+
+    def get_prop(pg, name, kind):
+        prop = (pg.get("properties") or {}).get(name) or {}
+        if kind == "rich_text":
+            return "".join(t.get("plain_text", "") for t in prop.get("rich_text") or [])
+        return ""
+
+    with patch(
+        "postmypost_seo.build_hashtags",
+        return_value=f"#TripHomePhuket #Phuket #{oid}",
+    ):
+        bundle = build_postmypost_caption_bundle(
+            page,
+            cfg["notion"]["fields"],
+            "instagram",
+            cfg,
+            get_prop,
+            lambda q: [],
+            object_id=oid,
+        )
+
+    text = bundle["text"]
+    comment = bundle.get("firstCommentText") or ""
+    assert "Объект №" not in text
+    assert f"🏷 Код объекта: {oid}" in text
+    assert text.count(oid) == 1
+    assert "Напишите менеджеру в Telegram @OpenHome_th." in text
+    assert "Код объекта:" not in text.replace(f"🏷 Код объекта: {oid}", "")
+    assert comment == f"#TripHomePhuket #Phuket #{oid}"
+    assert "Напишите менеджеру" not in comment
+    assert "WhatsApp +66625124002" in text
+    assert text.split("🏷 Код объекта:")[0].count(oid) == 0

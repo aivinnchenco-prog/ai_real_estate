@@ -230,7 +230,12 @@ def build_postmypost_caption_bundle(
     text = ai_adapt_caption(text, platform, config)
 
     first_comment = adapted.get("firstCommentText") or ""
-    first_comment_platforms = set(cta_cfg.get("append_to_first_comment") or ["instagram"])
+    # Missing key → Instagram (legacy default). Explicit [] disables CTA in comments.
+    first_comment_platforms = set(
+        cta_cfg["append_to_first_comment"]
+        if "append_to_first_comment" in cta_cfg
+        else ["instagram"]
+    )
     if cta and platform in first_comment_platforms:
         first_comment = merge_first_comment(first_comment, cta)
     if first_comment and object_id:

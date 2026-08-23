@@ -28,8 +28,8 @@ DEFAULTS = {
     "guard_file": "data/fb_account/guard.json",
     "timezone_offset_hours": 7,
     "active_hours": {"start": "09:30", "end": "21:30"},
-    "min_minutes_between_sessions": 90,
-    "session_gap_jitter_minutes": 45,
+    "min_minutes_between_sessions": 30,
+    "session_gap_jitter_minutes": 5,
 }
 
 

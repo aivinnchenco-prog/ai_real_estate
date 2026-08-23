@@ -31,6 +31,7 @@ class PublishJob:
     title: str
     caption_social: str
     caption_fb: str
+    caption_x: str = ""
     cta_instagram: str = ""
     title_youtube_shorts: str = ""
     caption_youtube_shorts: str = ""
@@ -65,6 +66,7 @@ class PublishJob:
             object_id=data["object_id"],
             title=data.get("title") or "",
             caption_social=data.get("caption_social") or "",
+            caption_x=data.get("caption_x") or "",
             caption_fb=data.get("caption_fb") or "",
             cta_instagram=data.get("cta_instagram") or "",
             title_youtube_shorts=data.get("title_youtube_shorts") or "",

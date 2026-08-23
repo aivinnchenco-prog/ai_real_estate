@@ -72,6 +72,9 @@ if [[ "$REPO_ROOT" != "$APP_DIR" ]]; then
   rsync -a --delete \
     --exclude '.git/' \
     --exclude '.venv/' \
+    --exclude '.venv311/' \
+    --exclude '**/.venv/' \
+    --exclude '**/.venv311/' \
     --exclude 'venv/' \
     --exclude '**/node_modules/' \
     --exclude '**/__pycache__/' \
@@ -121,6 +124,14 @@ echo "==> Playwright Chromium (+ OS deps) for Agent7 FB/Airbnb transports"
 "$VENV_DIR/bin/python" -m playwright install --with-deps chromium || {
   echo "WARN: playwright install failed — API health still works; browser channels later"
 }
+
+echo "==> FB parser .venv311 (Python 3.11 + requests/crawl4ai; never rsync this tree)"
+export FB_ROOT="${APP_DIR}/agent_1_parser/fb_parser"
+export RUN_USER
+if ! bash "${FB_ROOT}/scripts/ensure_venv.sh"; then
+  echo "ERROR: FB parser venv not ready. Agent 1 will refuse FB Marketplace links until:"
+  echo "  sudo FB_ROOT=$FB_ROOT RUN_USER=$RUN_USER bash $FB_ROOT/scripts/ensure_venv.sh"
+fi
 
 chown -R "$RUN_USER:$RUN_USER" "$OPENHOME_ROOT"
 

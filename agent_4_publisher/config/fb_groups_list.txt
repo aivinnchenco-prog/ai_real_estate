@@ -1,9 +1,73 @@
-# Список групп Facebook для постинга (ветка fb_groups_pipeline.py).
-# Одна группа на строку — просто URL. Строки с # игнорируются.
-# Пайплайн объединяет этот список с config/fb_groups.json (дубли отбрасываются),
-# лимит групп за один запуск — limits.max_groups_per_run в fb_groups.json.
+# Новые группы дописывайте в конец файла: курсор ротации идёт сверху вниз и по кругу.
+# Пачка объекта берётся с курсора (не весь список сразу). Старые URL не переставлять —
+# иначе собьются текущие assignment и group_cursor.
 
+# Уже в ротации (15). Не трогать порядок.
+https://www.facebook.com/groups/738660971365804/
+https://www.facebook.com/groups/162340677526329/
+https://www.facebook.com/groups/rentinphuket/
+https://www.facebook.com/groups/114081158935102/
+https://www.facebook.com/groups/307921563057104/
+https://www.facebook.com/groups/170117323644873/
+https://www.facebook.com/groups/105957509801950/
+https://www.facebook.com/groups/pn.thailand.hm/
+https://www.facebook.com/groups/1257554961248467/
+https://www.facebook.com/groups/phuketadvertising/
+https://www.facebook.com/groups/normalnayaspravochnayanaphukete/
 https://www.facebook.com/groups/PhuketNotizie/
 https://www.facebook.com/groups/Villa.For.Rent.Phuket/
 https://www.facebook.com/groups/phuketrentsale/
 https://www.facebook.com/groups/123632110828710/
+
+# 2026-08-21: 49 новых из таблицы «можно постить» (60 − 11 уже были в списке).
+# Чередование категорий RU аренда / RU комьюнити / EN аренда / районы / экспаты,
+# чтобы пачка объекта не была одним языком.
+https://www.facebook.com/groups/1007774235971145/
+https://www.facebook.com/groups/phuket.union.travel/
+https://www.facebook.com/groups/phuketpropertyrentsale/
+https://www.facebook.com/groups/469082443133439/
+https://www.facebook.com/groups/Phuket101/
+https://www.facebook.com/groups/realestatephuket/
+https://www.facebook.com/groups/878635432192988/
+https://www.facebook.com/groups/PhuketPropertyForRentOrSell/
+https://www.facebook.com/groups/217624568804423/
+https://www.facebook.com/groups/phuketexpats1/
+https://www.facebook.com/groups/2704225916432208/
+https://www.facebook.com/groups/631583370333821/
+https://www.facebook.com/groups/Phuketbuysellrent/
+https://www.facebook.com/groups/288981104774178/
+https://www.facebook.com/groups/welovephuket/
+https://www.facebook.com/groups/275754339519975/
+https://www.facebook.com/groups/1488879694747224/
+https://www.facebook.com/groups/352703484885257/
+https://www.facebook.com/groups/367705627507659/
+https://www.facebook.com/groups/247880262088420/
+https://www.facebook.com/groups/PhuketHelp/
+https://www.facebook.com/groups/1412722952361145/
+https://www.facebook.com/groups/572797562886339/
+https://www.facebook.com/groups/infophuket/
+https://www.facebook.com/groups/814753485320393/
+https://www.facebook.com/groups/1325229130864334/
+https://www.facebook.com/groups/phuketruteam/
+https://www.facebook.com/groups/1487724681530578/
+https://www.facebook.com/groups/rawaivillarental/
+https://www.facebook.com/groups/1003520483352606/
+https://www.facebook.com/groups/phuketrealestate/
+https://www.facebook.com/groups/1047697042023053/
+https://www.facebook.com/groups/buy.adv.sale.phuket/
+https://www.facebook.com/groups/549546995503002/
+https://www.facebook.com/groups/renthomephuket/
+https://www.facebook.com/groups/1049569238437041/
+https://www.facebook.com/groups/1691158791203180/
+https://www.facebook.com/groups/383038408867880/
+https://www.facebook.com/groups/phuket.property.investor/
+https://www.facebook.com/groups/abyssphuket/
+https://www.facebook.com/groups/187459528701181/
+https://www.facebook.com/groups/CONDOFORRENTPHUKET/
+https://www.facebook.com/groups/636349863135170/
+https://www.facebook.com/groups/952284168117431/
+https://www.facebook.com/groups/rentandsalephuket/
+https://www.facebook.com/groups/homephuket/
+https://www.facebook.com/groups/490380252864116/
+https://www.facebook.com/groups/714186362269972/
+https://www.facebook.com/groups/businessesforsaleandrentinphuket/

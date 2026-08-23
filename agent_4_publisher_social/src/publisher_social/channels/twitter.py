@@ -437,9 +437,9 @@ class TwitterChannel:
         images = job.device_images or job.local_images or job.image_urls
         has_video = bool(job.device_video or job.local_video or job.video_url)
         cfg = _tw_cfg(publisher_cfg, android_cfg)
-        caption = (job.caption_social or job.caption_fb or "").strip()
+        caption = (job.caption_x or job.caption_social or job.caption_fb or "").strip()
         if cfg.get("use_caption_fb"):
-            caption = (job.caption_fb or job.caption_social or "").strip()
+            caption = (job.caption_fb or job.caption_x or job.caption_social or "").strip()
         max_chars = int(cfg.get("max_chars") or 280)
         if len(caption) > max_chars:
             caption = caption[: max_chars - 1].rstrip() + "…"

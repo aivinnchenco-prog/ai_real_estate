@@ -481,16 +481,16 @@ def notion_query_ready(
     status_field: str,
     *,
     locked_field: str | None = None,
+    done_field: str | None = None,
 ) -> list[dict[str, Any]]:
+    clauses: list[dict[str, Any]] = [
+        {"property": status_field, "status": {"equals": status_ready}},
+    ]
     if locked_field:
-        filter_body: dict[str, Any] = {
-            "and": [
-                {"property": status_field, "status": {"equals": status_ready}},
-                {"property": locked_field, "checkbox": {"equals": False}},
-            ]
-        }
-    else:
-        filter_body = {"property": status_field, "status": {"equals": status_ready}}
+        clauses.append({"property": locked_field, "checkbox": {"equals": False}})
+    if done_field:
+        clauses.append({"property": done_field, "checkbox": {"equals": False}})
+    filter_body: dict[str, Any] = {"and": clauses} if len(clauses) > 1 else clauses[0]
     payload = json.dumps({"filter": filter_body}).encode("utf-8")
     result = req(
         "POST",

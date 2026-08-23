@@ -1,3 +1,15 @@
 # По одной ссылке на группу Facebook на строку.
-# Аренда жилья Пхукет / Аренда недвижимости Пхукет (discussion UI)
+# Строки с # игнорируются.
+# Рабочий Termux-список (с VPS /opt/openhome/app/agent_4_publisher_social).
+
 https://www.facebook.com/groups/738660971365804/
+https://www.facebook.com/groups/162340677526329/
+https://www.facebook.com/groups/rentinphuket/
+https://www.facebook.com/groups/114081158935102/
+https://www.facebook.com/groups/307921563057104/
+https://www.facebook.com/groups/170117323644873/
+https://www.facebook.com/groups/105957509801950/
+https://www.facebook.com/groups/pn.thailand.hm/
+https://www.facebook.com/groups/1257554961248467/
+https://www.facebook.com/groups/phuketadvertising/
+https://www.facebook.com/groups/normalnayaspravochnayanaphukete/

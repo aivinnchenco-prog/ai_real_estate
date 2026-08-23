@@ -208,6 +208,7 @@
       "description": "Описание",
       "caption": "Описание соц.сети",
       "caption_social": "Описание соц.сети",
+      "caption_x": "Описание X.com",
       "caption_telegram": "Описание для Telegram",
       "caption_instagram_cta": "CTA Instagram",
       "district": "Район",
@@ -258,8 +259,8 @@
       "instagram": "caption_social",
       "tiktok": "caption_social",
       "facebook": "caption_social",
-      "twitter": "caption_social",
-      "x": "caption_social",
+      "twitter": "caption_x",
+      "x": "caption_x",
       "linkedin": "caption_social",
       "youtube": "caption_social",
       "threads": "caption_social",
@@ -286,6 +287,7 @@
       "Дата добавления",
       "Площадь участка (м²)",
       "Описание соц.сети",
+      "Описание X.com",
       "metricool_post_group_id",
       "Google Maps",
       "Количество сан.узлов",
@@ -477,7 +479,7 @@
     "chain_metricool_after_telegram": false
   },
   "phone_publisher": {
-    "enabled": true,
+    "enabled": false,
     "mode": "fb_only",
     "channels": [
       "fb_groups",
@@ -488,7 +490,7 @@
     "command": "publish",
     "scheduled_command": "publish-scheduled",
     "$comment_runner": "termux: телефон сам опрашивает Notion (pub start, ~5 мин). chain: Mac/VPS вызывает ADB напрямую.",
-    "$comment": "mode=fb_only: телефон только для FB Groups/Marketplace. Остальные сети — PostMyPost.",
+    "$comment": "disabled: FB Groups/Marketplace идут Playwright-ветками на VPS (pipeline publish_fb_*). Телефонный путь оставлен как откат.",
     "$comment_path": "Путь относительно корня Real Estate Agent. Fallback: «Publisher social» в папке Агенты."
   },
   "postmypost": {
@@ -503,14 +505,30 @@
     "upload_poll_attempts": 45,
     "$comment_accounts": "platform_accounts — явный маппинг account_id по платформе. Если пусто — авто по channel code из API.",
     "platform_accounts": {
-      "instagram": [2214120],
-      "tiktok": [2214123],
-      "x": [2214180],
-      "twitter": [2214180],
-      "linkedin": [2214176],
-      "facebook": [2214118],
-      "youtube": [2214116],
-      "threads": [2214188]
+      "instagram": [
+        2214120
+      ],
+      "tiktok": [
+        2214123
+      ],
+      "x": [
+        2214180
+      ],
+      "twitter": [
+        2214180
+      ],
+      "linkedin": [
+        2214176
+      ],
+      "facebook": [
+        2214118
+      ],
+      "youtube": [
+        2214116
+      ],
+      "threads": [
+        2214188
+      ]
     },
     "platform_settings": {
       "instagram": {
@@ -544,9 +562,9 @@
     "default_rubric_id": null,
     "comment_cta": {
       "enabled": true,
-      "$comment": "CTA + код объекта в подпись и first comment при публикации",
+      "$comment": "CTA в подпись (под 🏷). Instagram first comment = только хештеги, без копипасты CTA.",
       "append_to_caption": true,
-      "append_to_first_comment": ["instagram"]
+      "append_to_first_comment": []
     },
     "reply_agent": {
       "enabled": true,
@@ -560,7 +578,7 @@
       "comment_reply_template": "Спасибо за интерес! Код объекта: {object_id}. Отправьте его менеджеру в Telegram {telegram_channel}{whatsapp_suffix} — поможем с подбором и оформлением.",
       "dm_reply_template": "Здравствуйте! Код объекта из поста: {object_id}. Отправьте этот код менеджеру в Telegram {telegram_channel}{whatsapp_suffix} — подберём варианты и поможем с оформлением.",
       "by_platform": {
-        "instagram": "Код объекта: {object_id}. Напишите менеджеру в Telegram {telegram_channel}{whatsapp_suffix}.",
+        "instagram": "Напишите менеджеру в Telegram {telegram_channel}.",
         "tiktok": "Код: {object_id} → Telegram {telegram_channel}",
         "youtube": "Код объекта {object_id}. Связь: Telegram {telegram_channel}",
         "x": "Код {object_id} → TG {telegram_channel}",
@@ -573,8 +591,13 @@
       "enabled": false,
       "$comment": "DM-воронки отключены. Реактивные ответы на комментарии — опционально одна automation в UI PostMyPost (см. comment_reply_automation)",
       "delay_minutes_after_publish": 15,
-      "platforms": ["instagram"],
-      "instagram_post_kinds": ["carousel", "reel"],
+      "platforms": [
+        "instagram"
+      ],
+      "instagram_post_kinds": [
+        "carousel",
+        "reel"
+      ],
       "dm_message_template": "Полная информация об объекте {object_id}: {telegram_url}"
     },
     "comment_reply_automation": {

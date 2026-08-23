@@ -127,6 +127,8 @@ def test_env_production_example_has_required_keys():
     assert "AGENT7_FACEBOOK_PROFILE_DIR" in text
     assert "AGENT9_FACEBOOK_PROFILE_DIR" in text
     assert "OPENHOME_FB_LOCK_DIR" in text
+    assert "FB_PARSER_PYTHON=" in text
+    assert "FB_PARSER_ROOT=" in text
     # template must not contain filled secrets
     assert "AMO_ACCESS_TOKEN=\n" in text or "AMO_ACCESS_TOKEN=\r\n" in text or re.search(
         r"^AMO_ACCESS_TOKEN=\s*$", text, re.M
@@ -141,6 +143,17 @@ def test_install_script_safe_defaults():
     assert "ufw enable" not in script.split("Firewall")[0]  # not auto-enabled in main flow
     assert "AGENT7_LIVE_OUTREACH_ENABLED=true" not in script
     assert "AMO_CHAT_CONNECT_LIVE=true" not in script
+    assert "--exclude '.venv311/'" in script or '--exclude ".venv311/"' in script
+    assert "ensure_venv.sh" in script
+    assert "fb_parser" in script
+
+
+def test_agent1_unit_pins_fb_parser_python():
+    unit = (DEPLOY / "systemd" / "openhome-agent1.service").read_text(encoding="utf-8")
+    assert "FB_PARSER_PYTHON=/opt/openhome/app/agent_1_parser/fb_parser/.venv311/bin/python" in unit
+    assert "FB_PARSER_ROOT=/opt/openhome/app/agent_1_parser/fb_parser" in unit
+    assert "PYTHONPATH=/opt/openhome/app" in unit
+    # Bot process stays on the shared venv; FB subprocess must not.
 
 
 def test_health_route_status_ok(tmp_path):

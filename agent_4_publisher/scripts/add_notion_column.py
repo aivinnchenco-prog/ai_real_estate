@@ -57,6 +57,7 @@ COLUMNS = {
     nfc.METRICOOL_POST_ID: {"rich_text": {}},
     "publora_post_group_id": {"rich_text": {}},
     nfc.DESCRIPTION_SOCIAL: {"rich_text": {}},
+    nfc.DESCRIPTION_X: {"rich_text": {}},
     nfc.PUBLISH_AT: {"date": {}},
     **{name: {"url": {}} for name in PUBLISHED_URL_COLUMNS},
     **AGENT6_COLUMNS,
@@ -65,6 +66,7 @@ COLUMNS = {
 DEFAULT_COLUMNS = [
     nfc.METRICOOL_POST_ID,
     nfc.PUBLISH_AT,
+    nfc.DESCRIPTION_X,
     *PUBLISHED_URL_COLUMNS,
     *AGENT6_COLUMNS.keys(),
 ]

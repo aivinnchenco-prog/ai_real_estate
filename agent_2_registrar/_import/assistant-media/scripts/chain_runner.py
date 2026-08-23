@@ -172,6 +172,78 @@ def clear_tag_if_was_failing() -> bool:
     return True
 
 
+TELEGRAM_ACCESS_TAG = "telegram_channel_access"
+_TG_ACCESS_FAIL_FLAG = ROOT / "data" / "telegram_channel_failing"
+
+
+def check_telegram_channel_access() -> tuple[bool, str]:
+    """Preflight витрины: publisher-бот валиден и админ канала-витрины.
+
+    Делегируем в agent_4_publisher/scripts/publish_telegram.py --check-channel,
+    чтобы вся Telegram-логика жила в модуле публикатора.
+    """
+    script = ROOT.parents[2] / "agent_4_publisher" / "scripts" / "publish_telegram.py"
+    if not script.exists():
+        return True, "publish_telegram.py not found — skip"
+    proc = subprocess.run(
+        [sys.executable, str(script), "--check-channel"],
+        cwd=script.parent,
+        capture_output=True,
+        text=True,
+    )
+    out = f"{proc.stdout or ''}{proc.stderr or ''}".strip()
+    return proc.returncode == 0, out
+
+
+def watch_telegram_channel_access() -> None:
+    """Алерт в error-бот, если publisher-бот не может постить в канал-витрину.
+
+    Ловит класс «Forbidden: bot is not a member of the channel chat» ДО того,
+    как каждый объект молча упадёт на sendMediaGroup. Один раз (cooldown в
+    error_notify); после восстановления сбрасываем дедуп и сообщаем.
+    """
+    ok, out = check_telegram_channel_access()
+    if ok:
+        if _clear_tg_access_flag():
+            notify("Telegram-витрина: доступ восстановлен, публикация в канал снова работает.",
+                   force=True)
+        return
+    print(f"[chain] Telegram channel access check FAILED:\n{out}", file=sys.stderr)
+    sent = notify(
+        "Telegram-витрина: бот-публикатор не может постить в канал.\n\n"
+        f"{out}\n\n"
+        "Проверить: бот TG_BOT_TOKEN_PUBLISHER добавлен админом канала "
+        "(TELEGRAM_CHANNEL) с правом публикации.",
+        tag=TELEGRAM_ACCESS_TAG,
+    )
+    if sent:
+        _mark_tg_access_failing()
+
+
+def _mark_tg_access_failing() -> None:
+    try:
+        _TG_ACCESS_FAIL_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        _TG_ACCESS_FAIL_FLAG.touch()
+    except OSError:
+        pass
+
+
+def _clear_tg_access_flag() -> bool:
+    if not _TG_ACCESS_FAIL_FLAG.exists():
+        return False
+    try:
+        _TG_ACCESS_FAIL_FLAG.unlink()
+    except OSError:
+        pass
+    clear_tag(TELEGRAM_ACCESS_TAG)
+    return True
+
+
+def telegram_showcase_blocked() -> bool:
+    """True while preflight знает, что витринный бот не может постить."""
+    return _TG_ACCESS_FAIL_FLAG.exists()
+
+
 def resolve_publish_platforms(chain: dict) -> list[str]:
     """Platforms for publish_pipeline (--platform all).
 
@@ -333,13 +405,20 @@ def run_agent6(page_id: str, platform: str, publisher_script: Path,
 
 def resolve_fb_python() -> Path | None:
     """python3.11 с Playwright — venv FB-парсера (там же авторизованный профиль)."""
+    env = (os.environ.get("FB_PARSER_PYTHON") or "").strip()
+    if env:
+        p = Path(env).expanduser()
+        return p if p.exists() else None
     p = ROOT.parents[2] / "agent_1_parser" / "fb_parser" / ".venv311" / "bin" / "python"
     return p if p.exists() else None
 
 
-def run_fb_branch(page_id: str, script_name: str) -> int:
-    """FB-ветки Агента 4 (группы / маркетплейс): свои локи (fb_*_locked),
-    «Статус» не меняют, поэтому безопасны рядом с Metricool-веткой."""
+def run_fb_branch(page_id: str | None, script_name: str, *, queue: bool = False) -> int:
+    """FB-ветки Агента 4 (группы / маркетплейс).
+
+    Очередь --queue смотрит галочки phone_fb_*_done, не agent6_locked.
+    «Статус» не меняют, поэтому безопасны рядом с PostMyPost.
+    """
     publisher_dir = ROOT.parents[2] / "agent_4_publisher"
     script = publisher_dir / "scripts" / script_name
     fb_python = resolve_fb_python()
@@ -349,12 +428,20 @@ def run_fb_branch(page_id: str, script_name: str) -> int:
     if fb_python is None:
         print(f"[chain] SKIP {script_name}: нет venv FB-парсера (.venv311)", file=sys.stderr)
         return 0
-    cmd = [str(fb_python), str(script), "--page-id", page_id]
-    # На сервере без дисплея — виртуальный экран (headful палится у FB меньше)
+    cmd = [str(fb_python), str(script)]
+    if queue:
+        cmd.append("--queue")
+        target = "queue"
+    else:
+        if not page_id:
+            print(f"[chain] SKIP {script_name}: нет page-id", file=sys.stderr)
+            return 0
+        cmd.extend(["--page-id", page_id])
+        target = page_id
     import shutil
     if not os.environ.get("DISPLAY") and shutil.which("xvfb-run"):
         cmd = ["xvfb-run", "-a", "-s", "-screen 0 1440x900x24"] + cmd
-    print(f"\n[chain] Agent 4 FB ({script_name}) → {page_id}")
+    print(f"\n[chain] Agent 4 FB ({script_name}) → {target}")
     proc = subprocess.run(cmd, cwd=publisher_dir)
     return proc.returncode
 
@@ -440,7 +527,13 @@ def continue_chain(
         # в Telegram независимо от флагов (выключается chain.telegram_showcase).
         # Смотрим и статусы монтажа/готовности — чтобы дослать посты объектам,
         # которые прошли цепочку до появления этой ветки.
-        if chain.get("telegram_showcase", True):
+        if chain.get("telegram_showcase", True) and telegram_showcase_blocked():
+            print(
+                "[chain] SKIP telegram showcase: publisher bot cannot post "
+                "(preflight telegram_channel_access failed)",
+                file=sys.stderr,
+            )
+        elif chain.get("telegram_showcase", True):
             tg_candidates = list(listings)
             if not object_id:
                 for st_key in ("video_start", "video_done"):
@@ -671,13 +764,26 @@ def continue_chain(
                             "Проверьте ADB/телефон и last_error в Notion.",
                             tag=f"phone_fb_failed:{listing.object_id}",
                         )
+
+    if fb_branches:
+        if object_id:
+            one = fetch_by_object_id(crm, object_id, nf)
+            if one:
+                for script_name in fb_branches:
+                    branch = script_name.replace("_pipeline.py", "")
+                    log_event(one.object_id, "chain", f"{branch}_start", page_id=one.page_id)
+                    code_fb = run_fb_branch(one.page_id, script_name)
+                    if code_fb != 0:
+                        exit_code = code_fb
+                        log_event(one.object_id, "chain", f"{branch}_failed", code=code_fb)
+        else:
             for script_name in fb_branches:
                 branch = script_name.replace("_pipeline.py", "")
-                log_event(listing.object_id, "chain", f"{branch}_start", page_id=listing.page_id)
-                code_fb = run_fb_branch(listing.page_id, script_name)
+                log_event("-", "chain", f"{branch}_queue")
+                code_fb = run_fb_branch(None, script_name, queue=True)
                 if code_fb != 0:
                     exit_code = code_fb
-                    log_event(listing.object_id, "chain", f"{branch}_failed", code=code_fb)
+                    log_event("-", "chain", f"{branch}_failed", code=code_fb)
 
     return exit_code
 
@@ -695,6 +801,10 @@ def watch_loop(crm: NotionCRM, cfg: dict) -> None:
                 watch_higgsfield_auth()
             except Exception as exc:
                 print(f"[chain] auth check error: {exc}", file=sys.stderr)
+            try:
+                watch_telegram_channel_access()
+            except Exception as exc:
+                print(f"[chain] telegram access check error: {exc}", file=sys.stderr)
         try:
             continue_chain(crm, cfg, from_agent=3)
         except Exception as exc:

@@ -7,9 +7,8 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import CallbackQuery, Message, ContentType, InlineKeyboardButton, InlineKeyboardMarkup, FSInputFile
+from aiogram.types import CallbackQuery, Message, ContentType, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.types import BotCommand, BotCommandScopeDefault, BotCommandScopeChat
-from aiogram.utils.media_group import MediaGroupBuilder
 import html
 import os
 import re
@@ -19,12 +18,14 @@ from CustomLogger import logger
 from google_sheets import GoogleSheetsWriter
 from voice_agent import VoiceAgent
 from airbnb_url import normalize_airbnb_url, resolve_currency
-from fb_handoff import extract_fb_url, handoff_fb_to_agent2
+from fb_handoff import describe_fb_parser_env, extract_fb_url, handoff_fb_to_agent2
 from agent2_handoff import find_agent2_root, resolve_object_id
 from parser_pool import close_parser
 from workflow import finalize_take_work, take_listing_to_work
 from queue_worker import ensure_agent_listener_task, poll_loop, poll_once
 from pricing_worker import bootstrap_background_pricing
+from location_retry import bootstrap_location_retry
+from tg_media import send_photo_batches
 import config
 import asyncio
 
@@ -399,13 +400,31 @@ async def send_flags_question(message: Message, object_id: str) -> None:
     if not ok:
         logger.error(f"notion_flags: не удалось поставить паузу для {object_id}: {note}")
     await message.answer(
-        f"🎬 Что делать с объектом <b>{object_id}</b>?\n"
+        f"🎬 Что делать с объектом <b>{html.escape(object_id)}</b>?\n"
         "1) Монтаж — генерировать ли видео.\n"
         "2) Нейросеть — Seedance 2.0 или Wan 2.7 (нужно, если монтаж = ДА).\n"
         "3) Публикация — постить ли в соц.сети (при монтаж=НЕТ — карусель фото).\n"
         "Пока не выбрано всё нужное — объект ждёт в базе.",
         reply_markup=_flags_keyboard(token),
     )
+
+
+async def _send_flags_after_listing(message: Message, object_id: str) -> None:
+    """Кнопки не зависят от успеха альбома фото — иначе IMAGE_PROCESS_FAILED их глотает."""
+    if not object_id:
+        await message.answer(
+            "Объект в CRM, но ID не найден — кнопки «Монтаж / Публикация» не показал."
+        )
+        return
+    try:
+        await send_flags_question(message, object_id)
+    except Exception as exc:
+        logger.error(f"Не удалось отправить кнопки флагов для {object_id}: {exc}")
+        await message.answer(
+            f"Объект <code>{html.escape(object_id)}</code> в CRM, но кнопки не отправились. "
+            f"Поставь «Монтаж» / «Публикация» в Notion.\n"
+            f"{_tg_safe_text(str(exc), limit=400)}"
+        )
 
 
 def _flags_summary(object_id: str, montage: str, publish: str, video_engine: str | None) -> str:
@@ -547,28 +566,26 @@ async def handle_fb_url_message(message: Message, fb_url: str):
         f"📷 Фото: {result.photos}\n{_tg_safe_text(result.note, limit=1500)}"
     )
 
-    if result.message_text:
-        await send_plain_text(message, result.message_text)
-
-    if result.image_paths:
-        media_group = MediaGroupBuilder(caption="")
-        for path in result.image_paths:
-            try:
-                media_group.add_photo(media=FSInputFile(path))
-            except Exception as e:
-                logger.error(f"Failed to add FB photo {path} to media group: {e}")
-                continue
-            if len(media_group.build()) >= 10:
-                await message.answer_media_group(media=media_group.build())
-                media_group = MediaGroupBuilder(caption="")
-        if len(media_group.build()) > 0:
-            await message.answer_media_group(media=media_group.build())
-    elif result.photos == 0:
-        await message.answer("Фото не найдены в session/photos/")
-
-    # Кнопки — последним сообщением, иначе теряются под альбомами фото.
-    if object_id:
-        await send_flags_question(message, object_id)
+    try:
+        if result.message_text:
+            await send_plain_text(message, result.message_text)
+        if result.image_paths:
+            sent, skipped = await send_photo_batches(message, result.image_paths)
+            if skipped:
+                await message.answer(
+                    f"📷 В Telegram ушло {sent} фото, пропущено {skipped} "
+                    f"(Telegram не принял файл)."
+                )
+        elif result.photos == 0:
+            await message.answer("Фото не найдены в session/photos/")
+    except Exception as exc:
+        logger.error(f"FB listing chat delivery failed after CRM ok: {exc}")
+        await message.answer(
+            f"Объект в CRM, но описание/фото в чат ушли не полностью.\n"
+            f"{_tg_safe_text(str(exc), limit=800)}"
+        )
+    finally:
+        await _send_flags_after_listing(message, object_id)
 
 
 async def handle_url_message(message: Message):
@@ -657,25 +674,11 @@ async def handle_url_message(message: Message):
                     await message.answer(text)
 
                 if local_image_paths:
-                    media_group = MediaGroupBuilder(caption="")
-                    for path in local_image_paths:
-                        try:
-                            media_group.add_photo(media=FSInputFile(path))
-                        except Exception as e:
-                            logger.error(f"Failed to add photo {path} to media group: {e}")
-
-                        if len(media_group.build()) >= 10:
-                            await message.answer_media_group(media=media_group.build())
-                            media_group = MediaGroupBuilder(caption="")
-
-                    if len(media_group.build()) > 0:
-                        await message.answer_media_group(media=media_group.build())
-
-                # Кнопки — последним сообщением, иначе теряются под альбомами фото.
-                if object_id:
-                    await send_flags_question(message, object_id)
+                    await send_photo_batches(message, local_image_paths)
 
             finally:
+                if object_id:
+                    await _send_flags_after_listing(message, object_id)
                 finalize_take_work(result)
         else:
             logger.info("Во входных данных не обнаружено URL для обработки!")
@@ -756,6 +759,9 @@ async def start_bot():
     if await asyncio.to_thread(bootstrap_background_pricing):
         logger.info('Airbnb background pricing worker started')
 
+    if await asyncio.to_thread(bootstrap_location_retry):
+        logger.info('Airbnb background location retry worker started')
+
     if config.ENABLE_TASK_QUEUE_POLLER and config.SUPABASE_URL:
         _queue_poll_task = asyncio.create_task(poll_loop(bot, admins))
         await poll_once(bot, admins)
@@ -763,6 +769,13 @@ async def start_bot():
     queue_note = ''
     if config.SUPABASE_URL:
         queue_note = f'\n📋 Очередь Supabase: опрос каждые {config.TASK_POLL_INTERVAL_SEC} с'
+
+    fb_ok, fb_note = await asyncio.to_thread(describe_fb_parser_env)
+    if fb_ok:
+        logger.info(fb_note)
+    else:
+        logger.error(fb_note)
+        queue_note += f'\n⚠️ {fb_note}'
 
     for admin_id in admins:
         try:

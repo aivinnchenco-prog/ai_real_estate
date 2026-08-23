@@ -5,6 +5,7 @@ google-auth-oauthlib>=1.2.1
 gspread>=6.1.4
 loguru>=0.7.2
 lxml>=5.3.0
+pillow>=10.0.0
 requests>=2.32.4
 selenium>=4.35.0
 seleniumbase>=4.41.1

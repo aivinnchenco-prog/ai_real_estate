@@ -17,9 +17,11 @@ LLM не умеет надёжно считать символы — даже с
 TELEGRAM_CAPTION_LIMIT = 1024
 SAFETY_MARGIN = 60  # запас под непредвиденные переносы/эмодзи
 
-SOCIAL_LIMIT = 280
-SOCIAL_SAFETY_MARGIN = 5  # у короткой версии бюджет и так впритык (~272/280
-                          # в эталонном примере), запас минимальный
+SOCIAL_LIMIT = 700
+SOCIAL_SAFETY_MARGIN = 20  # «Описание соц.сети» для IG/TikTok/FB/Threads/LinkedIn/YouTube
+
+X_LIMIT = 280
+X_SAFETY_MARGIN = 5  # колонка «Описание X.com» — лимит поста X
 
 
 def calculate_max_guests(rooms: int | None, extracted_guests: int | None = None) -> int:
@@ -47,35 +49,42 @@ def calculate_max_guests(rooms: int | None, extracted_guests: int | None = None)
     return rooms * 2 + 1  # фолбэк, только если хозяин нигде не указал число
 
 
-def validate_and_fit_social(generated_text: str, object_id: str) -> str:
-    """Страховка для короткой версии (колонка 'Описание соц.сети', лимит 280).
-
-    В отличие от validate_and_fit() — тут нет переносов строк (это плотный
-    текст в 1-3 предложения), поэтому обрезка идёт по словам, а не по строкам.
-
-    Код объекта в тело соц.описания не дописываем: publisher добавляет
-    отдельную строку «🏷 Код объекта: …», иначе код дублируется в посте.
-    """
-    limit = SOCIAL_LIMIT - SOCIAL_SAFETY_MARGIN
+def _strip_object_tag(generated_text: str, object_id: str) -> str:
     tag = f"Объект №{object_id}"
-
-    generated_text = generated_text.strip()
-    # Снять legacy-тег, если слабая модель всё же вставила его в конец.
     if tag in generated_text:
         generated_text = generated_text.replace(tag, "").strip()
-        generated_text = " ".join(generated_text.split())
+    return generated_text
 
+
+def _fit_by_words(generated_text: str, limit: int) -> str:
     if len(generated_text) <= limit:
         return generated_text
-
     words = generated_text.split()
     body = ""
     for w in words:
         if len(body) + len(w) + 1 > limit:
             break
         body = f"{body} {w}".strip()
-
     return body.strip()
+
+
+def validate_and_fit_social(generated_text: str, object_id: str) -> str:
+    """Страховка для «Описание соц.сети» (IG/TikTok/FB/Threads, лимит 700).
+
+    Переносы строк допустимы. Код объекта в тело не дописываем: publisher
+    добавляет отдельную строку «🏷 Код объекта: …».
+    """
+    limit = SOCIAL_LIMIT - SOCIAL_SAFETY_MARGIN
+    generated_text = _strip_object_tag(generated_text.strip(), object_id)
+    return _fit_by_words(generated_text, limit)
+
+
+def validate_and_fit_x(generated_text: str, object_id: str) -> str:
+    """Страховка для «Описание X.com» (лимит 280, плотный текст без переносов)."""
+    limit = X_LIMIT - X_SAFETY_MARGIN
+    generated_text = _strip_object_tag(generated_text.strip(), object_id)
+    generated_text = " ".join(generated_text.split())
+    return _fit_by_words(generated_text, limit)
 
 
 def validate_and_fit(generated_text: str, object_id: str) -> str:
@@ -155,8 +164,18 @@ if __name__ == "__main__":
     print(result_social)
     print(f"длина: {len(result_social)} (лимит {SOCIAL_LIMIT})")
 
+    print("\n--- x.com (эталон 280) ---")
+    result_x = validate_and_fit_x(social_example, "F_20260702_001")
+    print(result_x)
+    print(f"длина: {len(result_x)} (лимит {X_LIMIT})")
+
     print("\n--- social (слишком длинный, модель не уложилась) ---")
-    too_long_social = social_example + " Дополнительная информация которая не поместится и её придётся обрезать по словам аккуратно"
+    too_long_social = social_example + (" Дополнительная фраза про комплекс и район." * 40)
     result_trim = validate_and_fit_social(too_long_social, "F_20260702_001")
     print(result_trim)
     print(f"длина: {len(result_trim)} (лимит {SOCIAL_LIMIT})")
+
+    print("\n--- x.com (слишком длинный) ---")
+    result_x_trim = validate_and_fit_x(too_long_social, "F_20260702_001")
+    print(result_x_trim)
+    print(f"длина: {len(result_x_trim)} (лимит {X_LIMIT})")

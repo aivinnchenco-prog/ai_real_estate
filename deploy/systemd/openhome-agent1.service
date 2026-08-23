@@ -12,6 +12,10 @@ Environment=PYTHONUNBUFFERED=1
 Environment=HOME=/opt/openhome
 Environment=PATH=/opt/openhome/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=OPENHOME_ENV_FILE=/opt/openhome/.env
+Environment=FB_PARSER_ROOT=/opt/openhome/app/agent_1_parser/fb_parser
+Environment=FB_PARSER_PYTHON=/opt/openhome/app/agent_1_parser/fb_parser/.venv311/bin/python
+Environment=PYTHONPATH=/opt/openhome/app
+Environment=OPENHOME_APP_ROOT=/opt/openhome/app
 EnvironmentFile=-/opt/openhome/.env
 ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1440x900x24" /opt/openhome/venv/bin/python -u main.py
 Restart=on-failure

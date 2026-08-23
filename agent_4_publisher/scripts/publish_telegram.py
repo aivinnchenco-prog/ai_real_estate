@@ -63,9 +63,17 @@ def read_telegram_caption_raw(page: dict[str, Any], fields: dict[str, str], conf
 
 
 def telegram_token() -> str:
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    # Publisher-бот (trip_home_phuket_bot) должен быть админом канала-витрины.
+    # Каноничное неймспейсное имя — TG_BOT_TOKEN_PUBLISHER; читаем его первым,
+    # чтобы в едином /opt/openhome/.env не ловить чужой бот из общего слота
+    # TELEGRAM_BOT_TOKEN (fallback для per-agent .env и локальной разработки).
+    token = (
+        os.environ.get("TG_BOT_TOKEN_PUBLISHER")
+        or os.environ.get("TELEGRAM_BOT_TOKEN")
+        or ""
+    ).strip()
     if not token:
-        raise ValueError("Set TELEGRAM_BOT_TOKEN in .env")
+        raise ValueError("Set TG_BOT_TOKEN_PUBLISHER (or TELEGRAM_BOT_TOKEN) in .env")
     return token
 
 
@@ -106,6 +114,60 @@ def check_bot() -> dict[str, Any]:
     if not body.get("ok"):
         raise RuntimeError(f"getMe failed: {body}")
     return body["result"]
+
+
+def _tg_get(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    url = TELEGRAM_API.format(token=telegram_token(), method=method)
+    query = urllib.parse.urlencode(params)
+    try:
+        with urllib.request.urlopen(f"{url}?{query}", timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        err = e.read().decode("utf-8", errors="replace")
+        try:
+            return json.loads(err)
+        except json.JSONDecodeError:
+            return {
+                "ok": False,
+                "error_code": e.code,
+                "description": err or e.reason,
+            }
+
+
+def check_channel_access(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Preflight: бот-публикатор валиден и является админом канала-витрины.
+
+    Возвращает диагностику; бросает RuntimeError, если постить нельзя
+    (не тот бот / нет прав) — чтобы вызвавший (chain-watcher) поднял алерт
+    ДО того, как sendMediaGroup молча упадёт 403 на каждом объекте.
+    """
+    cfg = config or load_config()
+    channel = telegram_channel(cfg)
+    me = check_bot()
+    bot_id = me.get("id")
+    bot_username = me.get("username")
+    member = _tg_get("getChatMember", {"chat_id": channel, "user_id": bot_id})
+    if not member.get("ok"):
+        raise RuntimeError(
+            f"Бот @{bot_username} не может проверить членство в {channel}: "
+            f"{member.get('error_code')} {member.get('description')}. "
+            "Проверьте, что бот добавлен в канал."
+        )
+    status = (member.get("result") or {}).get("status")
+    can_post = status in ("administrator", "creator")
+    result = {
+        "channel": channel,
+        "bot_username": bot_username,
+        "bot_id": bot_id,
+        "status": status,
+        "can_post": can_post,
+    }
+    if not can_post:
+        raise RuntimeError(
+            f"Бот @{bot_username} не админ канала {channel} (status={status}). "
+            "Добавьте бота администратором с правом публикации."
+        )
+    return result
 
 
 def build_telegram_caption(page: dict[str, Any], fields: dict[str, str], config: dict[str, Any]) -> str:
@@ -336,13 +398,27 @@ def main() -> int:
         action="store_true",
         help="Only run Metricool carousel (skip Telegram)",
     )
-    parser.add_argument("--check-bot", action="store_true", help="Verify TELEGRAM_BOT_TOKEN via getMe")
+    parser.add_argument("--check-bot", action="store_true", help="Verify publisher bot token via getMe")
+    parser.add_argument(
+        "--check-channel",
+        action="store_true",
+        help="Preflight: publisher bot is an admin of the showcase channel (exit!=0 if not)",
+    )
     args = parser.parse_args()
 
     if args.check_bot:
         bot = check_bot()
         channel = telegram_channel(load_config())
         print(json.dumps({"bot": bot, "channel": channel}, indent=2, ensure_ascii=False))
+        return 0
+
+    if args.check_channel:
+        try:
+            info = check_channel_access()
+        except Exception as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 1
+        print(json.dumps(info, indent=2, ensure_ascii=False))
         return 0
 
     if not args.page_id:

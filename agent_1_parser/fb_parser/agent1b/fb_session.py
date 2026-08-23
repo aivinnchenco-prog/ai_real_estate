@@ -87,14 +87,36 @@ def parse_proxy_from_env() -> Optional[ProxySettings]:
     )
 
 
+def is_credential_like_profile_value(raw: str) -> bool:
+    """True if FB_BROWSER_PROFILE looks like email/URL, not a folder path.
+
+    Absolute Unix paths like /opt/openhome/runtime/browser_profiles/foo are valid
+    (many slashes). The old `count("/") > 2` check rejected them.
+    """
+    s = (raw or "").strip().strip("\"'")
+    if not s:
+        return False
+    lower = s.lower()
+    if lower.startswith(("http://", "https://", "file://")):
+        return True
+    if "@" in s and not s.startswith(("/", ".", "~")):
+        return True
+    return False
+
+
 def get_profile_path() -> Path:
-    raw = os.getenv("FB_BROWSER_PROFILE", ".fb_profile").strip() or ".fb_profile"
-    if "@" in raw or raw.count("/") > 2:
+    raw = (
+        os.getenv("FB_PARSER_BROWSER_PROFILE")
+        or os.getenv("FB_BROWSER_PROFILE")
+        or ".fb_profile"
+    ).strip() or ".fb_profile"
+    if is_credential_like_profile_value(raw):
         raise ValueError(
-            "FB_BROWSER_PROFILE must be a folder path (e.g. .fb_profile), "
-            "not email/password. Put credentials into FB_EMAIL and FB_PASSWORD."
+            "FB_BROWSER_PROFILE must be a folder path (e.g. .fb_profile or "
+            "/opt/openhome/runtime/browser_profiles/...), not email/password. "
+            "Put credentials into FB_EMAIL and FB_PASSWORD."
         )
-    path = Path(raw)
+    path = Path(raw).expanduser()
     if not path.is_absolute():
         # Anchor to project root so the profile is found regardless of cwd
         # (systemd, cron, launching from ~, etc.).
@@ -153,23 +175,20 @@ def build_browser_kwargs(for_login: bool = False) -> dict[str, Any]:
 
 @asynccontextmanager
 async def profile_lock():
+    """In-process lock plus cross-process flock (Agent 7 / 9 share the same profile)."""
     await _PROFILE_LOCK.acquire()
-    lock_file = get_profile_path() / ".profile.lock"
-    for _ in range(30):
-        try:
-            if not lock_file.exists():
-                lock_file.write_text(str(os.getpid()), encoding="utf-8")
-                break
-            await asyncio.sleep(0.5)
-        except OSError:
-            await asyncio.sleep(0.5)
     try:
-        yield
+        from openhome_shared.facebook_profile_lock import facebook_profile_lock
+
+        with facebook_profile_lock(get_profile_path()):
+            yield
+    except ImportError as exc:
+        raise RuntimeError(
+            "No module named 'openhome_shared'. "
+            "FB parser needs the monorepo root on PYTHONPATH "
+            "(OPENHOME_APP_ROOT=/opt/openhome/app)."
+        ) from exc
     finally:
-        try:
-            lock_file.unlink(missing_ok=True)
-        except OSError:
-            pass
         _PROFILE_LOCK.release()
 
 

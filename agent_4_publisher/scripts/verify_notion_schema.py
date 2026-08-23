@@ -32,6 +32,7 @@ EXPECTED_TYPES: dict[str, str] = {
     "description": "rich_text",
     "caption": "rich_text",
     "caption_social": "rich_text",
+    "caption_x": "rich_text",
     "caption_telegram": "rich_text",
     "video_url_Seedance": "url",
     "video_url_vertical": "url",

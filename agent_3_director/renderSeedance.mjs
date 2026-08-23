@@ -5,7 +5,6 @@
 import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import { ROOT } from "./env.mjs";
 import {
   buildPrompt,
   downloadToFile,
@@ -15,7 +14,7 @@ import { generateSeedanceViaCli, isCliAuthenticated } from "./higgsfieldCli.mjs"
 import { generateSeedanceViaMcp, isMcpConfigured } from "./higgsfieldMcp.mjs";
 import { generateSeedanceViaPlatform, isPlatformConfigured } from "./higgsfieldPlatform.mjs";
 import { downloadFromR2, publicUrlForKey, uploadVideoToR2 } from "./r2util.mjs";
-import { listKeys } from "./r2list.mjs";
+import { listMusicTracks, pickMusicTrackRoundRobin } from "./musicRotation.mjs";
 import {
   applyTitleOverlay,
   isTitleOverlayEnabled,
@@ -47,51 +46,22 @@ async function generateClip(provider, imageUrls, prompt, cfg) {
 }
 
 /**
- * Ротация треков по кругу: каждый новый объект получает следующий трек из
- * папки, после последнего — снова первый. Позиция хранится в
- * data/music_rotation.json; повторный прогон того же объекта (--force)
- * получает тот же трек, а не сдвигает очередь.
- */
-function pickMusicTrackRoundRobin(objectId, tracks) {
-  const sorted = [...tracks].sort();
-  const stateFile = path.resolve(ROOT, "data/music_rotation.json");
-
-  let state = { index: -1, assigned: {} };
-  try {
-    state = { index: -1, assigned: {}, ...JSON.parse(fs.readFileSync(stateFile, "utf8")) };
-  } catch {
-    /* первого запуска файла ещё нет */
-  }
-
-  const previous = state.assigned[objectId];
-  if (previous && sorted.includes(previous)) return previous;
-
-  const next = (Number(state.index) + 1) % sorted.length;
-  const track = sorted[next];
-  state.index = next;
-  state.assigned[objectId] = track;
-  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-  fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
-  return track;
-}
-
-/**
  * Мини-монтаж: наложение вирусной аудиодорожки из R2 (папка music/) на готовый
  * ролик — Metricool не даёт выбирать музыку при постинге, поэтому звук
- * вшиваем в файл. Треки берутся по кругу (round-robin), очередь не кончается.
+ * вшиваем в файл. Треки по кругу; очередь в R2 music/_rotation.json (не в APP).
  */
 export async function addMusicTrack({ objectId, videoPath, outPath, cfg, tmpDir }) {
   const music = cfg.music || {};
   if (music.enabled === false) return false;
 
   const prefix = music.r2_prefix || "music/";
-  const tracks = (await listKeys(prefix)).filter((k) => /\.(mp3|m4a|aac|wav|ogg)$/i.test(k));
+  const tracks = await listMusicTracks(prefix, music.rotation_key);
   if (!tracks.length) {
     console.warn(`Music: нет треков в R2 ${prefix} — ролик остаётся без музыки`);
     return false;
   }
 
-  const trackKey = pickMusicTrackRoundRobin(objectId, tracks);
+  const trackKey = await pickMusicTrackRoundRobin(objectId, tracks, music);
   const trackLocal = path.join(tmpDir, `music${path.extname(trackKey)}`);
   await downloadFromR2(trackKey, trackLocal);
 

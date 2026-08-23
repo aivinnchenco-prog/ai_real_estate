@@ -56,6 +56,40 @@ def extract_fb_url(text: str) -> str | None:
     return None
 
 
+REQUIRED_PARSER_MODULES = ("requests", "playwright", "crawl4ai", "openhome_shared")
+
+
+def _parser_env(workspace: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    for parent in [workspace.resolve(), *workspace.resolve().parents]:
+        if (parent / "openhome_shared").is_dir():
+            extra = str(parent)
+            current = env.get("PYTHONPATH", "").strip()
+            parts = [p for p in current.split(os.pathsep) if p]
+            if extra not in parts:
+                env["PYTHONPATH"] = extra if not parts else extra + os.pathsep + current
+            break
+    return env
+
+
+def preflight_parser_env(backend: str) -> None:
+    """Fail at bot start if this interpreter cannot import FB parser deps."""
+    modules = ("requests", "playwright", "scrapegraphai") if backend == "scrapegraphai" else REQUIRED_PARSER_MODULES
+    missing: list[str] = []
+    for name in modules:
+        try:
+            __import__(name)
+        except ImportError:
+            missing.append(name)
+    if missing:
+        raise RuntimeError(
+            "FB-парсер запущен не в .venv311: нет пакетов "
+            + ", ".join(missing)
+            + f". Интерпретатор: {sys.executable}. "
+            "Запусти ./run_bot.sh или: sudo bash scripts/ensure_venv.sh"
+        )
+
+
 def run_parser(parser_path: Path, workspace: Path, url: str, session_id: str, backend: str) -> tuple[int, str]:
     cmd = [
         sys.executable,
@@ -71,7 +105,13 @@ def run_parser(parser_path: Path, workspace: Path, url: str, session_id: str, ba
         "--save-debug-json",
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=PARSER_TIMEOUT_SEC)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=PARSER_TIMEOUT_SEC,
+            env=_parser_env(workspace),
+        )
     except subprocess.TimeoutExpired:
         return 1, f"PARSER_FAILED: timeout after {PARSER_TIMEOUT_SEC}s (page hang or network issue)."
     output = (proc.stdout or "") + (proc.stderr or "")
@@ -179,9 +219,11 @@ async def main() -> None:
     # Anchor .env and all relative paths to the project root so the bot works
     # no matter which directory it is started from (systemd, cron, ~, etc.).
     load_dotenv(PROJECT_ROOT / ".env")
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    # Unused leftover bot in production; still namespaced so a shared
+    # TELEGRAM_BOT_TOKEN cannot collide with the publisher showcase bot.
+    token = (os.getenv("TG_BOT_TOKEN_FB_PARSER") or os.getenv("TELEGRAM_BOT_TOKEN", "")).strip()
     if not token:
-        raise RuntimeError("TELEGRAM_BOT_TOKEN is not set.")
+        raise RuntimeError("TG_BOT_TOKEN_FB_PARSER (or TELEGRAM_BOT_TOKEN) is not set.")
 
     backend = os.getenv("FB_PARSER_BACKEND", "crawl4ai").strip()
     if backend not in ("crawl4ai", "scrapegraphai"):
@@ -194,6 +236,8 @@ async def main() -> None:
     parser_path = (workspace / "agent1b" / "fb_parser.py").resolve()
     if not parser_path.exists():
         raise RuntimeError(f"Parser not found: {parser_path}")
+
+    preflight_parser_env(backend)
 
     bot = Bot(token=token)
     dp = Dispatcher()

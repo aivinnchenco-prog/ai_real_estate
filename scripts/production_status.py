@@ -204,8 +204,42 @@ def main() -> int:
     print("AIRBNB AUTH")
     print(ab)
     print()
+    print("FB PARSER ENV")
+    fb_py = Path(
+        os.getenv("FB_PARSER_PYTHON")
+        or "/opt/openhome/app/agent_1_parser/fb_parser/.venv311/bin/python"
+    )
+    if shutil.which(str(fb_py)) or fb_py.is_file():
+        try:
+            probe = subprocess.run(
+                [
+                    str(fb_py),
+                    "-c",
+                    "import sys,requests,playwright,crawl4ai; assert sys.version_info[:2]==(3,11)",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=40,
+                check=False,
+            )
+            print("READY" if probe.returncode == 0 else f"BLOCKED ({fb_py})")
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(f"BLOCKED ({fb_py}: {exc})")
+    else:
+        print(f"BLOCKED missing {fb_py} — run fb_parser/scripts/ensure_venv.sh")
+    print()
     print("TELEGRAM")
     print(tg)
+    print()
+    print("TELEGRAM SHOWCASE")
+    pub_token = _present("TG_BOT_TOKEN_PUBLISHER")
+    channel = (os.getenv("TELEGRAM_CHANNEL") or "").strip()
+    if pub_token and channel:
+        print(f"CONFIG READY channel={channel}")
+    elif pub_token:
+        print("TOKEN SET, TELEGRAM_CHANNEL empty (publisher.json fallback)")
+    else:
+        print("CONFIG REQUIRED (TG_BOT_TOKEN_PUBLISHER)")
     print()
     print("DATABASE/STORES")
     print(persistence)

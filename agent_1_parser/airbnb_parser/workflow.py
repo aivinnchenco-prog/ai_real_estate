@@ -174,6 +174,32 @@ def _agent2_path(result: TakeWorkResult, parser, url: str, image_urls: list, tim
         except Exception as exc:
             logger.error(f'background pricing enqueue failed: {exc}')
 
+    # Если coords не пришли с первого парса — фоновый retry доберёт точку Airbnb.
+    loc = (listing_data.get('Локация') or {})
+    if ho.object_id and (loc.get('latitude') is None or loc.get('longitude') is None):
+        try:
+            from location_retry import enqueue_location_retry
+            import json as _json
+
+            page_id = ''
+            agent2_root = find_agent2_root()
+            if agent2_root and ho.session_id:
+                sj = agent2_root / 'data' / 'sessions' / ho.session_id / 'session.json'
+                if sj.exists():
+                    page_id = (_json.loads(sj.read_text(encoding='utf-8')).get('notion_page_id') or '')
+            enqueue_location_retry(
+                object_id=ho.object_id,
+                listing_url=url,
+                session_id=ho.session_id or '',
+                notion_page_id=page_id,
+            )
+            timings['location_retry_enqueued'] = True
+            logger.warning(
+                f'location missing for {ho.object_id} — enqueued background retry'
+            )
+        except Exception as exc:
+            logger.error(f'location retry enqueue failed: {exc}')
+
     result.session_id = ho.session_id
     result.object_id = ho.object_id
     result.monthly_prices = monthly_prices

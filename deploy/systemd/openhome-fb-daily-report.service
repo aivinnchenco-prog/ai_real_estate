@@ -1,0 +1,16 @@
+[Unit]
+Description=Open Home daily FB Groups/Marketplace report to error Telegram bot (one-shot)
+
+[Service]
+Type=oneshot
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app/agent_4_publisher
+Environment=PATH=/opt/openhome/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HOME=/opt/openhome
+EnvironmentFile=-/opt/openhome/.env
+ExecStart=/opt/openhome/venv/bin/python3 scripts/fb_daily_report.py --send --if-bangkok-18
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openhome-fb-daily-report

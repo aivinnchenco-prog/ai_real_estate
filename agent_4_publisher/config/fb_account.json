@@ -1,8 +1,8 @@
 {
-  "$comment": "Общий предохранитель FB-аккаунта для веток fb_groups/fb_marketplace (scripts/fb_account_guard.py). Один аккаунт = один человек: работаем только днём по местному времени, между сессиями любых веток — перерыв со случайным добавком. Пауза после предупреждений FB: scripts/fb_account_guard.py --pause 72.",
+  "$comment": "Общий предохранитель FB-аккаунта для веток fb_groups/fb_marketplace (scripts/fb_account_guard.py). Один аккаунт = один человек: работаем только днём по местному времени. Между сессиями (следующий объект в группах или Marketplace) — 30–35 мин. Пауза после предупреждений FB: scripts/fb_account_guard.py --pause 72.",
   "guard_file": "data/fb_account/guard.json",
   "timezone_offset_hours": 7,
   "active_hours": {"start": "09:30", "end": "21:30"},
-  "min_minutes_between_sessions": 90,
-  "session_gap_jitter_minutes": 45
+  "min_minutes_between_sessions": 30,
+  "session_gap_jitter_minutes": 5
 }

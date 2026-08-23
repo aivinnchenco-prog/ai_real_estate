@@ -51,6 +51,7 @@ PHUKET_DISTRICT_CENTROIDS: dict[str, tuple[float, float]] = {
     "Layan": (8.0170, 98.2960),
     "Bang Tao": (7.9925, 98.2957),
     "Laguna": (7.9887, 98.2997),
+    "Si Sunthon": (7.9900, 98.3500),
     "Choeng Thale": (7.9800, 98.3050),
     "Surin": (7.9770, 98.2790),
     "Kamala": (7.9530, 98.2830),
@@ -63,6 +64,26 @@ PHUKET_DISTRICT_CENTROIDS: dict[str, tuple[float, float]] = {
     "Cape Panwa": (7.8060, 98.4030),
     "Rawai": (7.7717, 98.3269),
     "Nai Harn": (7.7770, 98.3050),
+}
+
+# Синонимы района для сверки с formatted_address Places API
+DISTRICT_ALIASES: dict[str, tuple[str, ...]] = {
+    "si sunthon": ("si sunthon", "si sunthorn", "srisoonthorn", "srisoontoorn", "си сунтон"),
+    "си сунтон": ("si sunthon", "si sunthorn", "srisoonthorn", "srisoontoorn", "си сунтон"),
+    "choeng thale": ("choeng thale", "cherng talay", "cherngtalay", "чхоенг тале"),
+    "bang tao": ("bang tao", "bangtao", "банг тао"),
+    "phuket town": ("phuket town", "mueang phuket", "ratsada", "talat yai"),
+    "layan": ("layan",),
+    "surin": ("surin",),
+    "kamala": ("kamala",),
+    "patong": ("patong",),
+    "kathu": ("kathu",),
+    "karon": ("karon",),
+    "kata": ("kata",),
+    "chalong": ("chalong",),
+    "rawai": ("rawai",),
+    "nai harn": ("nai harn", "nai harn"),
+    "thalang": ("thalang", "thep krasatti", "thepkrasattri"),
 }
 
 # Generic-значения района, которые можно перекрывать районом из координат
@@ -204,14 +225,34 @@ def _looks_like_complex(name: str) -> bool:
     """Отсеивает generic заголовки без названия проекта."""
     lower = name.lower()
     generic = (
-        "studio", "студия", "apartment", "квартира", "condo", "house", "villa",
-        "2br", "3br", "1br", "bedroom", "for rent", "аренда",
+        "studio", "студия", "apartment", "квартира", "апартамент",
+        "condo", "house", "villa", "вилла", "дом", "жилье", "жильё",
+        "2br", "3br", "1br", "bedroom", "спальн", "for rent", "аренда",
+        "бассейн", "pool", "трансфер", "transfer", "гостей", "guest",
     )
     if any(g in lower for g in generic) and not any(
-        k in lower for k in ("title", "skypark", "legendary", "clover", "montazure", "laguna")
+        k in lower for k in ("title", "skypark", "legendary", "clover", "montazure", "laguna", "botanica", "shambala", "шамбала")
     ):
         return False
     return len(name) >= 4
+
+
+def _district_tokens(district: str) -> tuple[str, ...]:
+    d = (district or "").lower().strip()
+    if not d:
+        return ()
+    aliases = DISTRICT_ALIASES.get(d)
+    if aliases:
+        return aliases
+    return (d,)
+
+
+def place_matches_district(place_address: str | None, district: str) -> bool:
+    """True если адрес Places содержит район объявления (или его алиас)."""
+    if not place_address or not district:
+        return False
+    addr = place_address.lower()
+    return any(token in addr for token in _district_tokens(district) if len(token) >= 3)
 
 
 def build_search_query(
@@ -363,6 +404,7 @@ def resolve_google_maps(
         title=title,
     )
 
+    # Базовый URL: coords Airbnb/FB всегда важнее текстового Places.
     method = "search_url"
     url = _search_url(query)
     if coords:
@@ -373,25 +415,36 @@ def resolve_google_maps(
     place_id = None
 
     key = api_key or os.environ.get("GOOGLE_MAPS_API_KEY")
-    if key:
+    # Places только если есть название комплекса ИЛИ координаты (уточнение адреса).
+    # Без coords + без комплекса Places по рекламному title уводит на чужие виллы.
+    allow_places = bool(key) and (bool(complex_name) or bool(coords))
+    if allow_places:
         try:
             resolved = _places_api_resolve(query, key)
             if resolved:
-                # Найденное по названию место используем только если оно
-                # рядом с координатами объявления (или координат нет вовсе);
-                # иначе точка с карты Airbnb/FB надёжнее текстового поиска.
                 place_loc = resolved.get("location")
                 near_coords = (
                     coords is None
                     or place_loc is None
                     or _haversine_km(*coords, *place_loc) <= PLACE_MATCH_MAX_KM
                 )
-                if near_coords:
-                    url = resolved["url"]
+                district_ok = (
+                    coords is not None
+                    or place_matches_district(resolved.get("formatted_address"), district)
+                )
+                if near_coords and district_ok:
                     place_name = resolved.get("place_name")
                     place_id = resolved.get("place_id")
                     place_address = resolved.get("formatted_address")
-                    method = "places_api"
+                    # Карточку Places ставим в URL только для именованного комплекса.
+                    # Иначе оставляем точную точку с карты объявления.
+                    if complex_name and not coords:
+                        url = resolved["url"]
+                        method = "places_api"
+                    elif complex_name and coords and near_coords:
+                        url = resolved["url"]
+                        method = "places_api"
+                    # coords без комплекса: method остаётся coords_point, адрес можем обогатить
         except (urllib.error.URLError, RuntimeError, json.JSONDecodeError):
             pass
 

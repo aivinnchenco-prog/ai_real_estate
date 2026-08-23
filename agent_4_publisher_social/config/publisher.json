@@ -33,6 +33,7 @@
       "carousel_url": "carousel_url",
       "brand_open_home_url": "brand_open_home_url",
       "caption_social": "Описание соц.сети",
+      "caption_x": "Описание X.com",
       "caption_fb": "Описание для FB Marketplace",
       "cta_instagram": "CTA Instagram",
       "title_youtube_shorts": "Название YouTube Shorts",
@@ -75,8 +76,12 @@
   "orchestration": {
     "automatic_live_retries": false,
     "video_channels": [],
-    "carousel_channels": ["fb_groups"],
-    "final_channels": ["fb_marketplace"],
+    "carousel_channels": [
+      "fb_groups"
+    ],
+    "final_channels": [
+      "fb_marketplace"
+    ],
     "delayed_carousel": {},
     "$comment_order": "Live: один PublicationJob = fb_groups → пауза → fb_marketplace (см. facebook_batch)."
   },

@@ -38,6 +38,7 @@ Deploy rsync dest is **`/opt/openhome/app` only**. It must never `--delete` into
 | openhome-amo-task.timer | Periodic amo SLA task reconciliation | oneshot → worker | n/a | openhome | **INSTALLED, DISABLED** | `systemctl list-timers` | Would upsert/complete amo tasks |
 | openhome-amo-task.service | One-shot worker (Python env loader; do **not** bash-source `.env`) | `scripts/run_amo_task_worker.sh` | n/a | openhome | via timer | journal | Amo task writes |
 | openhome-planner-urls.timer | Hourly catch-up: PostMyPost planner links → live permalinks | oneshot → backfill | n/a | openhome | **INSTALLED, DISABLED** | `systemctl list-timers` | Would rewrite `post_url_*` in Notion |
+| openhome-fb-daily-report.timer | Daily FB Groups/Marketplace report to error Telegram bot at 18:00 Bangkok | oneshot → `fb_daily_report.py --send` | n/a | openhome | **YES / enabled** | `systemctl list-timers` | Sends a digest, does not post |
 | openhome-planner-urls.service | One-shot backfill (`--apply`) | `scripts/backfill_planner_urls.py --apply` | n/a | openhome | via timer | journal | Notion URL writes only |
 
 Agent 5 Usher: **event-driven** after Agent 4 (`pending_postmypost_ai_agent`); no unit.  
@@ -77,6 +78,8 @@ Agent1 bot, Agent6 userbot, chain watcher, amo-task timer, WhatsApp UI sync, Age
 | name | value |
 |------|--------|
 | `AGENT2_ROOT` | `/opt/openhome/app/agent_2_registrar/_import/assistant-media` |
+| `FB_PARSER_ROOT` | `/opt/openhome/app/agent_1_parser/fb_parser` |
+| `FB_PARSER_PYTHON` | `/opt/openhome/app/agent_1_parser/fb_parser/.venv311/bin/python` |
 | `PUBLISHER_LEDGER_PATH` | `/opt/openhome/runtime/publisher/publications.sqlite3` |
 | `PUBLISHER_PMP_STATE_PATH` | `/opt/openhome/runtime/publisher/postmypost_publications.json` |
 | `TG_SESSION_DIR` | `/opt/openhome/runtime/sessions` |

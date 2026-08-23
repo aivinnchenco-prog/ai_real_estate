@@ -29,6 +29,7 @@ from description_writer import (  # noqa: E402
     cjk_ratio,
     generate_long_description,
     generate_social_description,
+    generate_x_description,
     translate_to_russian,
 )
 from maps_resolver import resolve_google_maps  # noqa: E402
@@ -436,6 +437,7 @@ def main() -> int:
         caption_tg = caption_long
         caption_fb = caption_long
         caption_social = generate_social_description(desc_ctx)
+        caption_x = generate_x_description(desc_ctx)
 
         properties = build_notion_properties(
             draft=draft,
@@ -454,6 +456,8 @@ def main() -> int:
 
         if nf.get("caption_social"):
             properties[nf["caption_social"]] = NotionCRM.build_text(caption_social)
+        if nf.get("caption_x"):
+            properties[nf["caption_x"]] = NotionCRM.build_text(caption_x)
         # «Вместимость гостей» — только явное число от хозяина;
         # формула комнаты×2+1 живёт лишь внутри текстов, в таблицу не пишется.
         if nf.get("max_guests") and desc_ctx["max_guests_explicit"]:

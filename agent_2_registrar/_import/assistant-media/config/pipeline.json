@@ -18,9 +18,20 @@
   "monthly_pricing": {
     "months_ahead": 12,
     "background_workers": 1,
-    "background_request_delay_seconds": {"min": 5, "max": 12},
-    "block_cooldown_seconds": [300, 900, 3600],
-    "retry_delay_seconds": [120, 600, 1800],
+    "background_request_delay_seconds": {
+      "min": 5,
+      "max": 12
+    },
+    "block_cooldown_seconds": [
+      300,
+      900,
+      3600
+    ],
+    "retry_delay_seconds": [
+      120,
+      600,
+      1800
+    ],
     "stale_running_seconds": 300,
     "max_job_attempts": 3,
     "calendar_snapshot_ttl_seconds": 86400
@@ -112,6 +123,7 @@
       "calendar": "Календарь",
       "monthly_prices": "monthly_prices",
       "caption_social": "Описание соц.сети",
+      "caption_x": "Описание X.com",
       "max_guests": "Вместимость гостей",
       "montage": "Монтаж",
       "video_engine": "Видео-движок",
@@ -161,11 +173,11 @@
     "auto_agent4": false,
     "publish_platforms": null,
     "publisher_script": null,
-    "publish_fb_groups": false,
-    "publish_fb_marketplace": false,
-    "$comment_fb": "FB Groups/Marketplace — через Publisher social (телефон), не Playwright.",
+    "publish_fb_groups": true,
+    "publish_fb_marketplace": true,
+    "$comment_fb": "FB Groups/Marketplace — Playwright. Очередь по галочкам phone_fb_groups_done / phone_fb_marketplace_done (не agent6_locked). Снял галочку — объект снова в постинге.",
     "phone_publisher_live": false,
-    "$comment_phone_live": "При runner=termux VPS/Mac не постит на телефон. Боевой FB — pub start на Termux (queue --live).",
+    "$comment_phone_live": "Телефонный путь отключён. Откат: phone_publisher.enabled=true и publish_fb_*=false.",
     "default_montage": "НЕТ",
     "default_publish": "НЕТ",
     "telegram_showcase": true

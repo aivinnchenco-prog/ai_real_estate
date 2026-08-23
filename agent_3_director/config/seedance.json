@@ -34,7 +34,8 @@
   },
   "music": {
     "enabled": true,
-    "r2_prefix": "music/"
+    "r2_prefix": "music/",
+    "rotation_key": "music/_rotation.json"
   },
   "prompt_template": "Vertical 9:16 real estate video assembled from references {tags}. The video is a montage of {count} separate static shots — one shot per reference image, in the given order, each shot lasting an equal share of the total duration.\n\nEach shot begins as an exact frozen replica of its reference image: identical composition, framing, furniture, colors and lighting. Then the camera performs one motion only — a very slow, very smooth, perfectly stabilized dolly-in straight forward along the central axis, constant speed, extremely subtle: by the end of the shot the camera is only slightly closer. No panning, no tilting, no rotation, no zoom bursts, no lateral drift.\n\nBetween shots use a plain instant hard cut. No morphing, no cross-dissolve, no camera flying through walls or doorways, no invented transitions between rooms — each shot is an independent scene.\n\nScene content is locked to the reference: do not add, remove, move or redesign any furniture or objects, do not repaint surfaces, no people, no animals, no object animation, no lighting changes. Only the camera moves. Photorealistic, bright natural lighting, calm and stable."
 }
