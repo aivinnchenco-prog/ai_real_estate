@@ -9,11 +9,12 @@ User=openhome
 Group=openhome
 WorkingDirectory=/opt/openhome/app/agent_6_qualifier
 Environment=PYTHONUNBUFFERED=1
-Environment=PYTHONPATH=src
 Environment=HOME=/opt/openhome
 Environment=PATH=/opt/openhome/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EnvironmentFile=-/opt/openhome/.env
-ExecStart=/opt/openhome/venv/bin/python -u -m agent6_qualifier.tg_userbot
+# /opt/openhome/.env sets PYTHONPATH=/opt/openhome/app and EnvironmentFile always
+# wins over Environment=. Force the package path at exec time.
+ExecStart=/usr/bin/env PYTHONPATH=/opt/openhome/app/agent_6_qualifier/src /opt/openhome/venv/bin/python -u -m agent6_qualifier.tg_userbot
 Restart=always
 RestartSec=20
 StandardOutput=journal
