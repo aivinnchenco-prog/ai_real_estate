@@ -233,6 +233,7 @@ def _apply_location_to_session_and_notion(
 
     from maps_resolver import coords_point_url, district_from_coords, resolve_google_maps
     from real_estate_handler import NotionCRM
+    from zone_resolver import apply_zone_to_properties, resolve_zone
     import os
 
     district = district_from_coords(lat, lng) or "Phuket"
@@ -263,11 +264,22 @@ def _apply_location_to_session_and_notion(
         os.environ["NOTION_API_KEY"],
         os.environ.get("NOTION_DB_ID") or os.environ["NOTION_DATABASE_ID"],
     )
+    new_district = maps.district or district
     props = {
         "Google Maps": NotionCRM.build_url(maps.url or coords_point_url(lat, lng)),
-        "Район": NotionCRM.build_text(maps.district or district),
+        "Район": NotionCRM.build_text(new_district),
         "Адрес": NotionCRM.build_text(subtitle or maps.address or ""),
     }
+    # Район только что пересчитан по coords — Зону синхронизируем всегда.
+    apply_zone_to_properties(
+        props,
+        field_name="Зона",
+        zone=resolve_zone(new_district),
+        is_new_page=False,
+        old_district="",
+        new_district=new_district,
+        old_zone=None,
+    )
     crm.update_page(page_id, props)
     logger.info(
         f"location retry OK {job.get('object_id')}: "

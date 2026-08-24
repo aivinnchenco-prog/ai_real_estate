@@ -99,6 +99,7 @@
       "status": "Статус",
       "address": "Адрес",
       "district": "Район",
+      "zone": "Зона",
       "google_maps": "Google Maps",
       "source": "Источник объявления",
       "photo": "Фото",

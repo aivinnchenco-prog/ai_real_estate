@@ -36,6 +36,7 @@ from maps_resolver import resolve_google_maps  # noqa: E402
 from gallery_html import build_gallery_html  # noqa: E402
 from listing_parser import parse_listing  # noqa: E402
 from housing_type import detect_housing_type  # noqa: E402
+from zone_resolver import apply_zone_to_properties, resolve_zone  # noqa: E402
 from session_store import bind_object_id, get_object_id, load_session, save_session  # noqa: E402
 from event_log import log_event  # noqa: E402
 
@@ -107,6 +108,16 @@ def extract_listing_address(meta: dict) -> str:
     """Адрес из блока «Где вы будете» Airbnb (location.subtitle в parsed.json)."""
     loc = meta.get("location") or {}
     return str(loc.get("subtitle") or "").strip()
+
+
+def _page_rich_text(page: dict, name: str) -> str:
+    prop = (page.get("properties") or {}).get(name) or {}
+    return "".join(t.get("plain_text", "") for t in (prop.get("rich_text") or [])).strip()
+
+
+def _page_select(page: dict, name: str) -> str | None:
+    sel = ((page.get("properties") or {}).get(name) or {}).get("select") or {}
+    return sel.get("name")
 
 
 def detect_source_prefix(session_id: str, source: str, session_path: Path) -> str:
@@ -372,6 +383,7 @@ def main() -> int:
         # Район из координат карты (Google Maps) приоритетнее текстового
         if maps.district:
             draft.district = maps.district
+        zone = resolve_zone(draft.district)
         draft.housing_type = detect_housing_type(
             description,
             title=draft.title,
@@ -469,6 +481,7 @@ def main() -> int:
             "title": draft.title,
             "complex_name": maps.complex_name,
             "district": draft.district,
+            "zone": zone,
             "address": extract_listing_address(parsed_meta) or maps.address,
             "google_maps": maps.url,
             "google_maps_query": maps.query,
@@ -489,6 +502,16 @@ def main() -> int:
             return 0
 
         existing = crm.query_by_object_id(object_id)
+        zone_field = nf.get("zone") or "Зона"
+        apply_zone_to_properties(
+            properties,
+            field_name=zone_field,
+            zone=zone,
+            is_new_page=not existing,
+            old_district=_page_rich_text(existing, nf["district"]) if existing else "",
+            new_district=draft.district or "",
+            old_zone=_page_select(existing, zone_field) if existing else None,
+        )
         if existing:
             page = crm.update_page(existing["id"], properties)
         else:

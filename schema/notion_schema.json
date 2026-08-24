@@ -175,6 +175,18 @@
       ]
     },
     {
+      "exact_name": "Зона",
+      "type": "select",
+      "writers": [
+        "agent_2_registrar"
+      ],
+      "readers": [
+        "agent_4_publisher",
+        "agent_6_qualifier"
+      ],
+      "$comment": "Маркетинговая зона (грубее «Район»). Маппинг: agent_2_registrar/_import/assistant-media/config/zones_mapping.json. СИНХРОНИЗИРОВАТЬ с Site Openhome src/lib/zones.ts."
+    },
+    {
       "exact_name": "Google Maps",
       "type": "url",
       "writers": [
