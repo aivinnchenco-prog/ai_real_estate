@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { buildPrompt } from "../higgsfieldClient.mjs";
+import { extractUploadId } from "../higgsfieldCli.mjs";
 import { isSeedanceConfigured } from "../renderSeedance.mjs";
 import {
   fallbackSelectDiverse,
@@ -111,6 +112,32 @@ assert("gemini disabled via config", !isGeminiSelectorAvailable({ gemini_selecto
 delete process.env.GEMINI_API_KEY;
 assert("gemini unavailable without key", !isGeminiSelectorAvailable({}));
 if (savedGemini) process.env.GEMINI_API_KEY = savedGemini;
+
+assert(
+  "upload id from create json",
+  extractUploadId('{"id":"257fe244-79c4-4354-94be-dc6fa36d9da0","type":"image"}') ===
+    "257fe244-79c4-4354-94be-dc6fa36d9da0"
+);
+assert(
+  "upload id from list items",
+  extractUploadId(
+    JSON.stringify({
+      items: [{ id: "c9f4c05e-b2fc-4b6e-a85c-5404c8afb570", type: "image" }],
+    })
+  ) === "c9f4c05e-b2fc-4b6e-a85c-5404c8afb570"
+);
+assert(
+  "upload id from bare uuid text",
+  extractUploadId("uploaded 9d17c521-d444-4f60-94a0-844a6ed1ce4a") ===
+    "9d17c521-d444-4f60-94a0-844a6ed1ce4a"
+);
+let uploadThrew = false;
+try {
+  extractUploadId("Error: SignatureDoesNotMatch");
+} catch {
+  uploadThrew = true;
+}
+assert("upload id missing throws", uploadThrew);
 
 console.log(`\n${ok}/${ok + fail} passed`);
 process.exit(fail ? 1 : 0);
