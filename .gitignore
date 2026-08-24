@@ -1,6 +1,7 @@
 # Секреты и учётные данные
 .env
 .env.*
+*.env.local
 !.env.example
 !**/.env.example
 !deploy/.env.production.example
@@ -136,3 +137,6 @@ agent_4_publisher/.fb_groups_profile/
 agent_4_publisher/.fb_marketplace_profile/
 Монтаж локал/
 HANDOFF_*.md
+
+# Локальные медиа для монтажа, не исходники
+Список аудио файлом на рилс монтаж интерьер/
