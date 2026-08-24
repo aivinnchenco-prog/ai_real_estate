@@ -376,6 +376,7 @@
     ],
     "image_only_when_carousel": [
       "instagram",
+      "tiktok",
       "twitter",
       "x",
       "linkedin",
@@ -481,16 +482,17 @@
   "phone_publisher": {
     "enabled": false,
     "mode": "fb_only",
+    "fb_backend": "browser",
     "channels": [
       "fb_groups",
       "fb_marketplace"
     ],
     "runner": "termux",
     "project_path": "agent_4_publisher_social",
-    "command": "publish",
+    "command": "publish-chain",
     "scheduled_command": "publish-scheduled",
     "$comment_runner": "termux: телефон сам опрашивает Notion (pub start, ~5 мин). chain: Mac/VPS вызывает ADB напрямую.",
-    "$comment": "disabled: FB Groups/Marketplace идут Playwright-ветками на VPS (pipeline publish_fb_*). Телефонный путь оставлен как откат.",
+    "$comment": "mode=fb_only: FB Groups/Marketplace через Playwright (Agent 7 profile), не ADB/Termux. Телефонный путь оставлен как откат.",
     "$comment_path": "Путь относительно корня Real Estate Agent. Fallback: «Publisher social» в папке Агенты."
   },
   "postmypost": {
@@ -498,11 +500,16 @@
     "base_url": "https://api.postmypost.io/v4.1",
     "project_id": 355063,
     "project_name": "Open Home",
+    "project_code": "B4RHA",
+    "planner_locale": "uk",
     "timezone": "Asia/Bangkok",
     "publication_status": 5,
-    "planner_url_template": "https://app.postmypost.io/publications/{publication_id}",
+    "$comment_planner_url": "Share-preview в веб-приложении. API ссылку не отдаёт. После go-live deferred sync перезапишет колонку на posts[].url соцсети.",
+    "planner_url_template": "https://app.postmypost.io/{locale}/p/{project_code}#share={publication_id}",
     "upload_poll_seconds": 2,
     "upload_poll_attempts": 45,
+    "upload_mode": "direct",
+    "$comment_upload_mode": "direct = VPS скачивает R2 и грузит в PostMyPost (S3). url = PostMyPost качает сам (R2 часто 422).",
     "$comment_accounts": "platform_accounts — явный маппинг account_id по платформе. Если пусто — авто по channel code из API.",
     "platform_accounts": {
       "instagram": [

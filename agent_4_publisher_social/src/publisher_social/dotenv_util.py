@@ -42,11 +42,12 @@ def _real_estate_env_candidates(root: Path) -> list[Path]:
 
 
 def load_dotenv() -> None:
-    """Load .env from project root, then optional Real Estate Agent .env."""
+    """Load .env from project root, Agent 6/7, then monorepo .env."""
     root = package_root()
     candidates = [
         root / ".env",
         root / ".env.local",
+        root.parent / "agent_6_qualifier" / ".env",
     ]
     real_estate = os.environ.get("REAL_ESTATE_ENV")
     if real_estate:

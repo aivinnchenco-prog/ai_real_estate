@@ -75,8 +75,10 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function fillHookTemplate(html, meta) {
+function fillHookTemplate(html, meta, width, height) {
   return html
+    .replaceAll("{{CANVAS_WIDTH}}", String(width))
+    .replaceAll("{{CANVAS_HEIGHT}}", String(height))
     .replaceAll("{{TITLE_PHRASE}}", escapeHtml(meta.title_phrase))
     .replaceAll("{{BEDROOMS}}", escapeHtml(meta.bedrooms))
     .replaceAll("{{PRICE}}", escapeHtml(meta.price))
@@ -86,7 +88,7 @@ function fillHookTemplate(html, meta) {
 
 async function renderHookCardPng({ templatePath, meta, outPath, width, height }) {
   const template = readFileSync(templatePath, "utf8");
-  const html = fillHookTemplate(template, meta);
+  const html = fillHookTemplate(template, meta, width, height);
   const tmpDir = mkdtempSync(join(tmpdir(), "hook-card-"));
   const htmlPath = join(tmpDir, "card.html");
   writeFileSync(htmlPath, html, "utf8");

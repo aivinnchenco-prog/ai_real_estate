@@ -17,18 +17,18 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   html, body {
-    width: 1080px;
-    height: 1920px;
+    width: {{CANVAS_WIDTH}}px;
+    height: {{CANVAS_HEIGHT}}px;
     background: transparent; /* important: renders as alpha PNG for compositing over video */
     font-family: 'Inter', sans-serif;
-    overflow: hidden;
+    overflow: visible;
   }
 
   /* Card is anchored bottom-left, mirrors the reference composition */
   .card {
     position: absolute;
     left: 64px;
-    bottom: 340px;
+    bottom: 8%;
     width: fit-content;
     min-width: 620px;
     max-width: 940px;
@@ -101,7 +101,11 @@
     margin-left: 4px;
   }
 
-  /* --- Price row: ฿ box + amount + period --- */
+  .price-block {
+    width: 100%;
+  }
+
+  /* --- Price: ฿ + amount; period на отдельной строке (не обрезать «· сентябрь») --- */
   .price-row .currency-box {
     width: 84px;
     height: 84px;
@@ -129,11 +133,16 @@
   }
   .price-period {
     font-size: 34px;
-    font-weight: 400;
-    color: rgba(255,255,255,0.85);
-    margin-left: 16px;
-    align-self: flex-end;
-    margin-bottom: 8px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    margin-top: 14px;
+    line-height: 1.25;
+    white-space: normal;
+    max-width: 100%;
+  }
+  .price-period .month {
+    color: var(--gold-soft);
+    font-weight: 700;
   }
 </style>
 </head>
@@ -159,9 +168,11 @@
 
     <div class="divider"></div>
 
-    <div class="row price-row">
-      <div class="currency-box"><span>฿</span></div>
-      <div class="price-text">{{PRICE}}</div>
+    <div class="price-block">
+      <div class="row price-row">
+        <div class="currency-box"><span>฿</span></div>
+        <div class="price-text">{{PRICE}}</div>
+      </div>
       <div class="price-period">{{PERIOD}}</div>
     </div>
 
@@ -180,12 +191,19 @@
   </div>
 
   <script>
-    // Safety net: if a row still overflows the card even after it grew to max-width,
-    // scale that row down proportionally instead of letting text spill past the border.
+    // Подсветка месяца в period: «в месяц · сентябрь» → «в месяц · <span>сентябрь</span>»
     window.addEventListener('load', () => {
+      const period = document.querySelector('.price-period');
+      if (!period) return;
+      const raw = period.textContent || '';
+      const m = raw.match(/^(.*?)(?:\s*[·•]\s*)(.+)$/);
+      if (m) {
+        period.innerHTML =
+          `${m[1].trim()} · <span class="month">${m[2].trim()}</span>`;
+      }
       const card = document.querySelector('.card');
-      const innerWidth = card.clientWidth - 112; // minus left+right padding
-      document.querySelectorAll('.row').forEach(row => {
+      const innerWidth = card.clientWidth - 112;
+      document.querySelectorAll('.title-row, .district-row, .price-row').forEach((row) => {
         const natural = row.scrollWidth;
         if (natural > innerWidth) {
           const ratio = innerWidth / natural;

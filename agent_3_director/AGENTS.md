@@ -42,7 +42,9 @@ CRM → фото R2 → Higgsfield Seedance → hook-card → upload R2 → Noti
 
 **9 фото для Seedance:** 1-й — экстерьер/вид, max **1 кадр на локацию**, без похожих дублей.
 
-**Отбор фото автономный** (каскад в `selectPhotosSeedance.mjs`): CLIP-куратор (если жив на 8077 / `CURATOR_BASE_URL`) → Gemini vision (`GEMINI_API_KEY`, без локальных сервисов) → fallback по имени. Куратора вручную поднимать не нужно. Проверка отбора без рендера: `node scripts/select_photos.mjs --object-id {id} [--no-curator]`.
+**Отбор фото автономный** (каскад в `selectPhotosSeedance.mjs`): CLIP-куратор (если жив на 8077 / `CURATOR_BASE_URL`) → Gemini vision (`GEMINI_API_KEY`, без локальных сервисов) → fallback по имени. Куратора вручную поднимать не нужно. Проверка отбора без рендера: `node scripts/select_photos.mjs --object-id {id} [--mode video|carousel] [--no-curator]`.
+
+**Карусель отбирается иначе, чем видео** (`selectCarouselPhotos`): сначала расширенный пул проходных кадров, потом пропорция `carousel_exterior_ratio` (30% экстерьера). Пропорция **мягкая** — не просить у селектора сразу ровно 9 кадров с квотой экстерьера: квота заставляет добирать пустые подъездные дорожки и глухие стены. Лучше 8 сильных слайдов, чем 9 с балластом.
 
 `test_title_overlay.mjs` — отдельно, только чтобы быстро проверить шаблон на готовом видео.
 

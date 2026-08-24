@@ -1,0 +1,22 @@
+[Unit]
+Description=Open Home amoCRM OPENHOME SLA task reconciliation (one-shot)
+After=network-online.target openhome-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=openhome
+Group=openhome
+WorkingDirectory=/opt/openhome/app/agent_6_qualifier
+Environment=PYTHONPATH=src
+Environment=PATH=/opt/openhome/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HOME=/opt/openhome
+EnvironmentFile=-/opt/openhome/.env
+ExecStart=/opt/openhome/app/agent_6_qualifier/scripts/run_amo_task_worker.sh
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openhome-amo-task
+
+[Install]
+WantedBy=multi-user.target

@@ -1827,6 +1827,7 @@ def _publish_or_stop(
     android_cfg: dict[str, Any],
     channel: str = "fb_marketplace",
     session: MarketplaceSession | None = None,
+    post_publish_pause_seconds: float | int | None = None,
 ) -> ChannelResult:
     if not confirm_post:
         # безопасный стоп: назад → сохранить черновик, если диалог есть
@@ -1866,6 +1867,9 @@ def _publish_or_stop(
             publication_status="failed",
         )
     human_pause(android_cfg, scale=1.5)
+    sec = float(post_publish_pause_seconds or 0)
+    if sec > 0:
+        time.sleep(sec)
     publication_status = "accepted"
     note = "Нажато «Опубликовать» — дождитесь загрузки"
     if session is not None:
@@ -1963,6 +1967,30 @@ class FbMarketplaceChannel:
         publisher_cfg: dict[str, Any],
         confirm_post: bool = False,
     ) -> ChannelResult:
+        from ..browser.backend import channel_uses_browser
+
+        if channel_uses_browser(self.name, publisher_cfg):
+            from ..browser.publish import publish_fb_marketplace_browser
+
+            images = job.local_marketplace_images or job.marketplace_image_urls
+            listing = job.listing
+            if dry_run:
+                return ChannelResult(
+                    channel=self.name,
+                    ok=True,
+                    skipped=True,
+                    reason="dry-run",
+                    note=(
+                        f"FB MP browser (agent7): brand_images={len(images)}; "
+                        f"price={listing.price_monthly}; rooms={listing.rooms}"
+                    ),
+                )
+            return publish_fb_marketplace_browser(
+                job,
+                publisher_cfg=publisher_cfg,
+                confirm_post=confirm_post,
+            )
+
         # Только brand_open_home — не carousel / не колонка «Фото»
         images = (
             job.device_marketplace_images
@@ -2049,6 +2077,9 @@ class FbMarketplaceChannel:
                 confirm_post=confirm_post,
                 android_cfg=android_cfg,
                 session=session,
+                post_publish_pause_seconds=mp_cfg.get(
+                    "post_publish_pause_seconds"
+                ),
             )
             # ссылку на объявление Marketplace не копируем — не нужна
             result.note = f"{(result.note or '')}; {note}".strip("; ")

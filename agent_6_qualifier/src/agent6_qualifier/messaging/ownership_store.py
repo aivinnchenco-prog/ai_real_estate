@@ -80,6 +80,7 @@ class OwnershipStore:
             reason=str(raw.get("reason") or ""),
             manager_takeover=bool(raw.get("manager_takeover")),
             last_human_message_id=raw.get("last_human_message_id"),
+            last_human_activity_at=raw.get("last_human_activity_at"),
             known_bot_outbound_ids=set(raw.get("known_bot_outbound_ids") or []),
         )
 
@@ -93,6 +94,7 @@ class OwnershipStore:
             "reason": state.reason,
             "manager_takeover": state.manager_takeover,
             "last_human_message_id": state.last_human_message_id,
+            "last_human_activity_at": state.last_human_activity_at,
             "known_bot_outbound_ids": sorted(state.known_bot_outbound_ids),
         }
         with self._lock:

@@ -4,9 +4,12 @@ import unittest
 from unittest.mock import Mock, patch
 
 from publisher_social.channels._fb_publish import (
+    collect_publish_targets,
     confirm_publish_or_stop,
+    pick_publish_target,
     publish_button_visible,
     tap_publish_button,
+    wait_for_publish_ready,
 )
 
 
@@ -15,8 +18,48 @@ class FbPublishTests(unittest.TestCase):
         device = Mock()
         device.text.return_value.exists.return_value = True
         device.description.return_value.exists.return_value = False
+        device.descriptionContains.return_value.exists.return_value = False
         device.textContains.return_value.exists.return_value = False
         self.assertTrue(publish_button_visible(device))
+
+    def test_pick_publish_target_prefers_top_toolbar(self) -> None:
+        top = collect_publish_targets(
+            """
+            <hierarchy>
+              <node text="Опубликовать" bounds="[900,80][1040,160]" enabled="true" clickable="true" />
+              <node text="Опубликовать" bounds="[900,1800][1040,1880]" enabled="true" clickable="true" />
+            </hierarchy>
+            """
+        )
+        picked = pick_publish_target(
+            top,
+            screen_h=2400,
+            screen_w=1080,
+            placement="top_toolbar",
+        )
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertLess(picked.bounds[3], 700)
+
+    def test_pick_publish_target_prefers_bottom_right(self) -> None:
+        targets = collect_publish_targets(
+            """
+            <hierarchy>
+              <node text="Опубликовать" bounds="[900,80][1040,160]" enabled="true" clickable="true" />
+              <node text="Опубликовать" bounds="[820,2100][1040,2260]" enabled="true" clickable="true" />
+            </hierarchy>
+            """
+        )
+        picked = pick_publish_target(
+            targets,
+            screen_h=2400,
+            screen_w=1080,
+            placement="bottom_right",
+        )
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertGreater(picked.bounds[1], 1800)
+        self.assertGreater(picked.bounds[2], 800)
 
     def test_tap_publish_hides_keyboard_and_clicks(self) -> None:
         device = Mock()
@@ -25,6 +68,14 @@ class FbPublishTests(unittest.TestCase):
             node = Mock()
             label = kwargs.get("description") or kwargs.get("text") or kwargs.get("textContains")
             node.exists.return_value = label == "Опубликовать"
+            node.info = {
+                "bounds": {
+                    "top": 2100,
+                    "bottom": 2260,
+                    "left": 820,
+                    "right": 1040,
+                }
+            }
             return node
 
         device.side_effect = _selector
@@ -35,10 +86,33 @@ class FbPublishTests(unittest.TestCase):
         device.hide_keyboard.assert_called_once()
         device.assert_any_call(description="Опубликовать")
 
+    def test_wait_for_publish_ready_waits_for_uploads(self) -> None:
+        device = Mock()
+        device.window_size.return_value = (1080, 2400)
+        device.dump_hierarchy.side_effect = [
+            "<hierarchy>загрузка фото</hierarchy>",
+            """
+            <hierarchy>
+              <node text="Опубликовать" bounds="[900,80][1040,160]" enabled="true" clickable="true" />
+            </hierarchy>
+            """,
+        ]
+        device.text.return_value.exists.return_value = False
+        device.description.return_value.exists.return_value = False
+        device.descriptionContains.return_value.exists.return_value = False
+        device.textContains.return_value.exists.return_value = False
+        with patch("publisher_social.channels._fb_publish.human_pause"), patch(
+            "publisher_social.channels._fb_publish.time.sleep"
+        ):
+            self.assertTrue(wait_for_publish_ready(device, {}, timeout_sec=5))
+
     def test_confirm_publish_fails_when_button_stays_visible(self) -> None:
         device = Mock()
         visible = Mock(side_effect=[True, True, True])
         with patch(
+            "publisher_social.channels._fb_publish.wait_for_publish_ready",
+            return_value=True,
+        ), patch(
             "publisher_social.channels._fb_publish.publish_button_visible",
             visible,
         ), patch(
@@ -59,7 +133,7 @@ class FbPublishTests(unittest.TestCase):
     def test_confirm_publish_skips_without_live(self) -> None:
         device = Mock()
         with patch(
-            "publisher_social.channels._fb_publish.publish_button_visible",
+            "publisher_social.channels._fb_publish.wait_for_publish_ready",
             return_value=True,
         ):
             result = confirm_publish_or_stop(

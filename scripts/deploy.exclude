@@ -1,0 +1,64 @@
+# Правила для rsync --exclude-from (порядок важен: сначала «+» — что оставить).
+# Шаблоны без слэша внутри совпадают с именем на любом уровне дерева.
+# Никаких «**» — openrsync из macOS их не понимает.
+
+# --- шаблоны конфигов серверу полезны, их пропускаем ---
++ .env.example
++ .env.*.example
++ *.example
+
+# --- секреты: на сервере свой .env, перезаписывать его нельзя ---
+.env
+.env.*
+*.session
+*.session-journal
+credentials/
+amo_chat_fb_credentials.txt
+*.key
+*.pem
+
+# --- собранное под macOS: на Linux нерабочее, ставится на сервере отдельно ---
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv*/
+venv/
+
+# --- runtime: у сервера своё состояние, затирать его нельзя ---
+data/
+logs/
+Logs/
+*.log
+.fb_profile/
+.fb_posting_profile/
+.fb_groups_profile/
+.fb_marketplace_profile/
+temp_images/
+Error.html
+
+# --- деревья, где имена в репозитории и на сервере разошлись ---
+# Живой код агента 1 на сервере лежит в agent_1_parser/airbnb_parser (его в
+# репозитории нет вовсе), а локальный airbnb_scraper — старый дубликат.
+# Живой агент 9 на сервере — каталог «Агент 9», а не agent_9_connector.
+# Пока имена не сведены, не отправляем вторые копии: именно такие дубликаты
+# и приводят к правкам не в том файле.
+agent_1_parser/airbnb_scraper/
+agent_9_connector/
+
+# --- локальное, серверу не нужно (музыка и монтаж живут в R2) ---
+# Без пробелов в шаблонах: openrsync из macOS не матчит имена с пробелами,
+# «Список аудио файлом…» так и уезжал на сервер целиком.
+/agent_4_publisher_fb/
+Монтаж*/
+Список*/
+
+# --- служебное ---
+.deploy-backups/
+.git/
+.git-archived/
+.cursor/
+.cursorignore
+.DS_Store
+*.zip
+HANDOFF_*.md

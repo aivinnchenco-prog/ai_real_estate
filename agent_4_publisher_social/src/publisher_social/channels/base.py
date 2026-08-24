@@ -17,6 +17,26 @@ CAROUSEL_PUBLISH_CHANNELS = (
     "fb_groups",
 )
 
+# Android album folder names — one directory per object (see tests/test_media_selection.py).
+CAROUSEL_FOLDER_PREFIX = "Carousel"
+MARKETPLACE_FOLDER_PREFIX = "Open Home"
+
+
+def carousel_folder_name(object_id: str) -> str:
+    """Folder under publisher_social media_dir for carousel slides of one object."""
+    oid = (object_id or "").strip()
+    if not oid:
+        raise ValueError("object_id required for carousel folder name")
+    return f"{CAROUSEL_FOLDER_PREFIX} {oid}"
+
+
+def marketplace_folder_name(object_id: str) -> str:
+    """Folder under brand_open_home device dir for Marketplace photos of one object."""
+    oid = (object_id or "").strip()
+    if not oid:
+        raise ValueError("object_id required for marketplace folder name")
+    return f"{MARKETPLACE_FOLDER_PREFIX} {oid}"
+
 
 def carousel_folder_name(object_id: str) -> str:
     """Per-object phone album name (legacy: Carousel F2026_07_19 / object id)."""
@@ -37,6 +57,8 @@ class ChannelResult:
     post_url: str | None = None
     extra_urls: dict[str, str] | None = None
     note: str | None = None
+    # FB Groups: URLs successfully published in this run (for per-group Notion matrix).
+    published_group_urls: list[str] | None = None
     # verified | accepted | submitted_unverified | failed | skipped | preview
     publication_status: str | None = None
 
@@ -141,9 +163,15 @@ def select_carousel_photos_toggle_safe(
 def gallery_selection_state(desc: str) -> str | None:
     """Parse Android gallery content-desc into unselected/selected."""
     low = (desc or "").lower()
-    if "не выбрано" in low or "not selected" in low:
+    if "не выбрано" in low or "not selected" in low or "не выбран" in low:
         return "unselected"
-    if "выбрано" in low or "selected" in low:
+    if (
+        "выбрано" in low
+        or " selected" in low
+        or low.endswith("selected")
+        or "отмечено" in low
+        or "checked" in low
+    ):
         return "selected"
     return None
 

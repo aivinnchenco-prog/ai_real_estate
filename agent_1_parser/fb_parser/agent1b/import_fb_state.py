@@ -24,6 +24,7 @@ async def main() -> None:
     cookies = state.get("cookies") or []
     if not cookies:
         raise SystemExit("No cookies in storage state")
+    origins = state.get("origins") or []
 
     async with async_playwright() as p:
         ctx = await p.chromium.launch_persistent_context(
@@ -33,6 +34,21 @@ async def main() -> None:
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         await ctx.add_cookies(cookies)
+        for origin in origins:
+            origin_url = origin.get("origin")
+            items = origin.get("localStorage") or []
+            if not origin_url or not items:
+                continue
+            await page.goto(origin_url, wait_until="domcontentloaded", timeout=90000)
+            for item in items:
+                name = item.get("name")
+                value = item.get("value")
+                if not name:
+                    continue
+                await page.evaluate(
+                    "(pair) => localStorage.setItem(pair.name, pair.value)",
+                    {"name": name, "value": value or ""},
+                )
         await page.goto(
             "https://www.facebook.com/marketplace/",
             wait_until="domcontentloaded",

@@ -83,6 +83,7 @@ def run_agent3(object_id: str) -> int:
     proc = subprocess.run(
         ["node", str(entry), "--object-id", object_id],
         cwd=director,
+        env=_chain_subprocess_env(),
     )
     return proc.returncode
 
@@ -110,6 +111,13 @@ def run_build_carousel(object_id: str) -> int:
 HIGGSFIELD_AUTH_TAG = "higgsfield_auth"
 
 
+def _chain_subprocess_env() -> dict[str, str]:
+    """Env for node/higgsfield children (credentials live under HOME/.config/higgsfield)."""
+    env = os.environ.copy()
+    env.setdefault("HOME", "/opt/openhome")
+    return env
+
+
 def check_higgsfield_auth() -> tuple[bool, str]:
     """Preflight-проверка сессии Higgsfield CLI (для Seedance)."""
     script = ROOT.parents[2] / "agent_3_director" / "scripts" / "check_higgsfield_auth.mjs"
@@ -120,6 +128,7 @@ def check_higgsfield_auth() -> tuple[bool, str]:
         cwd=script.parents[1],
         capture_output=True,
         text=True,
+        env=_chain_subprocess_env(),
     )
     out = f"{proc.stdout or ''}{proc.stderr or ''}".strip()
     return proc.returncode == 0, out
@@ -134,16 +143,23 @@ def watch_higgsfield_auth() -> None:
     ok, out = check_higgsfield_auth()
     if ok:
         if clear_tag_if_was_failing():
-            notify("Higgsfield CLI: авторизация восстановлена, монтаж снова работает.",
-                   force=True)
+            notify(
+                "✅ Higgsfield CLI: авторизация восстановлена — монтаж Seedance снова работает.",
+                force=True,
+            )
         return
     print(f"[chain] Higgsfield auth check FAILED:\n{out}", file=sys.stderr)
     sent = notify(
-        "Higgsfield CLI: авторизация протухла — монтаж видео (Seedance) не запустится.\n\n"
-        "Починить на сервере:\n"
-        "ssh root@<VPS> \"HOME=/root higgsfield auth login\"\n"
-        "или локально: higgsfield auth login, затем скопировать\n"
-        "~/.config/higgsfield/credentials.json на сервер.",
+        "⚠️ Higgsfield CLI: токен протух или не авторизован (@Error_real_estate_bot).\n"
+        "Монтаж Seedance (Agent 3) не запустится до восстановления OAuth.\n\n"
+        f"Диагностика: {out[:500]}\n\n"
+        "Починить (chain watcher = user openhome, HOME=/opt/openhome):\n"
+        "1) Mac: higgsfield auth login → scp ~/.config/higgsfield/*.json "
+        "root@VPS:/opt/openhome/.config/higgsfield/ "
+        "(chown openhome:openhome, chmod 600)\n"
+        "2) SSH tunnel: agent_3_director/scripts/higgsfield_auth_remote.sh "
+        "(sudo -u openhome env HOME=/opt/openhome …)\n\n"
+        "Проверка: node agent_3_director/scripts/check_higgsfield_auth.mjs",
         tag=HIGGSFIELD_AUTH_TAG,
     )
     if sent:
@@ -284,6 +300,38 @@ def load_agent4_publisher_config() -> dict:
         return json.load(f)
 
 
+def _resolve_fb_publisher_backend(project: Path, pub_cfg: dict) -> str:
+    """phone (Termux/ADB) or browser (Playwright + Agent 7 profile)."""
+    env = os.environ.get("PUBLISHER_FB_BACKEND", "").strip().lower()
+    if env in ("browser", "phone"):
+        return env
+    pp = pub_cfg.get("phone_publisher") or {}
+    configured = pp.get("fb_backend")
+    if configured:
+        return str(configured).strip().lower()
+    fb_cfg_path = project / "config" / "fb_browser.json"
+    if fb_cfg_path.exists():
+        try:
+            with fb_cfg_path.open(encoding="utf-8") as f:
+                fb_cfg = json.load(f)
+            backend = fb_cfg.get("backend")
+            if backend:
+                return str(backend).strip().lower()
+        except (OSError, json.JSONDecodeError):
+            pass
+    pub_path = project / "config" / "publisher.json"
+    if pub_path.exists():
+        try:
+            with pub_path.open(encoding="utf-8") as f:
+                social_cfg = json.load(f)
+            backend = (social_cfg.get("fb_publisher") or {}).get("backend")
+            if backend:
+                return str(backend).strip().lower()
+        except (OSError, json.JSONDecodeError):
+            pass
+    return "phone"
+
+
 def phone_publisher_project_root(pub_cfg: dict) -> Path:
     """Корень Publisher social: monorepo/agent_4_publisher_social или legacy sibling."""
     rel = pub_cfg.get("phone_publisher", {}).get("project_path", "agent_4_publisher_social")
@@ -310,7 +358,7 @@ def run_phone_publisher(
     live: bool = False,
     channels: list[str] | None = None,
 ) -> int:
-    """Publisher social — публикация с Android-телефона (ADB)."""
+    """Publisher social — FB через браузер (Agent 7) или Android (ADB)."""
     pp = pub_cfg.get("phone_publisher", {})
     if not pp.get("enabled"):
         print("[chain] SKIP phone publisher: disabled in publisher.json", file=sys.stderr)
@@ -319,11 +367,23 @@ def run_phone_publisher(
     if not project.exists():
         print(f"[chain] SKIP phone publisher: not found {project}", file=sys.stderr)
         return 1
+    backend = _resolve_fb_publisher_backend(project, pub_cfg)
+    browser_mode = backend == "browser"
     venv_python = project / ".venv" / "bin" / "python"
     python_bin = str(venv_python) if venv_python.exists() else sys.executable
-    cmd_name = pp.get("command", "publish-all")
-    if channels:
-        cmd_name = "publish"
+    runner = str(pp.get("runner") or "termux").strip().lower()
+    if browser_mode:
+        # У браузерного бэкенда вход только один — publish-chain (сам проходит
+        # scheduled + pending за запуск). Ключ command в publisher.json описывает
+        # телефонную ветку, и его «publish» уводил бы в ADB-пайплайн: на VPS это
+        # падало с «adb not found in PATH».
+        cmd_name = "publish-chain"
+    elif runner == "chain":
+        cmd_name = pp.get("command") or "publish-chain"
+    else:
+        cmd_name = pp.get("command", "publish-all")
+        if channels:
+            cmd_name = "publish"
     cmd = [
         python_bin,
         "-m",
@@ -331,9 +391,10 @@ def run_phone_publisher(
         cmd_name,
         "--page-id",
         page_id,
-        "--push-media",
     ]
-    if channels:
+    if not browser_mode:
+        cmd.append("--push-media")
+    if channels and cmd_name == "publish":
         for channel in channels:
             cmd.extend(["--channel", channel])
     if live:
@@ -342,10 +403,31 @@ def run_phone_publisher(
         cmd.append("--dry-run")
     env = os.environ.copy()
     src = project / "src"
-    env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
-    print(f"\n[chain] Phone publisher ({cmd_name}) → {page_id}"
-          + (" [LIVE]" if live else " [dry-run]")
-          + f" via {python_bin}")
+    monorepo = project.parent
+    env["PYTHONPATH"] = (
+        str(src)
+        + os.pathsep
+        + str(monorepo)
+        + os.pathsep
+        + env.get("PYTHONPATH", "")
+    )
+    if browser_mode:
+        env.setdefault("PUBLISHER_FB_BACKEND", "browser")
+        env.setdefault(
+            "AGENT7_FACEBOOK_PROFILE_DIR",
+            "/opt/openhome/runtime/browser_profiles/facebook_agent7",
+        )
+        env.setdefault(
+            "OPENHOME_FB_LOCK_DIR",
+            "/opt/openhome/runtime/state/shared/locks",
+        )
+        env.setdefault("AGENT7_FB_HEADLESS", "true")
+    label = "FB browser publisher" if browser_mode else "Phone publisher"
+    print(
+        f"\n[chain] {label} ({cmd_name}) → {page_id}"
+        + (" [LIVE]" if live else " [dry-run]")
+        + f" via {python_bin}"
+    )
     proc = subprocess.run(cmd, cwd=project, env=env)
     return proc.returncode
 
@@ -390,7 +472,7 @@ def spawn_chatplace_for_reel(page_id: str) -> int:
 
 def run_agent6(page_id: str, platform: str, publisher_script: Path,
                mode: str | None = None) -> int:
-    """Один вызов publish_pipeline: --platform all публикует во все сети Metricool."""
+    """Один вызов publish_pipeline: --platform all → PostMyPost (или Metricool legacy)."""
     print(f"\n[chain] Agent 6 → {page_id} ({platform}"
           + (f", mode={mode}" if mode else "") + ")")
     if not publisher_script.exists():
@@ -619,12 +701,16 @@ def continue_chain(
             montage_started = True
             if code != 0:
                 log_event(listing.object_id, "chain", "agent3_failed", code=code)
-                notify(
-                    f"Агент 3 (монтаж видео) упал на объекте {listing.object_id} "
-                    f"(exit={code}). Детали в last_error объекта в Notion "
-                    "и в логах re-chain-watcher.",
-                    tag=f"agent3_failed:{listing.object_id}",
-                )
+                auth_ok, auth_out = check_higgsfield_auth()
+                if not auth_ok:
+                    watch_higgsfield_auth()
+                else:
+                    notify(
+                        f"Агент 3 (монтаж видео) упал на объекте {listing.object_id} "
+                        f"(exit={code}). Детали в last_error объекта в Notion "
+                        "и в логах openhome-chain-watcher.",
+                        tag=f"agent3_failed:{listing.object_id}",
+                    )
                 exit_code = code
             break  # строго один объект за цикл — остальные ждут следующего poll
 
@@ -633,9 +719,10 @@ def continue_chain(
     phone_on = bool(pub_cfg.get("phone_publisher", {}).get("enabled"))
     phone_mode_cfg = str((pub_cfg.get("phone_publisher") or {}).get("mode") or "").strip().lower()
     phone_fb_only = phone_on and phone_mode_cfg in ("fb_only", "facebook_only")
-    metricool_on = bool(pub_cfg.get("metricool", {}).get("enabled", True))
     postmypost_on = bool(pub_cfg.get("postmypost", {}).get("enabled"))
-    phone_mode = phone_on and not metricool_on and not postmypost_on
+    metricool_on = bool(pub_cfg.get("metricool", {}).get("enabled", False))
+    api_mode = postmypost_on or metricool_on
+    phone_mode = phone_on and not api_mode
     if chain.get("publish_fb_groups") and not phone_mode and not phone_fb_only:
         fb_branches.append("fb_groups_pipeline.py")
     if chain.get("publish_fb_marketplace") and not phone_mode and not phone_fb_only:
@@ -651,9 +738,7 @@ def continue_chain(
         else:
             listings6 = fetch_by_status(crm, statuses["video_done"], nf)
 
-        # Телефон вместо API: не блокируем и не спамим из‑за старого error_count
-        api_mode = postmypost_on or metricool_on
-        phone_mode = phone_on and not api_mode
+        # PostMyPost/Metricool: не блокируем из‑за старого error_count от legacy Metricool
         for listing in listings6:
             ready6, reason6 = agent6_ready(
                 listing,
@@ -759,9 +844,16 @@ def continue_chain(
                             "phone_fb_failed",
                             code=code_fb_phone,
                         )
+                        fb_hint = (
+                            "Проверьте сессию Agent 7 (facebook_agent7), Playwright и last_error в Notion."
+                            if _resolve_fb_publisher_backend(
+                                phone_publisher_project_root(pub_cfg), pub_cfg
+                            )
+                            == "browser"
+                            else "Проверьте ADB/телефон и last_error в Notion."
+                        )
                         notify(
-                            f"Phone FB publisher упал на объекте {listing.object_id}. "
-                            "Проверьте ADB/телефон и last_error в Notion.",
+                            f"FB publisher упал на объекте {listing.object_id}. {fb_hint}",
                             tag=f"phone_fb_failed:{listing.object_id}",
                         )
 

@@ -12,6 +12,7 @@ from housing_type import detect_housing_type  # noqa: E402
 from listing_parser import parse_listing  # noqa: E402
 from session_store import bind_object_id, get_object_id, load_session  # noqa: E402
 from notion_gate import NotionListing, agent3_ready, agent6_ready, agent4_ready  # noqa: E402
+from chain_runner import resolve_publish_platforms, social_api_enabled  # noqa: E402
 from agent2_structurize import (  # noqa: E402
     first_upcoming_month_entry,
     monthly_price_options,
@@ -206,6 +207,23 @@ class MonthlyPricesTests(unittest.TestCase):
         )
         self.assertIn("monthly_prices", props)
         self.assertEqual(props["Цена за месяц"]["number"], 55000.0)
+
+
+class PublishPlatformsTests(unittest.TestCase):
+    def test_social_api_enabled_postmypost_only(self):
+        self.assertTrue(social_api_enabled({
+            "postmypost": {"enabled": True},
+            "metricool": {"enabled": False},
+        }))
+        self.assertFalse(social_api_enabled({
+            "postmypost": {"enabled": False},
+            "metricool": {"enabled": False},
+        }))
+
+    def test_resolve_publish_platforms_reads_publisher_json(self):
+        plats = resolve_publish_platforms({})
+        self.assertGreater(len(plats), 0)
+        self.assertIn("instagram", plats)
 
 
 if __name__ == "__main__":

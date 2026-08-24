@@ -353,9 +353,11 @@ async function main() {
     }
 
     if (engine === "seedance") {
+      const authEnv = { ...process.env, HOME: process.env.HOME || "/opt/openhome" };
       const authCheck = spawnSync("node", [resolve(ROOT, "scripts/check_higgsfield_auth.mjs")], {
         encoding: "utf8",
         cwd: ROOT,
+        env: authEnv,
       });
       if (authCheck.status !== 0) {
         throw new Error(authCheck.stderr?.trim() || "Higgsfield auth check failed");

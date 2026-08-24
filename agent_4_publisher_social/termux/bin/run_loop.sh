@@ -200,6 +200,12 @@ while true; do
   # --- цикл публикации -------------------------------------------------------
   log "цикл публикации: $RUN_CMD"
   OUT_FILE="$STATE_DIR/last_run.out"
+  if [ -f "$PROJECT_DIR/.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . "$PROJECT_DIR/.env"
+    set +a
+  fi
   # не даём одному объекту завесить раннер навсегда
   timeout --foreground --kill-after=30 1800 \
     python -m publisher_social $RUN_CMD >"$OUT_FILE" 2>&1

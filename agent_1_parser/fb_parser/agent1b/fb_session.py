@@ -196,7 +196,10 @@ async def is_logged_in(page) -> bool:
     url = page.url.lower()
     if "login" in url or "checkpoint" in url:
         return False
-    body = (await page.content()).lower()
+    try:
+        body = (await page.content()).lower()
+    except Exception:
+        body = ""
     login_markers = [
         "log into facebook",
         "email or mobile number",
@@ -205,7 +208,7 @@ async def is_logged_in(page) -> bool:
         "увійти",
         "войти",
     ]
-    if any(m in body for m in login_markers):
+    if body and any(m in body for m in login_markers):
         return False
     cookies = await page.context.cookies()
     if any(c.get("name") == "c_user" and "facebook.com" in c.get("domain", "") for c in cookies):

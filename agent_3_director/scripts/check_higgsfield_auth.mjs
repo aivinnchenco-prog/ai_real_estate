@@ -20,8 +20,8 @@ const res = spawnSync(bin, ["account", "status", "--json", "--no-color"], {
 const out = `${res.stdout || ""}${res.stderr || ""}`;
 if (res.status !== 0 || /session expired|not authenticated/i.test(out)) {
   console.error("Higgsfield CLI: сессия истекла или не авторизован.");
-  console.error("Выполните в терминале: higgsfield auth login");
-  console.error("(откроется браузер, подтвердите вход за ~30 сек)");
+  console.error("Уведомление уйдёт в @Error_real_estate_bot (chain watcher, tag=higgsfield_auth).");
+  console.error("Починить: higgsfield auth login → scp credentials на VPS (HOME=/opt/openhome).");
   process.exit(1);
 }
 

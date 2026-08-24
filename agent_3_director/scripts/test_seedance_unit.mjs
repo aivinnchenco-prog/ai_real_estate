@@ -60,6 +60,30 @@ const carouselPicked = selectWithExteriorRatio(carouselCandidates, 9, 0.3);
 assert("carousel 9 selects 3 exterior", carouselPicked.filter((i) => isExteriorCategory(i.category)).length === 3);
 assert("carousel 9 selects 6 interior", carouselPicked.filter((i) => !isExteriorCategory(i.category)).length === 6);
 
+// Пропорция мягкая: если проходной экстерьер всего один, добираем интерьером,
+// а не тащим в карусель слабый кадр ради квоты.
+const scarceExterior = [
+  { key: "front.jpg", category: "exterior" },
+  ...Array.from({ length: 12 }, (_, i) => ({ key: `room_${i}.jpg`, category: "living" })),
+];
+const scarcePicked = selectWithExteriorRatio(scarceExterior, 9, 0.3);
+assert("carousel keeps 9 when exterior is scarce", scarcePicked.length === 9);
+assert(
+  "carousel does not invent exterior",
+  scarcePicked.filter((i) => isExteriorCategory(i.category)).length === 1
+);
+
+// Пул кандидатов приходит отранжированным — берём лучшие в каждой группе.
+const rankedPool = [
+  { key: "best_living.jpg", category: "living" },
+  { key: "best_pool.jpg", category: "pool" },
+  { key: "good_kitchen.jpg", category: "kitchen" },
+  { key: "weak_exterior.jpg", category: "exterior" },
+];
+const rankedPicked = selectWithExteriorRatio(rankedPool, 3, 0.3);
+assert("carousel takes best exterior of the pool", rankedPicked[0].key === "best_pool.jpg");
+assert("carousel drops pool tail beyond topK", rankedPicked.length === 3);
+
 // --- topUpSelection: добор до topK после куратора ---
 const allKeys = Array.from({ length: 12 }, (_, i) => `photo_${String(i + 1).padStart(3, "0")}.jpg`);
 const curatorPicked = ["photo_001.jpg", "photo_004.jpg", "photo_007.jpg"];
@@ -97,6 +121,20 @@ assert(
   "gemini respects topK",
   normalizeGeminiSelection({ selected: pool.map((key) => ({ key, category: "living" })) }, pool, 2).length === 2
 );
+// Режим пула кандидатов: порядок = ранжирование по качеству, экстерьер наверх
+// не поднимаем — иначе слабый кадр обгонит сильные до применения пропорции.
+const poolRanked = normalizeGeminiSelection(
+  {
+    selected: [
+      { key: "photo_002.jpg", category: "kitchen" },
+      { key: "photo_001.jpg", category: "exterior" },
+    ],
+  },
+  pool,
+  9,
+  { heroFirst: false }
+);
+assert("gemini pool mode keeps ranking", poolRanked[0].key === "photo_002.jpg");
 let threw = false;
 try {
   normalizeGeminiSelection({ nope: true }, pool, 9);

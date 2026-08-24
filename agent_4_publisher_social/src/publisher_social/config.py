@@ -7,6 +7,22 @@ from typing import Any
 
 from .dotenv_util import package_root
 
+PRODUCTION_CHANNELS = ("fb_groups", "fb_marketplace")
+
+
+def validate_production_channels(channels: list[str]) -> None:
+    """Reject legacy phone-only channels removed from production config."""
+    allowed = set(PRODUCTION_CHANNELS)
+    bad = [ch for ch in channels if ch not in allowed]
+    if bad:
+        raise ValueError(
+            "Каналы "
+            + ", ".join(bad)
+            + " недоступны в production. Разрешены только: "
+            + ", ".join(PRODUCTION_CHANNELS)
+            + "."
+        )
+
 
 def load_publisher_config() -> dict[str, Any]:
     path = package_root() / "config" / "publisher.json"
@@ -54,8 +70,8 @@ def state_path() -> Path:
     return path
 
 
-def load_fb_groups() -> list[str]:
-    cfg = load_publisher_config()
+def load_fb_groups(config: dict[str, Any] | None = None) -> list[str]:
+    cfg = config or load_publisher_config()
     rel = cfg.get("fb_groups", {}).get("groups_file", "config/fb_groups_list.txt")
     path = package_root() / rel
     if not path.exists():
@@ -66,6 +82,9 @@ def load_fb_groups() -> list[str]:
         if not line or line.startswith("#"):
             continue
         groups.append(line)
+    max_groups = int(cfg.get("fb_groups", {}).get("max_groups_per_object") or 0)
+    if max_groups > 0:
+        groups = groups[:max_groups]
     return groups
 
 

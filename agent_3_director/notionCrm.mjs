@@ -171,6 +171,17 @@ export function firstUpcomingMonthKey(monthly, now = new Date()) {
   return null;
 }
 
+/**
+ * Ключ YYYY-MM первого предстоящего календарного месяца (строго после текущего).
+ * Та же логика, что first_upcoming_month_entry / «Цена за месяц» при structurize.
+ */
+export function nextCalendarMonthKey(now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  if (m === 12) return `${y + 1}-01`;
+  return `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
 function monthNameRu(yyyyMm) {
   const month = Number(String(yyyyMm || "").split("-")[1]);
   return MONTHS_RU[month] || "";
@@ -187,18 +198,30 @@ export function isAirbnbObject(objectId) {
 }
 
 /**
- * Цена для хука/оверлея — только колонка «Цена за месяц».
- * Без monthly_prices, без «Цена за год» и без деления /12.
+ * Цена для хука — колонка «Цена за месяц», без /12 и без monthly_prices.
+ * Facebook (F_*): «в месяц · годовой контракт».
+ * Airbnb (A_*): «в месяц · {следующий календарный месяц} «краткосрок»».
  */
-function formatOverlayPrice(page, priceField, _fallbackField, _monthlyField, _objectId) {
+function formatOverlayPrice(page, priceField, _fallbackField, _monthlyField, objectId, now = new Date()) {
   const monthly = priceField ? readNumber(page, priceField) : null;
-  if (monthly) {
-    return { price: monthly.toLocaleString("en-US"), period: "в месяц" };
+  if (!monthly) {
+    return { price: "", period: "" };
   }
-  return { price: "", period: "" };
+  const price = monthly.toLocaleString("en-US");
+  if (isFbObject(objectId)) {
+    return { price, period: "в месяц · годовой контракт" };
+  }
+  if (isAirbnbObject(objectId)) {
+    const month = monthNameRu(nextCalendarMonthKey(now));
+    const period = month
+      ? `в месяц · ${month} «краткосрок»`
+      : `в месяц «краткосрок»`;
+    return { price, period };
+  }
+  return { price, period: "в месяц" };
 }
 
-export function pageVideoOverlayMeta(page, fields, overlayFields = {}, objectId = null) {
+export function pageVideoOverlayMeta(page, fields, overlayFields = {}, objectId = null, now = new Date()) {
   const housingField = overlayFields.housing_type || fields.housing_type || "Тип жилья";
   const roomsField = overlayFields.rooms || fields.rooms || "Количество комнат";
   const priceField = overlayFields.price || fields.price_monthly || "Цена за месяц";
@@ -217,7 +240,8 @@ export function pageVideoOverlayMeta(page, fields, overlayFields = {}, objectId 
     priceField,
     priceFallback,
     monthlyField,
-    oid
+    oid,
+    now
   );
 
   return {

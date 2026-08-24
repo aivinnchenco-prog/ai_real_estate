@@ -1024,6 +1024,8 @@ def published_url_field(
         # Карусель — только при явном mode=carousel. Без сигнала (например, старый
         # deferred sync без --post-kind) слот считаем видео: так публикуется
         # TikTok по умолчанию, а фото-пост всегда приходит с mode.
+        if upload_video or mode == "video":
+            return mapping.get("tiktok")
         if mode == "carousel":
             return mapping.get("tiktok_carousel") or mapping.get("tiktok")
         return mapping.get("tiktok")
@@ -1052,6 +1054,9 @@ def publication_post_kind(
     if network == "tiktok":
         return "video" if upload_video or mode == "video" else "carousel"
     return None
+
+
+social_post_kind = publication_post_kind
 
 
 def post_kind_slot_flags(post_kind: str | None) -> tuple[bool, str | None]:
@@ -1650,25 +1655,31 @@ def publish_one(
         post_kind = publication_post_kind(platform, upload_video=upload_video, mode=mode)
         needs_url_sync = backend == "postmypost" or not published_url
         if needs_url_sync:
-            result["deferred_url_sync"] = spawn_deferred_post_url_sync(
-                page_id,
-                post_id,
-                platform,
-                scheduled_time,
-                config,
-                post_kind=post_kind,
-            )
+            try:
+                result["deferred_url_sync"] = spawn_deferred_post_url_sync(
+                    page_id,
+                    post_id,
+                    platform,
+                    scheduled_time,
+                    config,
+                    post_kind=post_kind,
+                )
+            except OSError as exc:
+                print(f"[deferred_sync] spawn failed (non-fatal): {exc}", file=sys.stderr)
         if backend == "postmypost":
-            pmp_spawn = spawn_deferred_postmypost_funnel(
-                page_id,
-                platform,
-                scheduled_time,
-                config,
-                post_id=post_id,
-                post_kind=post_kind,
-            )
-            if pmp_spawn:
-                result["deferred_postmypost_funnel"] = pmp_spawn
+            try:
+                pmp_spawn = spawn_deferred_postmypost_funnel(
+                    page_id,
+                    platform,
+                    scheduled_time,
+                    config,
+                    post_id=post_id,
+                    post_kind=post_kind,
+                )
+                if pmp_spawn:
+                    result["deferred_postmypost_funnel"] = pmp_spawn
+            except OSError as exc:
+                print(f"[postmypost funnel] spawn failed (non-fatal): {exc}", file=sys.stderr)
             try:
                 agent5 = spawn_agent5_postmypost_ai_agent(
                     page_id,
@@ -1691,14 +1702,14 @@ def publish_one(
         err_field = fields.get("publish_error", nfc.LAST_ERROR)
         err_count_field = fields.get("error_count", "error_count")
         err_count = get_prop(page, err_count_field, "number") or 0
-        notion_update_fields(
-            page_id,
-            {
-                fields["status"]: {"status": {"name": status_failed}},
-                err_field: {"rich_text": [{"text": {"content": str(e)[:2000]}}]},
-                err_count_field: {"number": err_count + 1},
-            },
-        )
+        fail_props: dict[str, Any] = {
+            fields["status"]: {"status": {"name": status_failed}},
+            err_field: {"rich_text": [{"text": {"content": str(e)[:2000]}}]},
+            err_count_field: {"number": err_count + 1},
+        }
+        if lock_field:
+            fail_props[lock_field] = notion_checkbox_property(False)
+        notion_update_fields(page_id, fail_props)
         raise
 
 

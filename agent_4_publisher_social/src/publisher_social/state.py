@@ -108,7 +108,71 @@ def object_entry(state: dict[str, Any], object_id: str) -> dict[str, Any]:
 def object_has_progress(state: dict[str, Any], object_id: str) -> bool:
     """У объекта уже есть хотя бы один успешный канал — продолжаем без паузы."""
     entry = object_entry(state, object_id)
-    return bool(entry.get("channels_done"))
+    if entry.get("channels_done"):
+        return True
+    return bool(entry.get("fb_groups_published"))
+
+
+def normalize_fb_group_url(url: str) -> str:
+    return url.strip().rstrip("/") + "/"
+
+
+def fb_groups_published_map(state: dict[str, Any], object_id: str) -> dict[str, Any]:
+    entry = object_entry(state, object_id)
+    raw = entry.get("fb_groups_published") or {}
+    if not isinstance(raw, dict):
+        return {}
+    return dict(raw)
+
+
+def is_fb_group_published(state: dict[str, Any], object_id: str, group_url: str) -> bool:
+    key = normalize_fb_group_url(group_url)
+    return key in fb_groups_published_map(state, object_id)
+
+
+def mark_fb_group_published(
+    state: dict[str, Any],
+    object_id: str,
+    group_url: str,
+    *,
+    note: str | None = None,
+) -> None:
+    key = normalize_fb_group_url(group_url)
+    now = _now_iso()
+
+    def mutate(current: dict[str, Any]) -> None:
+        entry = object_entry(current, object_id)
+        published = entry.setdefault("fb_groups_published", {})
+        published[key] = {"at": now, "note": note}
+        if note:
+            entry.setdefault("log", []).append(f"{now} fb_groups {key}: {note}")
+
+    _mutate_state(state, mutate)
+
+
+def clear_fb_groups_published(state: dict[str, Any], object_id: str) -> None:
+    def mutate(current: dict[str, Any]) -> None:
+        object_entry(current, object_id).pop("fb_groups_published", None)
+
+    _mutate_state(state, mutate)
+
+
+def pending_fb_group_urls(
+    state: dict[str, Any],
+    object_id: str,
+    group_urls: list[str],
+) -> list[str]:
+    return [url for url in group_urls if not is_fb_group_published(state, object_id, url)]
+
+
+def all_fb_groups_published(
+    state: dict[str, Any],
+    object_id: str,
+    group_urls: list[str],
+) -> bool:
+    if not group_urls:
+        return False
+    return not pending_fb_group_urls(state, object_id, group_urls)
 
 
 def is_channel_done(state: dict[str, Any], object_id: str, channel: str) -> bool:

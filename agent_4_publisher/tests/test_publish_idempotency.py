@@ -81,19 +81,76 @@ def test_blocks_locked_without_bypass():
     assert reason == "agent6_locked"
 
 
-def test_allows_locked_with_bypass_for_unfilled_slot():
-    page = _page(locked=True)
+def test_allows_carousel_when_only_reel_url_filled():
+    page = _page(reel_url="https://instagram.com/reel/xyz")
     reason = publish_skip_reason(
         page,
         CFG["notion"]["fields"],
         "instagram",
         CFG,
-        upload_video=True,
-        mode="video",
+        upload_video=False,
+        mode="carousel",
         bypass_lock=True,
-        force=False,
+        force=True,
     )
     assert reason is None
+
+
+TIKTOK_CFG = {
+    "notion": {
+        "published_url_fields": {
+            "tiktok": "post_url_tiktok",
+            "tiktok_carousel": "post_url_tiktok_carousel",
+        },
+        "fields": {
+            "agent6_locked": "agent6_locked",
+            "status": "Статус",
+        },
+    }
+}
+
+
+def _tiktok_page(*, video_url=None, carousel_url=None):
+    props = {
+        "agent6_locked": {"type": "checkbox", "checkbox": False},
+        "post_url_tiktok": {"type": "url", "url": video_url},
+        "post_url_tiktok_carousel": {"type": "url", "url": carousel_url},
+    }
+    return {"id": "page-tk", "properties": props}
+
+
+def test_tiktok_carousel_not_skipped_when_video_url_present():
+    page = _tiktok_page(
+        video_url="https://app.postmypost.io/uk/p/B4RHA#share=31672358"
+    )
+    reason = publish_skip_reason(
+        page,
+        TIKTOK_CFG["notion"]["fields"],
+        "tiktok",
+        TIKTOK_CFG,
+        upload_video=False,
+        mode="carousel",
+        bypass_lock=True,
+        force=True,
+    )
+    assert reason is None
+
+
+def test_tiktok_carousel_skipped_when_carousel_url_present():
+    page = _tiktok_page(
+        carousel_url="https://app.postmypost.io/uk/p/B4RHA#share=999"
+    )
+    reason = publish_skip_reason(
+        page,
+        TIKTOK_CFG["notion"]["fields"],
+        "tiktok",
+        TIKTOK_CFG,
+        upload_video=False,
+        mode="carousel",
+        bypass_lock=True,
+        force=True,
+    )
+    assert reason and "post_url_tiktok_carousel" in reason
 
 
 def test_skips_when_local_registry_has_slot(tmp_path, monkeypatch):

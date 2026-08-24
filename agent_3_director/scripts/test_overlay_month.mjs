@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Unit: хук с ценой — только колонка «Цена за месяц».
+ * Unit: хук с ценой — Airbnb (месяц + «краткосрок»), Facebook («годовой контракт»).
  */
 import assert from "assert";
 import {
   parseMonthlyPrices,
   firstUpcomingMonthKey,
+  nextCalendarMonthKey,
   pageVideoOverlayMeta,
   isFbObject,
   isAirbnbObject,
@@ -47,6 +48,14 @@ assert.strictEqual(
   firstUpcomingMonthKey(parsed, new Date("2026-07-16T12:00:00")),
   "2026-08"
 );
+assert.strictEqual(
+  nextCalendarMonthKey(new Date("2026-07-16T12:00:00")),
+  "2026-08"
+);
+assert.strictEqual(
+  nextCalendarMonthKey(new Date("2026-12-15T12:00:00")),
+  "2027-01"
+);
 
 const airbnbMeta = pageVideoOverlayMeta(
   airbnbPage,
@@ -59,14 +68,15 @@ const airbnbMeta = pageVideoOverlayMeta(
     rooms: "Количество комнат",
     district: "Район",
   },
-  "A_20260720_001"
+  "A_20260720_001",
+  new Date("2026-08-24T12:00:00")
 );
 
 assert.strictEqual(airbnbMeta.price, "40,000");
-assert.strictEqual(airbnbMeta.period, "в месяц");
+assert.strictEqual(airbnbMeta.period, "в месяц · сентябрь «краткосрок»");
 assert.ok(isAirbnbObject("A_20260720_001"));
 
-// FB: «Цена за месяц» как есть; yearly/12 больше не используем.
+// FB: «Цена за месяц» как есть; подпись годового контракта, без yearly/12.
 const fbPage = {
   properties: {
     "Объект ID": { rich_text: [{ plain_text: "F_20260811_001" }] },
@@ -80,7 +90,7 @@ const fbPage = {
 
 const fbMeta = pageVideoOverlayMeta(fbPage, fields, {}, "F_20260811_001");
 assert.strictEqual(fbMeta.price, "120,000");
-assert.strictEqual(fbMeta.period, "в месяц");
+assert.strictEqual(fbMeta.period, "в месяц · годовой контракт");
 assert.ok(isFbObject("F_20260811_001"));
 
 const fbNoMonthly = {

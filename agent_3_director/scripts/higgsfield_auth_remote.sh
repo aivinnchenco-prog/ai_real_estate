@@ -12,6 +12,8 @@
 set -euo pipefail
 
 PORT="${HIGGSFIELD_AUTH_PORT:-3843}"
+# Chain watcher on VPS runs as openhome with HOME=/opt/openhome — set before login:
+#   export HOME=/opt/openhome
 export PATH="${HOME}/.local/bin:/usr/local/bin:${PATH}"
 
 if ! command -v higgsfield >/dev/null 2>&1; then

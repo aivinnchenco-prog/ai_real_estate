@@ -127,11 +127,13 @@ def test_owner_channel_priority():
                      source_url="https://airbnb.com/rooms/1")
     assert l.owner_channel() == (OwnerChannel.WHATSAPP, "+66123")
     l.owner_whatsapp = ""
-    assert l.owner_channel() == (OwnerChannel.TELEGRAM, "@own")
-    l.owner_telegram = ""
-    assert l.owner_channel()[0] == OwnerChannel.AIRBNB
     l.source_url = "https://facebook.com/marketplace/item/9"
-    assert l.owner_channel()[0] == OwnerChannel.FB_MARKETPLACE
+    assert l.owner_channel() == (
+        OwnerChannel.FB_MARKETPLACE,
+        "https://facebook.com/marketplace/item/9",
+    )
+    l.source_url = "https://airbnb.com/rooms/1"
+    assert l.owner_channel() is None
 
 
 # ---------- alerts ----------

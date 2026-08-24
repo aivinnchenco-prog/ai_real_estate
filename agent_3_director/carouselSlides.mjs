@@ -3,6 +3,8 @@
  * до 9 слайдов 1080×1350 (4:5).
  *
  * Цена на хуке — только из Notion «Цена за месяц». Без пересчётов.
+ * Объекты из FB (ID F_*) — «в месяц · годовой контракт».
+ * Airbnb и прочие — «в месяц · {календарный месяц}».
  *
  * Карусель (carousel/):
  *   слайд 1 — хук-обложка на лучшем «инстаграмном» фото;
@@ -283,6 +285,8 @@ export async function buildCarousel({
 
   const tmpDir = mkdtempSync(join(tmpdir(), "carousel-"));
   try {
+    // Лучший кадр уходит под хук-обложку и в фото-слайдах больше не повторяется,
+    // поэтому качаем полный лимит: иначе последний отобранный кадр пропадёт.
     const maxPhotos = MAX_SLIDES;
     const photoLocals = [];
     const downloadedKeys = [];
@@ -305,25 +309,18 @@ export async function buildCarousel({
       carouselMeta,
     });
 
+    // Не reuse {id}/hook_cover.jpg — там обложка для видео/Agent6; может быть без месяца.
+    // Карусель для постинга всегда рендерит slide_01 из overlayMeta.
     const hookItem = plan.find((item) => item.kind === "hook");
     if (hookItem) {
       const hookLocal = join(tmpDir, slideName(hookItem.slideNo));
-      let hookReady = false;
-      try {
-        await downloadFromR2(`${objectId}/hook_cover.jpg`, hookLocal);
-        hookReady = true;
-      } catch {
-        /* обложки ещё нет — рендерим ниже */
-      }
-      if (!hookReady) {
-        const overlayCfg = loadTitleOverlayConfig(videoCfg);
-        await renderHookCover({
-          photoPath: hookItem.sourcePath,
-          outputPath: hookLocal,
-          meta: overlayMeta,
-          cfg: overlayCfg,
-        });
-      }
+      const overlayCfg = loadTitleOverlayConfig(videoCfg);
+      await renderHookCover({
+        photoPath: hookItem.sourcePath,
+        outputPath: hookLocal,
+        meta: overlayMeta,
+        cfg: overlayCfg,
+      });
     }
 
     const slides = plan
