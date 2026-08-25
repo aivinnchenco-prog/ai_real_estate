@@ -38,6 +38,7 @@ from .server_concurrency import (
     set_batch_context,
     ServerConcurrencyLimits,
 )
+from .scheduler_policy import success_interval_hours
 from .status_mapper import AirbnbMonthPolicy, build_month_availabilities, normalize_calendar
 from .sync_one import (
     SourcePropertyMissingError,
@@ -344,7 +345,9 @@ def _process_one_object(
                 state = repo.get_object(object_id)
                 if state is not None and scheduler is None:
                     state.last_checked_at = fetched_at
-                    state.next_check_at = fetched_at + timedelta(hours=TIER_HOURS[state.refresh_tier])
+                    state.next_check_at = fetched_at + timedelta(
+                        hours=success_interval_hours(state.refresh_tier)
+                    )
                     state.refresh_status = RefreshStatus.SUCCESS
                     state.source_status = SourceStatus.ACTIVE
                     state.last_error = out.error or ""

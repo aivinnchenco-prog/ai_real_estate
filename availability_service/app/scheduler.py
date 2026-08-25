@@ -15,6 +15,7 @@ from .scheduler_policy import (
     MAX_SIMULTANEOUS_OBJECT_WORKERS,
     production_tier_for_source,
     retry_fallback_tier,
+    success_interval_hours,
     tier_after_success,
 )
 
@@ -31,7 +32,7 @@ def compute_next_check_at(
 ) -> datetime:
     now = now or _utcnow()
     base = from_time or now
-    hours = TIER_HOURS[tier]
+    hours = success_interval_hours(tier)
     return base + timedelta(hours=hours)
 
 

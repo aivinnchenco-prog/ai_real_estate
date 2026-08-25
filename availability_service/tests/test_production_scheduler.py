@@ -21,8 +21,10 @@ from availability_service.app.production_scheduler import (
 from availability_service.app.repository import AvailabilityRepository
 from availability_service.app.scheduler import AvailabilityScheduler, compute_next_check_at
 from availability_service.app.scheduler_policy import (
-    PRODUCTION_ROLLING_WINDOW_HOURS,
+    AIRBNB_ERROR_RETRY_FALLBACK_HOURS,
+    airbnb_check_interval_hours,
     compute_retry_next_check_at,
+    production_rolling_window_hours,
     spread_next_check_schedule,
     tier_after_success,
 )
@@ -30,12 +32,13 @@ from availability_service.app.scheduler_policy import (
 NOW = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
 
 
-def test_default_tier_48h_next_check():
+def test_default_tier_96h_next_check():
     nxt = compute_next_check_at(now=NOW, tier=RefreshTier.H48)
-    assert nxt == NOW + timedelta(hours=48)
+    assert nxt == NOW + timedelta(hours=airbnb_check_interval_hours())
+    assert airbnb_check_interval_hours() == 96
 
 
-def test_success_moves_first_refresh_to_48h(tmp_path):
+def test_success_moves_first_refresh_to_96h(tmp_path):
     repo = AvailabilityRepository(tmp_path / "db.sqlite3")
     repo.save_object(
         AvailabilityObjectState(
@@ -51,7 +54,7 @@ def test_success_moves_first_refresh_to_48h(tmp_path):
     state = repo.get_object("A_NEW")
     assert state.refresh_tier == RefreshTier.H48
     assert state.refresh_status == RefreshStatus.SUCCESS
-    assert nxt == NOW + timedelta(hours=48)
+    assert nxt == NOW + timedelta(hours=airbnb_check_interval_hours())
     repo.close()
 
 
@@ -218,22 +221,24 @@ def test_ingest_plans_notion_create_for_new_object(tmp_path):
 
 
 def test_simulation_1000_objects():
-    sim = run_scheduler_simulation(1000)
+    window = production_rolling_window_hours()
+    sim = run_scheduler_simulation(1000, window_hours=int(window))
     assert sim.object_count == 1000
-    assert sim.objects_per_hour_avg == pytest.approx(1000 / 48, rel=0.01)
+    assert sim.objects_per_hour_avg == pytest.approx(1000 / window, rel=0.01)
     assert sim.largest_hourly_bucket <= 25
-    assert sim.full_sweep_hours <= PRODUCTION_ROLLING_WINDOW_HOURS
+    assert sim.full_sweep_hours <= window
     assert sim.max_simultaneous_workers == 1
 
 
 def test_spread_schedule_spacing():
-    schedule = spread_next_check_schedule(["A", "B", "C"], now=NOW, window_hours=48)
+    window = 96
+    schedule = spread_next_check_schedule(["A", "B", "C"], now=NOW, window_hours=window)
     assert len(schedule) == 3
     assert schedule["A"] == NOW
     delta = (schedule["B"] - schedule["A"]).total_seconds()
-    assert 3600 * 48 / 3 == delta
+    assert 3600 * window / 3 == delta
 
 
 def test_compute_retry_fallback_after_max_short():
     nxt = compute_retry_next_check_at(now=NOW, retry_count=10, fallback_tier=RefreshTier.H48)
-    assert nxt == NOW + timedelta(hours=48)
+    assert nxt == NOW + timedelta(hours=AIRBNB_ERROR_RETRY_FALLBACK_HOURS)

@@ -1,8 +1,14 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from availability_service.app.models import AvailabilityObjectState, RefreshTier
+from availability_service.app.models import AvailabilityObjectState, RefreshTier, SourceKind
 from availability_service.app.repository import AvailabilityRepository
 from availability_service.app.scheduler import AvailabilityScheduler, compute_next_check_at
+from availability_service.app.scheduler_policy import (
+    AIRBNB_ERROR_RETRY_FALLBACK_HOURS,
+    RETRY_DELAY_MINUTES,
+    airbnb_check_interval_hours,
+    compute_retry_next_check_at,
+)
 
 
 NOW = datetime(2026, 8, 14, 15, 0, tzinfo=timezone.utc)
@@ -29,9 +35,16 @@ def test_12h_next_check_at():
     assert nxt == datetime(2026, 8, 15, 3, 0, tzinfo=timezone.utc)
 
 
-def test_48h_next_check_at():
+def test_airbnb_success_next_check_96h_default():
     nxt = compute_next_check_at(now=NOW, tier=RefreshTier.H48)
-    assert nxt == datetime(2026, 8, 16, 15, 0, tzinfo=timezone.utc)
+    assert nxt == NOW + timedelta(hours=airbnb_check_interval_hours())
+    assert airbnb_check_interval_hours() == 96
+
+
+def test_airbnb_success_next_check_env_override(monkeypatch):
+    monkeypatch.setenv("AIRBNB_CHECK_INTERVAL_HOURS", "120")
+    nxt = compute_next_check_at(now=NOW, tier=RefreshTier.H48)
+    assert nxt == NOW + timedelta(hours=120)
 
 
 def test_24h_next_check_at():
@@ -82,3 +95,21 @@ def test_retry_state(tmp_path):
     assert retry_count2 == 2
     assert nxt2 > nxt
     repo.close()
+
+
+def test_airbnb_retry_uses_short_delays_not_success_interval(tmp_path, monkeypatch):
+    monkeypatch.delenv("AIRBNB_CHECK_INTERVAL_HOURS", raising=False)
+    repo = AvailabilityRepository(tmp_path / "availability.sqlite3")
+    _seed(repo, "A_20260814_010", RefreshTier.H48)
+    repo.enqueue_job("A_20260814_010", now=NOW)
+    scheduler = AvailabilityScheduler(repo)
+    nxt, _ = scheduler.schedule_retry("A_20260814_010", "parse", now=NOW)
+    assert nxt == NOW + timedelta(minutes=RETRY_DELAY_MINUTES[0])
+    assert nxt < NOW + timedelta(hours=airbnb_check_interval_hours())
+    repo.close()
+
+
+def test_airbnb_exhausted_retry_fallback_48h_not_96h(tmp_path):
+    nxt = compute_retry_next_check_at(now=NOW, retry_count=99, fallback_tier=RefreshTier.H48)
+    assert nxt == NOW + timedelta(hours=AIRBNB_ERROR_RETRY_FALLBACK_HOURS)
+    assert AIRBNB_ERROR_RETRY_FALLBACK_HOURS == 48

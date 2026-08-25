@@ -826,7 +826,9 @@ class AvailabilityRepository:
             return AvailabilityFreshness.STALE
 
         tier = self.get_refresh_tier(object_id)
-        hours = TIER_HOURS[tier]
+        from .scheduler_policy import success_interval_hours
+
+        hours = success_interval_hours(tier)
         if last + timedelta(hours=hours) >= now:
             return AvailabilityFreshness.FRESH
         return AvailabilityFreshness.STALE

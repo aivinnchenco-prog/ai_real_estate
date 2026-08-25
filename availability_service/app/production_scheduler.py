@@ -21,7 +21,7 @@ from .repository import AvailabilityRepository
 from .scheduler import AvailabilityScheduler, select_due_objects
 from .scheduler_policy import (
     FACEBOOK_ROLLING_WINDOW_HOURS,
-    PRODUCTION_ROLLING_WINDOW_HOURS,
+    production_rolling_window_hours,
     spread_next_check_schedule,
     spacing_seconds_for_count,
     TARGET_OBJECTS_PER_HOUR,
@@ -189,7 +189,7 @@ def has_established_refresh_schedule(state: AvailabilityObjectState) -> bool:
 def bootstrap_window_hours_for_count(
     count: int,
     *,
-    max_hours: float = PRODUCTION_ROLLING_WINDOW_HOURS,
+    max_hours: float = production_rolling_window_hours(),
 ) -> float:
     """Adaptive window: small fleets spread over minutes, large over up to max_hours."""
     if count <= 1:
@@ -246,7 +246,7 @@ def bootstrap_spread_selective(
     max_hours = (
         FACEBOOK_ROLLING_WINDOW_HOURS
         if source == SourceKind.FACEBOOK
-        else PRODUCTION_ROLLING_WINDOW_HOURS
+        else production_rolling_window_hours()
     )
     objects = repo.list_objects()
     candidates = bootstrap_candidates(objects, now=now, source=source)
@@ -281,7 +281,7 @@ def bootstrap_spread_existing(
     repo: AvailabilityRepository,
     *,
     now: datetime | None = None,
-    window_hours: int = PRODUCTION_ROLLING_WINDOW_HOURS,
+    window_hours: int = production_rolling_window_hours(),
 ) -> int:
     """Spread next_check_at for all objects across the rolling window."""
     now = now or _utcnow()
@@ -301,7 +301,7 @@ def build_due_bucket_preview(
     *,
     now: datetime,
     source: SourceKind | None = None,
-    horizon_hours: float = PRODUCTION_ROLLING_WINDOW_HOURS,
+    horizon_hours: float = production_rolling_window_hours(),
 ) -> DueBucketPreview:
     """Due buckets for scheduler queue (optionally filtered by source)."""
     if source is not None:
@@ -605,7 +605,7 @@ def print_scheduler_bootstrap_report(report: SchedulerBootstrapReport) -> None:
 def simulate_rolling_window(
     object_count: int,
     *,
-    window_hours: int = PRODUCTION_ROLLING_WINDOW_HOURS,
+    window_hours: int = production_rolling_window_hours(),
     now: datetime | None = None,
 ) -> SimulationResult:
     """Dry-run: model initial due spread for N objects (no live processing)."""
@@ -646,7 +646,7 @@ def simulate_rolling_window(
 def run_scheduler_simulation(
     object_count: int = 1000,
     *,
-    window_hours: int = PRODUCTION_ROLLING_WINDOW_HOURS,
+    window_hours: int = production_rolling_window_hours(),
 ) -> SimulationResult:
     return simulate_rolling_window(object_count, window_hours=window_hours)
 
@@ -658,7 +658,7 @@ def run_scheduler_dry_run(config: AvailabilityConfig | None = None) -> dict:
     try:
         scheduler = AvailabilityScheduler(repo)
         preview = scheduler.preview()
-        sim = run_scheduler_simulation(1000, window_hours=PRODUCTION_ROLLING_WINDOW_HOURS)
+        sim = run_scheduler_simulation(1000, window_hours=production_rolling_window_hours())
         return {
             "preview": preview,
             "simulation": {

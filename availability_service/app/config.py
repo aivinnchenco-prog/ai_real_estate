@@ -108,6 +108,7 @@ class AvailabilityConfig:
     facebook_enabled: bool = False
     facebook_browser_profile: Path = Path("/opt/openhome/runtime/browser_profiles/facebook_owner_outreach")
     price_object_max_seconds: int = 600
+    airbnb_check_interval_hours: int = 96
 
     @property
     def writes_allowed(self) -> bool:
@@ -141,6 +142,7 @@ class AvailabilityConfig:
             "browser_max_instances": self.browser_max_instances,
             "batch_safe_max_objects": self.batch_safe_max_objects,
             "price_object_max_seconds": self.price_object_max_seconds,
+            "airbnb_check_interval_hours": self.airbnb_check_interval_hours,
             "window_start_mode": self.window_start_mode.value,
             "airbnb_enabled": self.airbnb_enabled,
             "airbnb_live_allowed": self.airbnb_live_allowed,
@@ -218,5 +220,8 @@ def load_config() -> AvailabilityConfig:
         ).expanduser(),
         price_object_max_seconds=max(
             0, int(os.environ.get("AVAILABILITY_PRICE_OBJECT_MAX_SECONDS") or "600")
+        ),
+        airbnb_check_interval_hours=max(
+            1, int(os.environ.get("AIRBNB_CHECK_INTERVAL_HOURS") or "96")
         ),
     )
