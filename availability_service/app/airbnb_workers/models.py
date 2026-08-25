@@ -25,6 +25,18 @@ class CheckResult(str, Enum):
     NOT_FOUND = "NOT_FOUND"
 
 
+class PricingResult(str, Enum):
+    SUCCESS = "SUCCESS"
+    NO_PRICE = "NO_PRICE"
+    CAPTCHA = "CAPTCHA"
+    CHALLENGE = "CHALLENGE"
+    PROXY_ERROR = "PROXY_ERROR"
+    BROWSER_ERROR = "BROWSER_ERROR"
+    TIMEOUT = "TIMEOUT"
+    PARSE_ERROR = "PARSE_ERROR"
+    INVALID_LISTING = "INVALID_LISTING"
+
+
 class AssignmentReason(str, Enum):
     INITIAL = "INITIAL"
     INITIAL_MIGRATION = "INITIAL_MIGRATION"
@@ -60,6 +72,9 @@ class AirbnbWorker:
     consecutive_failures: int = 0
     captcha_count: int = 0
     cooldown_until: datetime | None = None
+    last_pricing_success_at: datetime | None = None
+    last_pricing_failure_at: datetime | None = None
+    last_pricing_error: str = ""
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -94,3 +109,34 @@ class CalendarCheckResult:
     @property
     def should_not_update_availability(self) -> bool:
         return self.status != CheckResult.SUCCESS
+
+
+@dataclass
+class PricingCheckResult:
+    status: PricingResult
+    worker_id: str = ""
+    proxy_id: str = ""
+    object_id: str = ""
+    message: str = ""
+    price_entries: dict[str, dict] = field(default_factory=dict)
+
+    @property
+    def success(self) -> bool:
+        return self.status == PricingResult.SUCCESS
+
+    @property
+    def should_not_update_prices(self) -> bool:
+        """Technical failures must not wipe existing monthly price rows."""
+        return self.status in {
+            PricingResult.CAPTCHA,
+            PricingResult.CHALLENGE,
+            PricingResult.PROXY_ERROR,
+            PricingResult.BROWSER_ERROR,
+            PricingResult.TIMEOUT,
+            PricingResult.PARSE_ERROR,
+            PricingResult.INVALID_LISTING,
+        }
+
+    @property
+    def is_captcha(self) -> bool:
+        return self.status in {PricingResult.CAPTCHA, PricingResult.CHALLENGE}

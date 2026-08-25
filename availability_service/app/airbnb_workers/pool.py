@@ -332,6 +332,53 @@ class AirbnbWorkerPool:
 
         self.worker_repo.upsert_worker(worker, now=now)
 
+    def record_pricing_success(self, worker_id: str, *, now: datetime | None = None) -> None:
+        now = now or _utcnow()
+        worker = self.worker_repo.get_worker(worker_id)
+        if not worker:
+            return
+        worker.last_pricing_success_at = now
+        worker.last_pricing_error = ""
+        worker.last_used_at = now
+        self.worker_repo.upsert_worker(worker, now=now)
+        logger.info(
+            "PRICING_SUCCESS worker_id=%s proxy_id=%s",
+            worker.worker_id,
+            worker.proxy_id,
+        )
+
+    def record_pricing_failure(
+        self,
+        worker_id: str,
+        *,
+        result_kind: str,
+        now: datetime | None = None,
+    ) -> None:
+        now = now or _utcnow()
+        worker = self.worker_repo.get_worker(worker_id)
+        if not worker:
+            return
+        proxy_id = worker.proxy_id
+        worker.last_pricing_failure_at = now
+        worker.last_pricing_error = result_kind
+        worker.last_used_at = now
+        if result_kind in {"CAPTCHA", "CHALLENGE", "PROXY_ERROR"}:
+            self.record_check_failure(worker_id, result_kind=result_kind, now=now)
+        else:
+            self.worker_repo.upsert_worker(worker, now=now)
+        worker = self.worker_repo.get_worker(worker_id)
+        if worker:
+            worker.last_pricing_failure_at = now
+            worker.last_pricing_error = result_kind
+            self.worker_repo.upsert_worker(worker, now=now)
+            proxy_id = worker.proxy_id
+        logger.warning(
+            "PRICING_%s worker_id=%s proxy_id=%s",
+            result_kind,
+            worker_id,
+            proxy_id,
+        )
+
     def workers_eligible_for_jobs(self, *, now: datetime | None = None) -> list[AirbnbWorker]:
         now = now or _utcnow()
         out: list[AirbnbWorker] = []

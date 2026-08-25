@@ -65,6 +65,9 @@ def _pool_config(tmp_path: Path, proxies: int = 5, uas: int = 10) -> AirbnbWorke
         captcha_cooldown_minutes=30,
         captcha_quarantine_threshold=3,
         calendar_timeout_seconds=45,
+        pricing_worker_pool_enabled=False,
+        pricing_min_delay_seconds=0,
+        pricing_max_delay_seconds=0,
     )
 
 

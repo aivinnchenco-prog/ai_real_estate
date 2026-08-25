@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
@@ -53,9 +54,13 @@ from .airbnb_workers.integration import (
     build_worker_pool,
     calendar_failure_message,
     fetch_airbnb_calendar_for_object,
+    fetch_airbnb_pricing_for_object,
+    pricing_failure_message,
+    should_skip_pricing_after_calendar,
     worker_pool_enabled,
+    worker_slot_for_object,
 )
-from .airbnb_workers.config import load_worker_pool_config
+from .airbnb_workers.config import load_worker_pool_config, pricing_worker_pool_enabled
 from .airbnb_workers.pool import AirbnbWorkerPool
 
 
@@ -168,172 +173,241 @@ def _process_one_object(
         with object_processing_slot(object_id, metrics):
             cal_start = time.perf_counter()
             pool_config = load_worker_pool_config()
-            use_worker_pool = worker_pool_enabled(config) and pool_config.enabled
-            try:
-                if use_worker_pool:
-                    calendar_result = fetch_airbnb_calendar_for_object(
-                        repo,
-                        object_id,
-                        pricing_url,
-                        pool=worker_pool,
-                        pool_config=pool_config,
-                    )
-                    if not calendar_result.success:
-                        metrics.calendar_failures += 1
-                        metrics.calendar_failure_objects.append(object_id)
-                        err = calendar_failure_message(calendar_result)
-                        metrics.record_error(f"{object_id} calendar: {err}")
-                        if scheduler is not None:
-                            scheduler.schedule_retry(object_id, err)
-                        out.error = err
-                        return out
-                    calendar_raw = calendar_result.days
-                else:
-                    calendar_raw = fetch_calendar_days_live(pricing_url)
-            except Exception as exc:
-                metrics.calendar_failures += 1
-                metrics.calendar_failure_objects.append(object_id)
-                metrics.record_error(f"{object_id} calendar: {exc}")
-                raise
-
-            out.calendar_elapsed_s = round(time.perf_counter() - cal_start, 2)
-
-            if not calendar_raw:
-                metrics.calendar_failures += 1
-                metrics.calendar_failure_objects.append(object_id)
-                raise RuntimeError("Airbnb returned empty calendar")
-
-            calendar_raw = filter_calendar_to_window(calendar_raw, window)
-            if not calendar_raw:
-                raise RuntimeError("calendar empty inside availability window")
-
-            calendar_days = normalize_calendar(calendar_raw)
-
-            fetched_at = datetime.now(timezone.utc)
-            repo.upsert_property(prop, default_tier=config.default_refresh_tier, now=fetched_at)
-
-            out.calendar_rows = save_provider_calendar(
-                repo, object_id, calendar_days, replace=True, fetched_at=fetched_at
-            )
-
-            cal_dict = {day.date: day.available for day in calendar_days}
-
-            price_start = time.perf_counter()
-            with price_fetch_slot(object_id, metrics):
-                fetch_price, cleanup, get_metrics = create_selenium_price_fetcher(pricing_url)
-                price_metrics = get_metrics()
-                price_metrics.months_requested = len(window)
-                try:
-                    price_entries = collect_prices_for_window(
-                        fetch_price,
-                        cal_dict,
-                        window,
-                        min_segment_days=5,
-                        metrics=price_metrics,
-                        price_object_max_seconds=config.price_object_max_seconds,
-                    )
-                    out.price_months_requested = price_metrics.months_requested
-                    out.price_attempts_total = price_metrics.attempts_total
-                    out.price_internal_retries = price_metrics.internal_retries
-                    out.price_failed_attempts = price_metrics.failed_fetch_calls
-                    out.price_successful_months = price_metrics.successful_months
-                    out.price_no_price_results = price_metrics.price_no_price_results
-                    out.price_timeout_results = price_metrics.price_timeout_results
-                    out.price_access_denied_results = price_metrics.price_access_denied_results
-                    out.price_browser_error_results = price_metrics.price_browser_error_results
-                    out.price_object_wallclock_capped = price_metrics.price_object_wallclock_capped
-                    out.price_attempts = price_metrics.attempts_total
-                    out.retries = price_metrics.internal_retries
-                except Exception as exc:
-                    metrics.pricing_failures += 1
-                    metrics.record_error(f"{object_id} pricing: {exc}")
-                    raise
-                finally:
-                    cleanup()
-            out.pricing_elapsed_s = round(time.perf_counter() - price_start, 2)
-
-            display_statuses = {
-                item.key: evaluate_month_display_status(cal_dict, item.year, item.month).value
-                for item in window
-            }
-            month_rows = build_month_availabilities(
-                window,
-                cal_dict,
-                price_entries,
-                AirbnbMonthPolicy.FULL_MONTH_REQUIRED,
-            )
-            out.monthly_rows = repo.replace_monthly_rows(
-                object_id,
-                month_rows,
-                fetched_at=fetched_at,
-                display_statuses=display_statuses,
-            )
-            repo.set_state(
-                f"probe_snapshot:{object_id}",
-                json.dumps(
-                    {"price_entries": price_entries, "fetched_at": fetched_at.isoformat()},
-                    ensure_ascii=False,
-                ),
-                now=fetched_at,
-            )
-            state = repo.get_object(object_id)
-            if state is not None and scheduler is None:
-                state.last_checked_at = fetched_at
-                state.next_check_at = fetched_at + timedelta(hours=TIER_HOURS[state.refresh_tier])
-                state.refresh_status = RefreshStatus.SUCCESS
-                state.source_status = SourceStatus.ACTIVE
-                state.last_error = ""
-                repo.save_object(state, now=fetched_at)
-            elif state is not None and scheduler is not None:
-                state.last_calendar_refresh_at = fetched_at
-                state.source_status = SourceStatus.ACTIVE
-                repo.save_object(state, now=fetched_at)
-
-            price_map = {row.month_key: row.price for row in repo.get_monthly_rows(object_id)}
-            display_result = build_month_display_rows(window, cal_dict, price_map)
-            out.month_cells = {
-                item.display_name: cell for item, _, cell in display_result.rows
-            }
-            for item in window:
-                if item.key in display_result.blocked_ranges_by_key:
-                    out.blocked_ranges[item.display_name] = (
-                        display_result.blocked_ranges_by_key[item.key]
-                    )
-
-            if scheduler is not None:
-                next_check = scheduler.schedule_success(object_id, now=fetched_at)
-                notion_tier = repo.get_object(object_id).refresh_tier if repo.get_object(object_id) else production_tier_for_source(SourceKind.AIRBNB)
-            else:
-                notion_tier = RefreshTier.H12
-                next_check = fetched_at + timedelta(hours=TIER_HOURS[notion_tier])
-            action, page_id = writer.sync_batch_notion_upsert(
-                object_id=object_id,
-                object_name=prop.name,
-                source=prop.source,
-                calendar_url=prop.calendar_url.strip() or prop.source_url.strip(),
-                batch_allowed_ids=batch_allowed,
-                month_cells=out.month_cells,
-                last_checked=fetched_at,
-                next_check=next_check,
-                refresh_status=RefreshStatus.SUCCESS,
-                last_error="",
-                target_schema=target_schema,
-                target_mapping=target_mapping,
-                refresh_tier=notion_tier,
-            )
-            after = writer.count_target_rows_by_object_id(
-                config.target_database_id,
-                target_mapping,
-                object_id,
-                target_schema.properties,
-            )
-            if after != 1:
-                raise RuntimeError(
-                    f"expected 1 Notion row after upsert for {object_id}, found {after}"
+            use_calendar_pool = worker_pool_enabled(config) and pool_config.enabled
+            use_pricing_pool = pricing_worker_pool_enabled() and pool_config.enabled
+            slot_ctx = nullcontext()
+            if worker_pool and (use_calendar_pool or use_pricing_pool):
+                slot_ctx, _assigned_worker = worker_slot_for_object(
+                    worker_pool, object_id, pool_config
                 )
-            out.notion_action = action
-            out.notion_updated = True
-            out.success = True
+
+            calendar_result = None
+            with slot_ctx:
+                try:
+                    if use_calendar_pool:
+                        calendar_result = fetch_airbnb_calendar_for_object(
+                            repo,
+                            object_id,
+                            pricing_url,
+                            pool=worker_pool,
+                            pool_config=pool_config,
+                            acquire_slot=False,
+                        )
+                        if not calendar_result.success:
+                            metrics.calendar_failures += 1
+                            metrics.calendar_failure_objects.append(object_id)
+                            err = calendar_failure_message(calendar_result)
+                            metrics.record_error(f"{object_id} calendar: {err}")
+                            if scheduler is not None:
+                                scheduler.schedule_retry(object_id, err)
+                            out.error = err
+                            return out
+                        calendar_raw = calendar_result.days
+                    else:
+                        calendar_raw = fetch_calendar_days_live(pricing_url)
+                except Exception as exc:
+                    metrics.calendar_failures += 1
+                    metrics.calendar_failure_objects.append(object_id)
+                    metrics.record_error(f"{object_id} calendar: {exc}")
+                    raise
+
+                out.calendar_elapsed_s = round(time.perf_counter() - cal_start, 2)
+
+                if not calendar_raw:
+                    metrics.calendar_failures += 1
+                    metrics.calendar_failure_objects.append(object_id)
+                    raise RuntimeError("Airbnb returned empty calendar")
+
+                calendar_raw = filter_calendar_to_window(calendar_raw, window)
+                if not calendar_raw:
+                    raise RuntimeError("calendar empty inside availability window")
+
+                calendar_days = normalize_calendar(calendar_raw)
+
+                fetched_at = datetime.now(timezone.utc)
+                repo.upsert_property(prop, default_tier=config.default_refresh_tier, now=fetched_at)
+
+                out.calendar_rows = save_provider_calendar(
+                    repo, object_id, calendar_days, replace=True, fetched_at=fetched_at
+                )
+
+                cal_dict = {day.date: day.available for day in calendar_days}
+
+                price_start = time.perf_counter()
+                pricing_technical_ok = True
+                price_entries: dict[str, dict] = {}
+                with price_fetch_slot(object_id, metrics):
+                    if use_pricing_pool and worker_pool is not None:
+                        if use_calendar_pool and should_skip_pricing_after_calendar(calendar_result):
+                            pricing_technical_ok = False
+                            err = calendar_failure_message(calendar_result)
+                            metrics.pricing_failures += 1
+                            metrics.record_error(f"{object_id} pricing skipped: {err}")
+                            out.error = err
+                        else:
+                            pricing_result = fetch_airbnb_pricing_for_object(
+                                repo,
+                                object_id,
+                                pricing_url,
+                                cal_dict,
+                                window,
+                                pool=worker_pool,
+                                pool_config=pool_config,
+                                price_object_max_seconds=config.price_object_max_seconds,
+                                acquire_slot=False,
+                            )
+                            price_entries = pricing_result.price_entries
+                            pricing_technical_ok = not pricing_result.should_not_update_prices
+                            if pricing_result.success:
+                                out.price_months_requested = len(window)
+                                out.price_successful_months = sum(
+                                    1 for e in price_entries.values() if e and e.get("price")
+                                )
+                            elif pricing_result.should_not_update_prices:
+                                metrics.pricing_failures += 1
+                                err = pricing_failure_message(pricing_result)
+                                metrics.record_error(f"{object_id} pricing: {err}")
+                                out.error = err or out.error
+                            else:
+                                out.price_months_requested = len(window)
+                    else:
+                        fetch_price, cleanup, get_metrics = create_selenium_price_fetcher(pricing_url)
+                        price_metrics = get_metrics()
+                        price_metrics.months_requested = len(window)
+                        try:
+                            price_entries = collect_prices_for_window(
+                                fetch_price,
+                                cal_dict,
+                                window,
+                                min_segment_days=5,
+                                metrics=price_metrics,
+                                price_object_max_seconds=config.price_object_max_seconds,
+                            )
+                            out.price_months_requested = price_metrics.months_requested
+                            out.price_attempts_total = price_metrics.attempts_total
+                            out.price_internal_retries = price_metrics.internal_retries
+                            out.price_failed_attempts = price_metrics.failed_fetch_calls
+                            out.price_successful_months = price_metrics.successful_months
+                            out.price_no_price_results = price_metrics.price_no_price_results
+                            out.price_timeout_results = price_metrics.price_timeout_results
+                            out.price_access_denied_results = price_metrics.price_access_denied_results
+                            out.price_browser_error_results = price_metrics.price_browser_error_results
+                            out.price_object_wallclock_capped = price_metrics.price_object_wallclock_capped
+                            out.price_attempts = price_metrics.attempts_total
+                            out.retries = price_metrics.internal_retries
+                        except Exception as exc:
+                            metrics.pricing_failures += 1
+                            metrics.record_error(f"{object_id} pricing: {exc}")
+                            pricing_technical_ok = False
+                            raise
+                        finally:
+                            cleanup()
+                out.pricing_elapsed_s = round(time.perf_counter() - price_start, 2)
+
+                display_statuses = {
+                    item.key: evaluate_month_display_status(cal_dict, item.year, item.month).value
+                    for item in window
+                }
+                if pricing_technical_ok and price_entries:
+                    confirmed_prices = sum(
+                        1 for entry in price_entries.values() if entry and entry.get("price")
+                    )
+                    if confirmed_prices > 0:
+                        month_rows = build_month_availabilities(
+                            window,
+                            cal_dict,
+                            price_entries,
+                            AirbnbMonthPolicy.FULL_MONTH_REQUIRED,
+                        )
+                        out.monthly_rows = repo.replace_monthly_rows(
+                            object_id,
+                            month_rows,
+                            fetched_at=fetched_at,
+                            display_statuses=display_statuses,
+                        )
+                        repo.set_state(
+                            f"probe_snapshot:{object_id}",
+                            json.dumps(
+                                {
+                                    "price_entries": price_entries,
+                                    "fetched_at": fetched_at.isoformat(),
+                                },
+                                ensure_ascii=False,
+                            ),
+                            now=fetched_at,
+                        )
+                    else:
+                        out.monthly_rows = repo.count_monthly_rows(object_id)
+                else:
+                    out.monthly_rows = repo.count_monthly_rows(object_id)
+
+                state = repo.get_object(object_id)
+                if state is not None and scheduler is None:
+                    state.last_checked_at = fetched_at
+                    state.next_check_at = fetched_at + timedelta(hours=TIER_HOURS[state.refresh_tier])
+                    state.refresh_status = RefreshStatus.SUCCESS
+                    state.source_status = SourceStatus.ACTIVE
+                    state.last_error = out.error or ""
+                    repo.save_object(state, now=fetched_at)
+                elif state is not None and scheduler is not None:
+                    state.last_calendar_refresh_at = fetched_at
+                    state.source_status = SourceStatus.ACTIVE
+                    repo.save_object(state, now=fetched_at)
+
+                price_map = {row.month_key: row.price for row in repo.get_monthly_rows(object_id)}
+                display_result = build_month_display_rows(window, cal_dict, price_map)
+                out.month_cells = {
+                    item.display_name: cell for item, _, cell in display_result.rows
+                }
+                for item in window:
+                    if item.key in display_result.blocked_ranges_by_key:
+                        out.blocked_ranges[item.display_name] = (
+                            display_result.blocked_ranges_by_key[item.key]
+                        )
+
+                if scheduler is not None:
+                    if pricing_technical_ok and not out.error:
+                        next_check = scheduler.schedule_success(object_id, now=fetched_at)
+                    else:
+                        next_check = scheduler.schedule_retry(
+                            object_id, (out.error or "pricing failed")[:500], now=fetched_at
+                        )[0]
+                    notion_tier = (
+                        repo.get_object(object_id).refresh_tier
+                        if repo.get_object(object_id)
+                        else production_tier_for_source(SourceKind.AIRBNB)
+                    )
+                else:
+                    notion_tier = RefreshTier.H12
+                    next_check = fetched_at + timedelta(hours=TIER_HOURS[notion_tier])
+                action, page_id = writer.sync_batch_notion_upsert(
+                    object_id=object_id,
+                    object_name=prop.name,
+                    source=prop.source,
+                    calendar_url=prop.calendar_url.strip() or prop.source_url.strip(),
+                    batch_allowed_ids=batch_allowed,
+                    month_cells=out.month_cells,
+                    last_checked=fetched_at,
+                    next_check=next_check,
+                    refresh_status=RefreshStatus.SUCCESS if pricing_technical_ok else RefreshStatus.ERROR,
+                    last_error=out.error or "",
+                    target_schema=target_schema,
+                    target_mapping=target_mapping,
+                    refresh_tier=notion_tier,
+                )
+                after = writer.count_target_rows_by_object_id(
+                    config.target_database_id,
+                    target_mapping,
+                    object_id,
+                    target_schema.properties,
+                )
+                if after != 1:
+                    raise RuntimeError(
+                        f"expected 1 Notion row after upsert for {object_id}, found {after}"
+                    )
+                out.notion_action = action
+                out.notion_updated = True
+                out.success = pricing_technical_ok or not use_pricing_pool
     except SourcePropertyMissingError:
         repo.remove_object(object_id)
         out.orphan_removed = True

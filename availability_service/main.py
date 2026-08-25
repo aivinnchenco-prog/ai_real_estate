@@ -407,6 +407,10 @@ def main(argv: list[str] | None = None) -> int:
     trace.add_argument("--url", required=True)
     smoke = workers_sub.add_parser("calendar-smoke", help="Controlled calendar smoke (assigned worker)")
     smoke.add_argument("--case", action="append", default=[], help="object_id|url")
+    pdry = workers_sub.add_parser("pricing-dry-run", help="Show calendar/pricing worker identity mapping")
+    pdry.add_argument("--object-id", action="append", required=True)
+    tpp = workers_sub.add_parser("test-pricing-proxies", help="Selenium proxy connectivity per worker")
+    tpp.add_argument("--worker-id", action="append", default=[])
 
     args = parser.parse_args(argv)
     if args.command == "dry-run":
@@ -575,6 +579,39 @@ def main(argv: list[str] | None = None) -> int:
                 passed = sum(1 for r in rows if r.status == "SUCCESS")
                 print(f"\nSMOKE: {passed}/{len(rows)} PASS")
                 return 0 if passed == len(rows) else 1
+            if args.workers_command == "pricing-dry-run":
+                from .app.airbnb_workers.pricing_diag import (
+                    build_pricing_dry_run,
+                    print_pricing_dry_run,
+                )
+
+                report = build_pricing_dry_run(repo, args.object_id)
+                print_pricing_dry_run(report)
+                return 0
+            if args.workers_command == "test-pricing-proxies":
+                from .app.airbnb_workers.config import load_worker_pool_config
+                from .app.airbnb_workers.pool import AirbnbWorkerPool
+                from .app.airbnb_workers.pricing_diag import probe_pricing_worker_connectivity
+                from .app.airbnb_workers.registry import AirbnbWorkerRepository
+
+                pool_config = load_worker_pool_config()
+                pool = AirbnbWorkerPool(AirbnbWorkerRepository(repo), pool_config)
+                pool.bootstrap()
+                worker_ids = args.worker_id or [
+                    w.worker_id for w in pool.worker_repo.list_workers()[:3]
+                ]
+                results = [
+                    probe_pricing_worker_connectivity(pool, wid) for wid in worker_ids
+                ]
+                passed = sum(1 for r in results if r.passed)
+                for r in results:
+                    status = "PASS" if r.passed else "FAIL"
+                    print(
+                        f"  {r.worker_id} [{status}] exit_ip={r.exit_ip or '-'} "
+                        f"ua_ok={r.ua_ok} profile={r.profile_exists}"
+                    )
+                print(f"\nPRICING CONNECTIVITY: {passed}/{len(results)} PASS")
+                return 0 if passed == len(results) else 1
         finally:
             repo.close()
     return 1

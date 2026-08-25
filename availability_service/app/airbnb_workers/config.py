@@ -35,6 +35,9 @@ class AirbnbWorkerPoolConfig:
     captcha_cooldown_minutes: int
     captcha_quarantine_threshold: int
     calendar_timeout_seconds: int
+    pricing_worker_pool_enabled: bool
+    pricing_min_delay_seconds: float
+    pricing_max_delay_seconds: float
 
 
 def _default_proxy_pool_path(runtime_dir: Path) -> Path:
@@ -85,7 +88,29 @@ def load_worker_pool_config() -> AirbnbWorkerPoolConfig:
             1, int(os.environ.get("AIRBNB_CAPTCHA_QUARANTINE_THRESHOLD") or "3")
         ),
         calendar_timeout_seconds=max(15, int(os.environ.get("AIRBNB_CALENDAR_TIMEOUT_SECONDS") or "60")),
+        pricing_worker_pool_enabled=_pricing_worker_pool_enabled(),
+        pricing_min_delay_seconds=float(
+            os.environ.get("AIRBNB_PRICING_MIN_DELAY_SECONDS")
+            or os.environ.get("AIRBNB_WORKER_MIN_DELAY_SECONDS")
+            or "8"
+        ),
+        pricing_max_delay_seconds=float(
+            os.environ.get("AIRBNB_PRICING_MAX_DELAY_SECONDS")
+            or os.environ.get("AIRBNB_WORKER_MAX_DELAY_SECONDS")
+            or "18"
+        ),
     )
+
+
+def _pricing_worker_pool_enabled() -> bool:
+    raw = os.environ.get("AIRBNB_PRICING_WORKER_POOL_ENABLED", "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def pricing_worker_pool_enabled() -> bool:
+    """Phase 2: route Selenium pricing through worker identity (independent rollback flag)."""
+    pool_config = load_worker_pool_config()
+    return pool_config.enabled and pool_config.pricing_worker_pool_enabled
 
 
 def load_proxy_pool(path: Path) -> list[ProxyConfig]:

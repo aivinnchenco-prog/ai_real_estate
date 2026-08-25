@@ -6,6 +6,7 @@ from ..repository import AvailabilityRepository
 from .config import AirbnbWorkerPoolConfig, load_worker_pool_config
 from .pool import AirbnbWorkerPool
 from .registry import AirbnbWorkerRepository
+from .worker_paths import pricing_profile_path
 
 
 @dataclass
@@ -27,9 +28,12 @@ def build_diagnostics(repo: AvailabilityRepository) -> WorkerDiagnosticsReport:
     report.summary = pool.load_summary()
     report.config = {
         "enabled": pool_config.enabled,
+        "pricing_worker_pool_enabled": pool_config.pricing_worker_pool_enabled,
         "max_concurrency": pool_config.max_concurrency,
         "min_delay_seconds": pool_config.min_delay_seconds,
         "max_delay_seconds": pool_config.max_delay_seconds,
+        "pricing_min_delay_seconds": pool_config.pricing_min_delay_seconds,
+        "pricing_max_delay_seconds": pool_config.pricing_max_delay_seconds,
         "rebalance_threshold": pool_config.rebalance_threshold,
         "captcha_cooldown_minutes": pool_config.captcha_cooldown_minutes,
         "profiles_root": str(pool_config.profiles_root),
@@ -44,13 +48,25 @@ def build_diagnostics(repo: AvailabilityRepository) -> WorkerDiagnosticsReport:
                 "proxy_endpoint": worker.proxy_endpoint.split("@")[-1],
                 "objects": worker.assigned_count,
                 "active_jobs": worker.active_jobs,
-                "last_success_at": worker.last_success_at.isoformat() if worker.last_success_at else None,
-                "last_failure_at": worker.last_failure_at.isoformat() if worker.last_failure_at else None,
+                "last_calendar_success_at": worker.last_success_at.isoformat()
+                if worker.last_success_at
+                else None,
+                "last_calendar_failure_at": worker.last_failure_at.isoformat()
+                if worker.last_failure_at
+                else None,
+                "last_pricing_success_at": worker.last_pricing_success_at.isoformat()
+                if worker.last_pricing_success_at
+                else None,
+                "last_pricing_failure_at": worker.last_pricing_failure_at.isoformat()
+                if worker.last_pricing_failure_at
+                else None,
+                "last_pricing_error": worker.last_pricing_error or None,
                 "consecutive_failures": worker.consecutive_failures,
                 "captcha_count": worker.captcha_count,
                 "cooldown_until": worker.cooldown_until.isoformat() if worker.cooldown_until else None,
                 "user_agent_prefix": worker.user_agent[:60] + "...",
                 "profile_path": worker.profile_path,
+                "pricing_profile_path": str(pricing_profile_path(worker)),
             }
         )
     for assignment in worker_repo.list_assignments():
@@ -86,8 +102,16 @@ def print_diagnostics(report: WorkerDiagnosticsReport) -> None:
         print(f"    captcha: {w['captcha_count']}")
         if w["cooldown_until"]:
             print(f"    cooldown_until: {w['cooldown_until']}")
-        if w["last_success_at"]:
-            print(f"    last_success: {w['last_success_at']}")
+        if w.get("last_calendar_success_at"):
+            print(f"    calendar_last_success: {w['last_calendar_success_at']}")
+        if w.get("last_pricing_success_at"):
+            print(f"    pricing_last_success: {w['last_pricing_success_at']}")
+        if w.get("last_pricing_failure_at"):
+            print(f"    pricing_last_failure: {w['last_pricing_failure_at']}")
+        if w.get("last_pricing_error"):
+            print(f"    pricing_last_error: {w['last_pricing_error']}")
+        if w.get("pricing_profile_path"):
+            print(f"    pricing_profile: {w['pricing_profile_path']}")
 
     if report.assignments:
         print("\n== ASSIGNMENT SAMPLE (first 20) ==")

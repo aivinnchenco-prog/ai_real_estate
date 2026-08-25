@@ -22,15 +22,23 @@ class PriceAttemptReason(str, Enum):
     OTHER_TRANSIENT_ERROR = "OTHER_TRANSIENT_ERROR"
 
 
-def classified_fetch_once(parser: Any, url: str, check_in: Any, check_out: Any) -> tuple[Optional[float], PriceAttemptReason]:
+def classified_fetch_once(
+    parser: Any,
+    url: str,
+    check_in: Any,
+    check_out: Any,
+    *,
+    normalize_url: Any | None = None,
+) -> tuple[Optional[float], PriceAttemptReason]:
     """One page load using Agent1 parser helpers; classifies outcome for retry policy."""
     import config
     from airbnb_url import normalize_airbnb_url, resolve_currency
     from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
     from datetime import date
 
+    normalize_fn = normalize_url or normalize_airbnb_url
     parser._target_currency = resolve_currency(url)
-    base = normalize_airbnb_url(url)
+    base = normalize_fn(url)
     parts = urlparse(base)
     query = parse_qs(parts.query)
     query["check_in"] = [str(check_in)]
@@ -85,6 +93,8 @@ def fetch_price_with_fail_fast(
     url: str,
     check_in: Any,
     check_out: Any,
+    *,
+    normalize_url: Any | None = None,
 ) -> Optional[float]:
     """Bounded retries for transient errors; NO_PRICE returns after one page load."""
     import config
@@ -96,7 +106,9 @@ def fetch_price_with_fail_fast(
 
     for attempt in range(1, retries + 1):
         metrics.page_loads += 1
-        value, reason = classified_fetch_once(parser, url, check_in, check_out)
+        value, reason = classified_fetch_once(
+            parser, url, check_in, check_out, normalize_url=normalize_url
+        )
         if reason == PriceAttemptReason.SUCCESS:
             return value
         if reason == PriceAttemptReason.ACCESS_DENIED:

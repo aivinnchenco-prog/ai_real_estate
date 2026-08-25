@@ -489,6 +489,7 @@ def fetch_calendar_with_worker(
     max_concurrency: int = 1,
     min_delay: float = 0,
     max_delay: float = 0,
+    acquire_slot: bool = True,
 ) -> CalendarCheckResult:
     listing_url = normalize_listing_url(listing_url)
     base = CalendarCheckResult(
@@ -514,13 +515,9 @@ def fetch_calendar_with_worker(
     profile_path = Path(worker.profile_path)
     profile_path.mkdir(parents=True, exist_ok=True)
     storage_path = profile_path / "storage_state.json"
-    try:
-        with worker_execution_slot(
-            worker.worker_id,
-            max_concurrency=max_concurrency,
-            min_delay=min_delay,
-            max_delay=max_delay,
-        ):
+
+    def _run_fetch() -> CalendarCheckResult:
+        try:
             with profile_directory_lock(profile_path):
                 attempt = _fetch_once(
                     listing_url=listing_url,
@@ -611,20 +608,30 @@ def fetch_calendar_with_worker(
                     attempt.page_kind.value,
                 )
                 return result
-    except Exception as exc:
-        msg = str(exc)
-        if _PROXY_ERROR.search(msg):
-            base.status = CheckResult.PROXY_ERROR
-        else:
-            base.status = CheckResult.BROWSER_ERROR
-        base.message = msg[:300]
-        logger.warning(
-            "CHECK_FAILED object_id=%s worker_id=%s result=%s",
-            object_id,
+        except Exception as exc:
+            msg = str(exc)
+            if _PROXY_ERROR.search(msg):
+                base.status = CheckResult.PROXY_ERROR
+            else:
+                base.status = CheckResult.BROWSER_ERROR
+            base.message = msg[:300]
+            logger.warning(
+                "CHECK_FAILED object_id=%s worker_id=%s result=%s",
+                object_id,
+                worker.worker_id,
+                base.status.value,
+            )
+            return base
+
+    if acquire_slot:
+        with worker_execution_slot(
             worker.worker_id,
-            base.status.value,
-        )
-        return base
+            max_concurrency=max_concurrency,
+            min_delay=min_delay,
+            max_delay=max_delay,
+        ):
+            return _run_fetch()
+    return _run_fetch()
 
 
 def run_calendar_trace(

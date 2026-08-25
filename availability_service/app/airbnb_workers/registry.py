@@ -50,7 +50,19 @@ CREATE INDEX IF NOT EXISTS idx_airbnb_assignments_worker
 
 def ensure_worker_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(WORKER_SCHEMA_SQL)
+    _migrate_worker_columns(conn)
     conn.commit()
+
+
+def _migrate_worker_columns(conn: sqlite3.Connection) -> None:
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(airbnb_workers)").fetchall()}
+    for col, ddl in (
+        ("last_pricing_success_at", "TEXT"),
+        ("last_pricing_failure_at", "TEXT"),
+        ("last_pricing_error", "TEXT NOT NULL DEFAULT ''"),
+    ):
+        if col not in existing:
+            conn.execute(f"ALTER TABLE airbnb_workers ADD COLUMN {col} {ddl}")
 
 
 class AirbnbWorkerRepository:
@@ -78,6 +90,15 @@ class AirbnbWorkerRepository:
             consecutive_failures=int(row["consecutive_failures"]),
             captcha_count=int(row["captcha_count"]),
             cooldown_until=_parse_dt(row["cooldown_until"]),
+            last_pricing_success_at=_parse_dt(row["last_pricing_success_at"])
+            if "last_pricing_success_at" in row.keys()
+            else None,
+            last_pricing_failure_at=_parse_dt(row["last_pricing_failure_at"])
+            if "last_pricing_failure_at" in row.keys()
+            else None,
+            last_pricing_error=str(row["last_pricing_error"] or "")
+            if "last_pricing_error" in row.keys()
+            else "",
             created_at=_parse_dt(row["created_at"]),
             updated_at=_parse_dt(row["updated_at"]),
         )
@@ -105,8 +126,9 @@ class AirbnbWorkerRepository:
                 status, assigned_count, active_jobs,
                 last_used_at, last_success_at, last_failure_at,
                 consecutive_failures, captcha_count, cooldown_until,
+                last_pricing_success_at, last_pricing_failure_at, last_pricing_error,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(worker_id) DO UPDATE SET
                 proxy_id=excluded.proxy_id,
                 proxy_endpoint=excluded.proxy_endpoint,
@@ -121,6 +143,9 @@ class AirbnbWorkerRepository:
                 consecutive_failures=excluded.consecutive_failures,
                 captcha_count=excluded.captcha_count,
                 cooldown_until=excluded.cooldown_until,
+                last_pricing_success_at=excluded.last_pricing_success_at,
+                last_pricing_failure_at=excluded.last_pricing_failure_at,
+                last_pricing_error=excluded.last_pricing_error,
                 updated_at=excluded.updated_at
             """,
             (
@@ -138,6 +163,9 @@ class AirbnbWorkerRepository:
                 worker.consecutive_failures,
                 worker.captcha_count,
                 _iso(worker.cooldown_until),
+                _iso(worker.last_pricing_success_at),
+                _iso(worker.last_pricing_failure_at),
+                worker.last_pricing_error or "",
                 _iso(created),
                 _iso(now),
             ),
