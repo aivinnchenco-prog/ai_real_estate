@@ -32,6 +32,16 @@ from .status_mapper import AirbnbMonthPolicy
 SYNC_ONE_ALLOWED_OBJECT_IDS = frozenset({"A_20260802_002"})
 
 
+class SourcePropertyMissingError(Exception):
+    """Object exists in availability SQLite but was removed from source Notion DB."""
+
+    def __init__(self, object_id: str) -> None:
+        self.object_id = object_id
+        super().__init__(
+            f"object {object_id} not found in source «Аренда недвижимости»"
+        )
+
+
 @dataclass
 class SyncOneResult:
     object_id: str = ""
@@ -102,7 +112,7 @@ def _find_source_property(
     )
     results = data.get("results") or []
     if not results:
-        raise SystemExit(f"STOP: object {object_id} not found in source «Аренда недвижимости»")
+        raise SourcePropertyMissingError(object_id)
 
     from .notion_reader import _plain_property, resolve_calendar_check_url
 

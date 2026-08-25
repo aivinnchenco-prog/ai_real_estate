@@ -38,13 +38,25 @@ from .server_concurrency import (
     ServerConcurrencyLimits,
 )
 from .status_mapper import AirbnbMonthPolicy, build_month_availabilities, normalize_calendar
-from .sync_one import _calendar_range_for_window, _find_source_property
+from .sync_one import (
+    SourcePropertyMissingError,
+    _calendar_range_for_window,
+    _find_source_property,
+)
 from ..providers.airbnb import save_provider_calendar
 from ..providers.airbnb_adapter import (
     collect_prices_for_window,
     create_selenium_price_fetcher,
     fetch_calendar_days_live,
 )
+from .airbnb_workers.integration import (
+    build_worker_pool,
+    calendar_failure_message,
+    fetch_airbnb_calendar_for_object,
+    worker_pool_enabled,
+)
+from .airbnb_workers.config import load_worker_pool_config
+from .airbnb_workers.pool import AirbnbWorkerPool
 
 
 def _apply_batch_live_env() -> None:
@@ -78,6 +90,7 @@ class BatchSafeObjectResult:
     price_browser_error_results: int = 0
     price_object_wallclock_capped: bool = False
     retries: int = 0
+    orphan_removed: bool = False
     month_cells: dict[str, str] = field(default_factory=dict)
     blocked_ranges: dict[str, str] = field(default_factory=dict)
     error: str = ""
@@ -137,6 +150,7 @@ def _process_one_object(
     batch_allowed: frozenset[str],
     metrics: BatchRunMetrics,
     scheduler: AvailabilityScheduler | None = None,
+    worker_pool: AirbnbWorkerPool | None = None,
 ) -> BatchSafeObjectResult:
     out = BatchSafeObjectResult(object_id=object_id)
     set_batch_context(object_id, metrics)
@@ -153,8 +167,29 @@ def _process_one_object(
 
         with object_processing_slot(object_id, metrics):
             cal_start = time.perf_counter()
+            pool_config = load_worker_pool_config()
+            use_worker_pool = worker_pool_enabled(config) and pool_config.enabled
             try:
-                calendar_raw = fetch_calendar_days_live(pricing_url)
+                if use_worker_pool:
+                    calendar_result = fetch_airbnb_calendar_for_object(
+                        repo,
+                        object_id,
+                        pricing_url,
+                        pool=worker_pool,
+                        pool_config=pool_config,
+                    )
+                    if not calendar_result.success:
+                        metrics.calendar_failures += 1
+                        metrics.calendar_failure_objects.append(object_id)
+                        err = calendar_failure_message(calendar_result)
+                        metrics.record_error(f"{object_id} calendar: {err}")
+                        if scheduler is not None:
+                            scheduler.schedule_retry(object_id, err)
+                        out.error = err
+                        return out
+                    calendar_raw = calendar_result.days
+                else:
+                    calendar_raw = fetch_calendar_days_live(pricing_url)
             except Exception as exc:
                 metrics.calendar_failures += 1
                 metrics.calendar_failure_objects.append(object_id)
@@ -299,6 +334,11 @@ def _process_one_object(
             out.notion_action = action
             out.notion_updated = True
             out.success = True
+    except SourcePropertyMissingError:
+        repo.remove_object(object_id)
+        out.orphan_removed = True
+        out.success = True
+        out.notion_action = "orphan_removed"
     except Exception as exc:
         out.error = str(exc)
         metrics.record_error(f"{object_id}: {exc}")
@@ -357,6 +397,10 @@ def run_batch_safe(
     result.backup_path = _backup_sqlite(config.sqlite_path)
 
     repo = AvailabilityRepository(config.sqlite_path)
+    worker_pool = None
+    if worker_pool_enabled(config):
+        worker_pool, _ = build_worker_pool(repo)
+        worker_pool.assign_new_objects()
     try:
         for oid in ids:
             obj_result = _process_one_object(
@@ -370,6 +414,7 @@ def run_batch_safe(
                 target_mapping=target_mapping,
                 batch_allowed=batch_allowed,
                 metrics=result.metrics,
+                worker_pool=worker_pool,
             )
             result.objects.append(obj_result)
     finally:

@@ -157,8 +157,14 @@ class AvailabilityRepository:
         self._conn.executescript(SCHEMA_SQL)
         self._conn.commit()
         self._migrate_schema()
+        self._migrate_airbnb_worker_schema()
         self._repair_calendar_sources_if_needed()
         self._conn.commit()
+
+    def _migrate_airbnb_worker_schema(self) -> None:
+        from .airbnb_workers.registry import ensure_worker_schema
+
+        ensure_worker_schema(self._conn)
 
     def _table_columns(self, table: str) -> set[str]:
         rows = self._conn.execute(f"PRAGMA table_info({table})").fetchall()
@@ -474,6 +480,27 @@ class AvailabilityRepository:
             self._insert_object(state, created_at=now, updated_at=now)
         else:
             self._update_object(state, updated_at=now)
+
+    def remove_object(self, object_id: str) -> dict[str, int]:
+        """Delete object and all related rows (calendar, months, jobs). Idempotent."""
+        deleted: dict[str, int] = {}
+        for table in (
+            "refresh_jobs",
+            "availability_calendar_days",
+            "availability_months",
+        ):
+            cur = self._conn.execute(
+                f"DELETE FROM {table} WHERE object_id = ?",
+                (object_id,),
+            )
+            deleted[table] = cur.rowcount
+        cur = self._conn.execute(
+            "DELETE FROM availability_objects WHERE object_id = ?",
+            (object_id,),
+        )
+        deleted["availability_objects"] = cur.rowcount
+        self._conn.commit()
+        return deleted
 
     def get_object(self, object_id: str) -> AvailabilityObjectState | None:
         row = self._conn.execute(

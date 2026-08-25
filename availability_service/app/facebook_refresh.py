@@ -11,7 +11,7 @@ from .notion_reader import NotionReader, map_target_fields
 from .notion_writer import NotionWriter
 from .repository import AvailabilityRepository
 from .scheduler import AvailabilityScheduler
-from .sync_one import _find_source_property
+from .sync_one import SourcePropertyMissingError, _find_source_property
 from ..providers.facebook import FacebookAvailabilityProvider
 from ..providers.facebook_checker import FacebookCheckResult
 
@@ -58,9 +58,16 @@ def run_facebook_refresh(
     preserved = state.source_status
     out.preserved_source_status = preserved.value
 
-    prop = _find_source_property(
-        reader, config, object_id, expected_source=SourceKind.FACEBOOK
-    )
+    try:
+        prop = _find_source_property(
+            reader, config, object_id, expected_source=SourceKind.FACEBOOK
+        )
+    except SourcePropertyMissingError:
+        repo.remove_object(object_id)
+        out.success = True
+        out.notion_action = "orphan_removed"
+        out.elapsed_s = round(time.perf_counter() - start, 2)
+        return out
     out.name = prop.name
 
     provider = FacebookAvailabilityProvider()

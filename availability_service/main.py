@@ -369,6 +369,45 @@ def main(argv: list[str] | None = None) -> int:
         help="Required to allow live Facebook browser requests",
     )
 
+    remove_obj = sub.add_parser(
+        "remove-object",
+        help="Remove object from availability SQLite (orphan cleanup)",
+    )
+    remove_obj.add_argument("--object-id", required=True, help="Object ID to remove")
+    remove_obj.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Required to delete rows (use --dry-run to preview)",
+    )
+    remove_obj.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview row counts without deleting",
+    )
+
+    workers = sub.add_parser("airbnb-workers", help="Airbnb calendar worker pool")
+    workers_sub = workers.add_subparsers(dest="workers_command", required=True)
+    workers_sub.add_parser("status", help="Worker pool diagnostics")
+    workers_sub.add_parser("bootstrap", help="Bootstrap workers from proxy pool")
+    migrate = workers_sub.add_parser("migrate", help="Assign Airbnb objects to workers")
+    migrate.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview balanced assignment without writing",
+    )
+    migrate.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Required to write assignments",
+    )
+    workers_sub.add_parser("test-proxies", help="Per-worker proxy connectivity (no Airbnb)")
+    trace = workers_sub.add_parser("calendar-trace", help="Diagnostic calendar trace (no Notion write)")
+    trace.add_argument("--object-id", required=True)
+    trace.add_argument("--worker-id", required=True)
+    trace.add_argument("--url", required=True)
+    smoke = workers_sub.add_parser("calendar-smoke", help="Controlled calendar smoke (assigned worker)")
+    smoke.add_argument("--case", action="append", default=[], help="object_id|url")
+
     args = parser.parse_args(argv)
     if args.command == "dry-run":
         summary = run_dry_run()
@@ -465,6 +504,79 @@ def main(argv: list[str] | None = None) -> int:
         report = run_facebook_verify(confirm_live=args.confirm_live)
         print_facebook_verify_report(report)
         return 0 if report.verified else 1
+    if args.command == "remove-object":
+        from .app.remove_object import print_remove_object_report, run_remove_object
+
+        result = run_remove_object(
+            args.object_id,
+            confirm=args.confirm,
+            dry_run=args.dry_run,
+        )
+        print_remove_object_report(result)
+        return 0 if result.existed or result.dry_run else 1
+    if args.command == "airbnb-workers":
+        from .app.airbnb_workers.cli import (
+            run_airbnb_workers_bootstrap,
+            run_airbnb_workers_migrate,
+            run_airbnb_workers_status,
+        )
+
+        config = load_config()
+        repo = AvailabilityRepository(config.sqlite_path)
+        try:
+            if args.workers_command == "status":
+                run_airbnb_workers_status(repo)
+                return 0
+            if args.workers_command == "bootstrap":
+                run_airbnb_workers_bootstrap(repo)
+                return 0
+            if args.workers_command == "migrate":
+                if args.dry_run:
+                    run_airbnb_workers_migrate(repo, dry_run=True)
+                    return 0
+                if not args.confirm:
+                    raise SystemExit("REFUSED: migrate requires --confirm (use --dry-run to preview)")
+                run_airbnb_workers_migrate(repo, dry_run=False)
+                return 0
+            if args.workers_command == "test-proxies":
+                from .app.airbnb_workers.proxy_probe import (
+                    print_proxy_probe_report,
+                    run_proxy_probe,
+                )
+
+                report = run_proxy_probe(repo)
+                print_proxy_probe_report(report)
+                return 0 if report.passed_count == len(report.results) else 1
+            if args.workers_command == "calendar-trace":
+                from .app.airbnb_workers.calendar_diag import (
+                    print_trace_matrix,
+                    run_trace_matrix,
+                )
+                from .app.airbnb_workers.calendar_fetch import normalize_listing_url
+
+                rows = run_trace_matrix(
+                    repo,
+                    cases=[(args.object_id, args.worker_id, normalize_listing_url(args.url))],
+                )
+                print_trace_matrix(rows)
+                return 0 if rows[0].status == "SUCCESS" else 1
+            if args.workers_command == "calendar-smoke":
+                from .app.airbnb_workers.calendar_diag import (
+                    print_trace_matrix,
+                    run_controlled_smoke,
+                )
+
+                cases = []
+                for item in args.case:
+                    oid, url = item.split("|", 1)
+                    cases.append((oid.strip(), url.strip()))
+                rows = run_controlled_smoke(repo, cases)
+                print_trace_matrix(rows)
+                passed = sum(1 for r in rows if r.status == "SUCCESS")
+                print(f"\nSMOKE: {passed}/{len(rows)} PASS")
+                return 0 if passed == len(rows) else 1
+        finally:
+            repo.close()
     return 1
 
 

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "proxy_01",
+    "server": "http://us.decodo.com:10001",
+    "username": "YOUR_DECODO_USERNAME",
+    "password": "YOUR_DECODO_PASSWORD"
+  },
+  {
+    "id": "proxy_02",
+    "server": "http://us.decodo.com:10002",
+    "username": "YOUR_DECODO_USERNAME",
+    "password": "YOUR_DECODO_PASSWORD"
+  }
+]

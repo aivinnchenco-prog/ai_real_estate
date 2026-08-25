@@ -152,6 +152,9 @@ HANDOFF_*.md
 
 # Availability Service local SQLite / runtime
 availability_service/data/
+availability_service/config/airbnb_proxy_pool.json
+availability_service/config/airbnb_user_agents.json
+**/runtime/browser_profiles/airbnb_availability/
 
 # Локальные бэкапы перед scripts/deploy.sh --pull
 .deploy-backups/
