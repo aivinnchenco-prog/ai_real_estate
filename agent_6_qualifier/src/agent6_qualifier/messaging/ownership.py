@@ -75,9 +75,12 @@ class ConversationOwnershipState:
     known_bot_outbound_ids: set[str] = field(default_factory=set)
 
     def bot_may_reply(self) -> bool:
-        if self.manager_takeover and not human_handoff_expired(self.last_human_activity_at):
-            return False
-        if self.owner == ConversationOwner.HUMAN_HANDOFF:
+        from agent6_qualifier.handoff_control import handoff_manual_only
+
+        blocked = self.manager_takeover or self.owner == ConversationOwner.HUMAN_HANDOFF
+        if blocked:
+            if handoff_manual_only():
+                return False
             return human_handoff_expired(self.last_human_activity_at)
         return self.owner == ConversationOwner.BOT_ACTIVE
 
@@ -110,9 +113,23 @@ def apply_inbound_to_ownership(
         state.known_bot_outbound_ids.add(crm_id or message.message_id)
         return state
 
-    if kind == "HUMAN_OUTBOUND":
-        state.owner = ConversationOwner.HUMAN_HANDOFF
-        state.reason = "outbound not from Agent 6 (explicit is_from_bot=false)"
+    if kind in ("HUMAN_OUTBOUND", "UNKNOWN_EXTERNAL_OUTBOUND"):
+        from agent6_qualifier.handoff_control import (
+            apply_external_outbound_stop,
+            is_greeting_allowlisted,
+        )
+
+        if kind == "UNKNOWN_EXTERNAL_OUTBOUND" and is_greeting_allowlisted(
+            message.text
+        ):
+            state.reason = "UNKNOWN_EXTERNAL_OUTBOUND allowlisted greeting"
+            return state
+        reason = (
+            "C: chat"
+            if kind == "HUMAN_OUTBOUND"
+            else "C: chat (UNKNOWN_EXTERNAL_OUTBOUND)"
+        )
+        apply_external_outbound_stop(state, reason=reason)
         state.last_human_message_id = message.message_id
         ts = (
             message.timestamp.isoformat(timespec="seconds")
@@ -122,12 +139,6 @@ def apply_inbound_to_ownership(
         state.last_human_activity_at = ts
         return state
 
-    # UNKNOWN_EXTERNAL_OUTBOUND — do not invent HUMAN_HANDOFF automatically.
-    # Callers may set manager_takeover explicitly.
-    state.reason = (
-        "UNKNOWN_EXTERNAL_OUTBOUND — ownership unchanged "
-        "(possible WA/Wazzup/amo greeting; not Agent6 crmMessageId)"
-    )
     return state
 
 

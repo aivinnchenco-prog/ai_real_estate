@@ -73,19 +73,18 @@ def test_c_human_handoff_silent_under_ttl():
     assert turn.silent
 
 
-def test_d_handoff_expired_new_search():
-    """D: HUMAN_HANDOFF >48h + new search → bot resumes."""
+def test_d_handoff_expired_stays_silent_in_manual_only():
+    """D: HUMAN_HANDOFF >48h — still silent when AGENT6_HANDOFF_MANUAL_ONLY."""
     s = Session(chat_id="tg2")
     old = (datetime.now(timezone.utc) - timedelta(hours=handoff_ttl_hours() + 1)).isoformat()
     s.human_handoff_active = True
     s.human_handoff_at = old
     s.last_human_message_at = old
     assert human_handoff_expired(s)
-    assert should_bot_respond(s)
+    assert not should_bot_respond(s)
     q = make_qualifier()
     turn = q.handle_message(s, "Хочу подобрать новый объект", {})
-    assert not turn.silent
-    assert s.wants_selection
+    assert turn.silent
 
 
 def test_e_background_owner_response():

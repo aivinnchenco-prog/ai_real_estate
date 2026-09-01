@@ -58,22 +58,10 @@ def _question_for_slot(slot: Slot, lead: LeadProfile) -> str:
 
 
 def build_progressive_questions(plan: SlotPlan, lead: LeadProfile) -> list[str]:
-    """Preferred 1 question; max 2 when dates + guests both missing."""
+    """All missing critical slots in one message; no one-by-one drip."""
     if not plan.next_slots:
         return []
-    first = plan.next_slots[0]
-    second = plan.next_slots[1] if len(plan.next_slots) > 1 else None
-    if (
-        first == Slot.CHECK_IN
-        and second == Slot.GUESTS
-        and lead.check_in is None
-        and lead.guests is None
-    ):
-        return [
-            _question_for_slot(first, lead),
-            _question_for_slot(second, lead),
-        ]
-    return [_question_for_slot(first, lead)]
+    return [_question_for_slot(slot, lead) for slot in plan.next_slots]
 
 
 def build_progressive_reply(

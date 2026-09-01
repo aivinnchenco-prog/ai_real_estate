@@ -249,11 +249,37 @@ async def process_whatsapp_client_turn(
         result.notes.append("OWN_BOT_OUTBOUND ignored")
         return result
 
-    if not state.bot_may_reply():
+    session_early = _get_or_load_session(session_store, session_chat_id, phone=phone)
+    if amo is not None and session_early.amo_lead_id:
+        try:
+            from agent6_qualifier.handoff_control import sync_from_amo_tags
+
+            sync_from_amo_tags(amo, session_early, state)
+        except Exception:
+            pass
+    if session_early.human_handoff_active and state.bot_may_reply():
+        from agent6_qualifier.handoff_control import activate_stop
+
+        activate_stop(
+            session_early, state,
+            reason=state.reason or "session_human_handoff",
+            lead_id=session_early.amo_lead_id,
+        )
+
+    from agent6_qualifier.handoff_control import chat_is_paused
+
+    if chat_is_paused(session_early, state) or not state.bot_may_reply():
         result.notes.append(f"handoff/ownership block owner={state.owner.value}")
         result.handoff = True
         result.outbound_mode = "blocked"
         result.outbound_blocked_reason = state.block_reason() or "handoff"
+        try:
+            from agent6_qualifier.messaging.ownership_store import OwnershipStore
+
+            OwnershipStore().save(state, phone=phone or "")
+            session_store.save(session_early)
+        except Exception:
+            pass
         return result
 
     try:

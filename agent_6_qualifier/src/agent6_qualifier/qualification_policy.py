@@ -200,12 +200,17 @@ def preprocess_turn(session: Session, message: str, update: dict) -> TurnPolicy:
     if any(slot in _CRITERIA_SLOTS for slot in policy.corrected_slots):
         policy.forced_intent = "CHANGE_CRITERIA"
 
-    # 9. Client explicitly takes over from the manager.
+    # 9. Client explicitly takes over from the manager — disabled in manual-only.
     if session.human_handoff_active and client_resumes_self_service(message):
-        session.human_handoff_active = False
-        session.handoff_to_human = False
-        policy.resumed_from_human = True
-        policy.events.append("Клиент продолжает диалог с ботом")
+        from .handoff_control import handoff_manual_only
+
+        if handoff_manual_only():
+            policy.events.append("resume phrase ignored (manual-only)")
+        else:
+            session.human_handoff_active = False
+            session.handoff_to_human = False
+            policy.resumed_from_human = True
+            policy.events.append("Клиент продолжает диалог с ботом")
 
     # 10. Repair assessment (never handoff on the first misunderstanding).
     policy.repair = repair_mod.assess(
@@ -248,7 +253,7 @@ def build_repair_understanding(session: Session) -> str:
     if lead.check_in is not None:
         bits.append(f"заезд {lead.check_in.strftime('%d.%m.%Y')}")
     if not bits:
-        return "Понял, давайте зафиксируем запрос заново."
+        return ""
     return "Понял. Сейчас ищем: " + ", ".join(bits) + "."
 
 

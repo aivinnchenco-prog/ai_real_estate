@@ -76,6 +76,23 @@ async def process_client_message(
     session = get_session(chat_id)
     text = event.raw_text or ""
     print(f"[in] {chat_id}: {text[:80]}")
+    # Tags only (START/STOP). Do not sync amo responsible_user_id — that
+    # used to auto-resume whenever the lead owner was still the AI user.
+    if amo is not None and session.amo_lead_id:
+        try:
+            from .handoff_control import sync_from_amo_tags
+
+            sync_from_amo_tags(amo, session)
+        except Exception:
+            pass
+
+    from .handoff_control import chat_is_paused
+
+    if chat_is_paused(session):
+        session.history.append({"role": "user", "text": text})
+        store.save(session)
+        print(f"[out] {chat_id}: (paused — no qualify / no amo / no send)", flush=True)
+        return
 
     tasks = _amo_tasks(amo, notify_error)
     if tasks is not None:
@@ -111,7 +128,7 @@ async def process_client_message(
         playbook_hints = ""
 
     turn = handle_message(session, text, update)
-    if turn.silent:
+    if turn.silent or not (turn.reply_draft or "").strip():
         session.history.append({"role": "user", "text": text})
         store.save(session)
         print(f"[out] {chat_id}: (silent — human-owned)")
@@ -135,7 +152,29 @@ async def process_client_message(
             reply = polish_reply(
                 turn.reply_draft, session.language, session.lead.name
             )
-    await send_client_response(event, reply)
+
+    from .outbound_dedup import should_suppress_outbound
+
+    if should_suppress_outbound(session, reply):
+        print(
+            f"[out] {chat_id}: suppressed duplicate",
+            flush=True,
+        )
+        session.history.append({"role": "user", "text": text})
+        store.save(session)
+        return
+
+    sent = False
+
+    async def _send_once(evt, text_out: str) -> None:
+        nonlocal sent
+        if sent:
+            print(f"[out] {chat_id}: suppressed second send", flush=True)
+            return
+        await send_client_response(evt, text_out)
+        sent = True
+
+    await _send_once(event, reply)
     print(f"[out] {chat_id}: {reply[:80]}")
 
     if tasks is not None and turn.awaiting_client_response:
@@ -326,7 +365,7 @@ def process_client_message_sync(
         update = {}
 
     turn = qualifier.handle_message(session, message, update)
-    if turn.silent:
+    if turn.silent or not (turn.reply_draft or "").strip():
         return ClientHandleResult(turn=turn, reply="", silent=True)
 
     if turn.template_key:
@@ -335,5 +374,11 @@ def process_client_message_sync(
     reply = turn.reply_draft
     if polish and not turn.skip_polish:
         reply = brain.polish_reply(reply, session.language, session.lead.name)
+
+    from .outbound_dedup import should_suppress_outbound
+
+    if should_suppress_outbound(session, reply):
+        print("suppressed duplicate", flush=True)
+        return ClientHandleResult(turn=turn, reply="", silent=True)
 
     return ClientHandleResult(turn=turn, reply=reply, silent=False)

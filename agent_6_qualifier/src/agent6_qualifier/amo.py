@@ -374,8 +374,24 @@ class AmoClient:
             payload["result"] = {"text": result_text[:4000]}
         self._req("PATCH", f"/tasks/{int(task_id)}", json=payload)
 
-    def get_lead(self, lead_id: int) -> dict:
-        return self._req("GET", f"/leads/{int(lead_id)}") or {}
+    def get_lead(self, lead_id: int, *, with_tags: bool = False) -> dict:
+        path = f"/leads/{int(lead_id)}"
+        if with_tags:
+            path += "?with=tags"
+        return self._req("GET", path) or {}
+
+    def lead_tag_names(self, lead_id: int) -> list[str]:
+        lead = self.get_lead(lead_id, with_tags=True)
+        tags = (lead.get("_embedded") or {}).get("tags") or []
+        return [str(t.get("name") or "").strip() for t in tags if t.get("name")]
+
+    def replace_lead_tags(self, lead_id: int, names: list[str]) -> None:
+        """PATCH tags to the given names (used to drop «Бот: старт/стоп»)."""
+        self._req(
+            "PATCH",
+            f"/leads/{int(lead_id)}",
+            json={"_embedded": {"tags": [{"name": n} for n in names]}},
+        )
 
     # ---------- contacts: custom fields + tags (role schema) ----------
 

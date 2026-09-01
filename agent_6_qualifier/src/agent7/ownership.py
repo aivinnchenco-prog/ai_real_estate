@@ -55,6 +55,10 @@ def should_bot_respond(session: Session) -> bool:
     """Bot may send an automatic reply to the client."""
     if not is_human_owned(session):
         return True
+    from agent6_qualifier.handoff_control import handoff_manual_only
+
+    if handoff_manual_only():
+        return False
     return human_handoff_expired(session)
 
 

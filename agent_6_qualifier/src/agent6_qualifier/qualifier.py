@@ -73,6 +73,13 @@ class Session:
     lead_temperature: str = ""
     history: list = field(default_factory=list)  # [{"role":"user"|"assistant","text":...}]
     amo_lead_id: int | None = None
+    amo_responsible_user_id: int | None = None
+    last_start_applied_at: str = ""
+    last_pause_at: str = ""
+    last_start_absent_at: str = ""
+    amo_tags_checked_at: str = ""
+    cached_amo_tag_names: list = field(default_factory=list)
+    amo_start_tag_present: bool = False
     language: str = "ru"
     # Publication reference (Agent 4 mapping → Agent 6 resolver)
     source_platform: str = ""
@@ -194,9 +201,15 @@ class Qualifier:
         if not should_bot_respond(session):
             return Turn(reply_draft="", events=events, silent=True, skip_polish=True)
 
+        # Threshold handoff beats quiet repair — otherwise a consolidated
+        # ask swallows §14 escalation.
         handoff_turn = self._repair_handoff_turn(session, policy, events, message)
         if handoff_turn is not None:
             return handoff_turn
+
+        quiet = self._quiet_repair_turn(session, policy, events, message)
+        if quiet is not None:
+            return quiet
 
         intent = policy.forced_intent
         if intent is None:
@@ -447,6 +460,46 @@ class Qualifier:
 
     # ---------- Wave 3 branches ----------
 
+    def _quiet_repair_turn(
+        self, session: Session, policy, events: list[str], message: str,
+    ) -> Turn | None:
+        """REPEATED_BOT_REPLY / LOW_CONFIDENCE: never prepend a recap message.
+
+        No new facts and nothing to ask → silent. Missing critical slots →
+        one consolidated question.
+        """
+        from .repair import RepairReason
+
+        reason = getattr(policy.repair, "reason", None)
+        if reason not in (
+            RepairReason.REPEATED_BOT_REPLY,
+            RepairReason.LOW_CONFIDENCE_EXTRACT,
+        ):
+            return None
+        from .progressive_templates import build_progressive_reply
+        from .slot_planner import plan_qualification
+
+        plan = plan_qualification(session, session.chosen)
+        has_new = bool(policy.effective_update) or bool(policy.corrected_slots)
+        if plan.missing_critical:
+            draft = build_progressive_reply(
+                session.lead, plan, message=message,
+            )
+            events.append(f"Repair quiet: {reason.value} → consolidated ask")
+            return Turn(
+                reply_draft=draft,
+                events=events,
+                skip_polish=True,
+                awaiting_client_response=True,
+                template_key="repair_consolidated_ask",
+            )
+        if not has_new:
+            events.append(f"Repair quiet: {reason.value} → silent")
+            return Turn(
+                reply_draft="", events=events, silent=True, skip_polish=True,
+            )
+        return None
+
     def _repair_handoff_turn(
         self, session: Session, policy, events: list[str], message: str,
     ) -> Turn | None:
@@ -475,6 +528,13 @@ class Qualifier:
     def _with_repair_prefix(session: Session, policy, draft: str) -> str:
         """Short recap of the new understanding, no long apology (§13)."""
         if not policy.repair.triggered:
+            return draft
+        from .repair import RepairReason
+
+        if policy.repair.reason in (
+            RepairReason.REPEATED_BOT_REPLY,
+            RepairReason.LOW_CONFIDENCE_EXTRACT,
+        ):
             return draft
         from .qualification_policy import build_repair_understanding
 

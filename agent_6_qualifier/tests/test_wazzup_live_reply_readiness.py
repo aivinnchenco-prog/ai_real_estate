@@ -254,7 +254,8 @@ def test_10_unknown_external_outbound_classified(wazzup_env):
     assert classify_outbound_source(msg) == "UNKNOWN_EXTERNAL_OUTBOUND"
     state = ConversationOwnershipState(chat_id="66625124001")
     apply_inbound_to_ownership(state, msg)
-    assert state.owner == ConversationOwner.BOT_ACTIVE
+    assert state.owner == ConversationOwner.HUMAN_HANDOFF
+    assert state.manager_takeover is True
     assert "UNKNOWN_EXTERNAL_OUTBOUND" in state.reason
 
 
