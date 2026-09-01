@@ -23,18 +23,22 @@ def _json_default(o):
 
 
 def _lead_from(d: dict) -> LeadProfile:
+    payload = dict(d)
     for key in ("check_in", "check_out"):
-        if d.get(key):
-            d[key] = date.fromisoformat(d[key])
-    return LeadProfile(**d)
+        if payload.get(key):
+            payload[key] = date.fromisoformat(payload[key])
+    known = {f.name for f in dataclasses.fields(LeadProfile)}
+    return LeadProfile(**{k: v for k, v in payload.items() if k in known})
 
 
 def _listing_from(d: dict) -> Listing:
-    if d.get("availability"):
-        d["availability"] = Availability(d["availability"])
-    if d.get("busy_until"):
-        d["busy_until"] = date.fromisoformat(d["busy_until"])
-    return Listing(**d)
+    payload = dict(d)
+    if payload.get("availability"):
+        payload["availability"] = Availability(payload["availability"])
+    if payload.get("busy_until"):
+        payload["busy_until"] = date.fromisoformat(payload["busy_until"])
+    known = {f.name for f in dataclasses.fields(Listing)}
+    return Listing(**{k: v for k, v in payload.items() if k in known})
 
 
 class SessionStore:

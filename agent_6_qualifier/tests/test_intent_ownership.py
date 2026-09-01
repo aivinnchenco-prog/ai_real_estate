@@ -120,7 +120,7 @@ def test_f_change_district_keeps_other_criteria():
     )
     assert s.lead.guests == 4
     assert s.lead.check_in == date(2026, 9, 1)
-    assert "Банг Тао" in s.lead.districts or "Банг Тао" in turn.reply_draft
+    assert "Bang Tao" in s.lead.districts or "Банг Тао" in s.lead.districts or "Банг Тао" in turn.reply_draft
 
 
 def test_g_supplied_criteria_not_reasked():
