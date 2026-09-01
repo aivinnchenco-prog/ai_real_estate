@@ -20,6 +20,7 @@ class ReactionType(str, Enum):
     LIKE = "LIKE"
     DISLIKE = "DISLIKE"
     TOO_EXPENSIVE = "TOO_EXPENSIVE"
+    TOO_CHEAP = "TOO_CHEAP"
     BAD_LOCATION = "BAD_LOCATION"
     TOO_SMALL = "TOO_SMALL"
     TOO_LARGE = "TOO_LARGE"
@@ -70,6 +71,11 @@ class DetectedReaction:
 
 # Ordered: the first pattern that matches wins, so specific beats generic.
 _PATTERNS: tuple[tuple[re.Pattern[str], ReactionType, str], ...] = (
+    (re.compile(r"почему\s+так\s+д[её]ш[её]в|слишком\s+д[её]ш[её]в|"
+                r"подозрительно\s+д[её]ш[её]в|так\s+не\s+быва|"
+                r"что\s+за\s+цена|нереально\s+д[её]ш[её]в",
+                re.IGNORECASE),
+     ReactionType.TOO_CHEAP, "price_low"),
     (re.compile(r"слишком\s+дорог|дорогов|очень\s+дорог|\bне\s+по\s+карману|"
                 r"\bдорого\b", re.IGNORECASE),
      ReactionType.TOO_EXPENSIVE, "price_high"),
@@ -114,6 +120,7 @@ _SIMILAR_REQUEST = re.compile(
 def _signals_for(reaction: ReactionType, reason: str) -> list[PreferenceSignal]:
     mapping: dict[ReactionType, PreferenceSignal] = {
         ReactionType.TOO_EXPENSIVE: PreferenceSignal("price", "price_sensitive", "negative", 1.5),
+        ReactionType.TOO_CHEAP: PreferenceSignal("price", "price_suspicious", "negative", 1.0),
         ReactionType.BAD_LOCATION: PreferenceSignal("location", "distance", "negative", 1.5),
         ReactionType.NO_POOL: PreferenceSignal("pool", "pool_required", "positive", 1.0),
         ReactionType.TOO_SMALL: PreferenceSignal("size", "bigger", "positive", 1.0),
@@ -312,6 +319,12 @@ def acknowledge_reaction(reaction: DetectedReaction) -> str:
     kind = reaction.reaction_type
     if kind == ReactionType.TOO_EXPENSIVE:
         return "Понял, по цене не подходит — подберу вариант дешевле."
+    if kind == ReactionType.TOO_CHEAP:
+        return (
+            "Понял вопрос про цену — для длинной аренды месячная ставка "
+            "ниже посуточной. Точную цифру уточню у владельца, "
+            "тот же список повторять не буду."
+        )
     if kind == ReactionType.BAD_LOCATION:
         return "Понял, расположение не подходит."
     if kind == ReactionType.NO_POOL:

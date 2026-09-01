@@ -103,6 +103,10 @@ _WANTS_SELECTION_RE = re.compile(
     re.IGNORECASE,
 )
 # Клиент говорит, что пришёл по конкретному объекту, но ID/ссылку ещё не прислал.
+_ASKS_DEPOSIT_RE = re.compile(
+    r"(?i)депозит|залог|\bdeposit\b",
+)
+
 _HAS_SPECIFIC_RE = re.compile(
     r"конкретн\w+|(у?видел\w*|смотрел\w*|нашел|нашёл)\b|"
     r"(ваш\w*|на\s+вашем)\s+(пост|канал|сайт|страниц|инстаграм|объявлен)",
@@ -438,7 +442,8 @@ class Qualifier:
         if reaction_turn is not None:
             return reaction_turn
 
-        return self._next_step(session, events, message, policy=policy)
+        turn = self._next_step(session, events, message, policy=policy)
+        return self._with_deposit_answer(session, message, update, turn)
 
     # ---------- Wave 3 branches ----------
 
@@ -493,6 +498,19 @@ class Qualifier:
 
         draft, extra_events = build_reaction_reply(session, policy)
         events.extend(extra_events)
+
+        from .reactions import ReactionType
+        if (
+            policy.reaction is not None
+            and policy.reaction.reaction_type == ReactionType.TOO_CHEAP
+        ):
+            return Turn(
+                reply_draft=self._with_repair_prefix(session, policy, draft),
+                events=events,
+                skip_polish=True,
+                awaiting_client_response=True,
+                template_key="reaction_too_cheap",
+            )
 
         question = reaction_refine_question(session, policy)
         if question:
@@ -723,9 +741,34 @@ class Qualifier:
                 from .templates import client_no_alternatives
                 return Turn(reply_draft=client_no_alternatives(self._oid(session)),
                             events=events, skip_polish=True)
-            from .templates import CLIENT_ASK_BUDGET_TOLERANCE
-            return Turn(reply_draft=CLIENT_ASK_BUDGET_TOLERANCE, events=events,
-                        awaiting_client_response=True)
+            from .matching import empty_shortlist_reason, find_alternatives
+            from .reactions import rejected_ids
+            from .templates import CLIENT_NO_NEW_ALTERNATIVES, client_empty_shortlist
+
+            still_there = find_alternatives(
+                listings,
+                session.lead,
+                chosen=session.chosen,
+                exclude_ids=rejected_ids(session),
+            )
+            if still_there:
+                return Turn(
+                    reply_draft=CLIENT_NO_NEW_ALTERNATIVES,
+                    events=events + ["Новых вариантов нет — показанные исключены"],
+                    skip_polish=True,
+                    awaiting_client_response=True,
+                    template_key="client_no_new_alternatives",
+                )
+            reason = empty_shortlist_reason(listings, session.lead)
+            return Turn(
+                reply_draft=client_empty_shortlist(
+                    reason, budget_set=session.lead.budget is not None,
+                ),
+                events=events + [f"Пустая выдача: {reason}"],
+                skip_polish=True,
+                awaiting_client_response=True,
+                template_key="client_empty_shortlist",
+            )
 
         lines = ["Вот что могу предложить:"]
         for l in candidates:
@@ -734,9 +777,37 @@ class Qualifier:
             if l.object_id not in session.shown_object_ids:
                 session.shown_object_ids.append(l.object_id)
         lines.append("Какой-то из вариантов интересен? Могу уточнить детали у владельца.")
-        return Turn(reply_draft="\n\n".join(lines), events=events)
+        return Turn(
+            reply_draft="\n\n".join(lines),
+            events=events,
+            skip_polish=True,
+            template_key="_show_alternatives",
+        )
 
     # ---------- вспомогательное ----------
+
+    def _with_deposit_answer(
+        self, session: Session, message: str, update: dict, turn: Turn,
+    ) -> Turn:
+        asked = bool((update or {}).get("asks_deposit")) or bool(
+            _ASKS_DEPOSIT_RE.search(message or "")
+        )
+        if not asked or turn.silent:
+            return turn
+        from .templates import client_deposit_answer
+
+        listing = session.chosen
+        if listing is None:
+            shown = list(getattr(session, "shown_object_ids", None) or [])
+            if shown:
+                listing = self._find_by_id(shown[-1])
+        extra = client_deposit_answer(listing)
+        draft = turn.reply_draft or ""
+        if extra in draft:
+            return turn
+        turn.reply_draft = f"{extra}\n\n{draft}".strip()
+        turn.events = list(turn.events or []) + ["Ответ по депозиту"]
+        return turn
 
     @staticmethod
     def _oid(session: Session) -> str:

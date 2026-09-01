@@ -128,6 +128,12 @@ def qualification_hints_from_text(
     if br:
         out["bedrooms"] = int(br.group(1))
 
+    if re.search(r"(?i)депозит|залог|\bdeposit\b", text):
+        out["asks_deposit"] = True
+    from .districts import is_any_district_phrase
+    if is_any_district_phrase(text):
+        out["any_district"] = True
+
     return out
 
 
