@@ -105,7 +105,7 @@ _DEPOSIT_RE = re.compile(
 )
 
 _PRICE_AMOUNT_RE = re.compile(
-    r"(\d[\d\s\u00a0\u202f,]*)\s*(?:THB|฿|бат|baht)(?=\s|[.,;:]|$)",
+    r"(\d[\d\s\u00a0\u202f,]*)\s*(?:THB|฿|бат|baht)(?=\s|[.,;:/]|$)",
     re.I,
 )
 _NON_RENT_PRICE_RE = re.compile(
@@ -113,7 +113,8 @@ _NON_RENT_PRICE_RE = re.compile(
     re.I,
 )
 _RENT_PRICE_RE = re.compile(
-    r"месяц|/мес|мес\.|per\s+month|monthly|аренд|\brent\b|цена\s*[:]|price\s*[:]",
+    r"месяц|помесячн|/мес|мес\.|per\s+month|monthly|\bmonths?\b|"
+    r"аренд|\brent\b|цена\s*[:]|price\s*[:]",
     re.I,
 )
 
@@ -151,7 +152,7 @@ def _parse_monthly_price(description: str) -> float | None:
             return value
         if rent_hit is None:
             rent_hit = value
-    return None
+    return rent_hit
 
 
 _MAX_GUESTS_RES = [
