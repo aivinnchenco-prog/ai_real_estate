@@ -20,7 +20,7 @@ from agent6_qualifier.messaging.ownership import (
     ConversationOwnershipState,
     apply_inbound_to_ownership,
 )
-from agent6_qualifier.messaging.types import CanonicalInboundMessage
+from agent6_qualifier.messaging.types import CanonicalInboundMessage, ConversationOwner
 from agent6_qualifier.messaging.wazzup_config import WazzupConfig, load_wazzup_config
 from agent6_qualifier.messaging.wazzup_errors import (
     WazzupMalformedPayload,
@@ -221,6 +221,26 @@ def process_wazzup_webhook(
             chat_id=msg.chat_id
         )
         ownership_by_chat[msg.chat_id] = apply_inbound_to_ownership(state, msg)
+        stopped = ownership_by_chat[msg.chat_id]
+        if stopped.manager_takeover or stopped.owner == ConversationOwner.HUMAN_HANDOFF:
+            try:
+                from agent6_qualifier.handoff_control import persist_ownership
+                from agent6_qualifier.messaging.wa_client_runtime import (
+                    default_session_store,
+                    whatsapp_session_chat_id,
+                )
+                from agent6_qualifier.session_ownership import activate_human_handoff
+
+                persist_ownership(stopped, phone=msg.phone or "")
+                store = default_session_store()
+                cid = whatsapp_session_chat_id(msg.phone, chat_id=msg.chat_id)
+                sess = store.load(cid)
+                if sess is not None:
+                    activate_human_handoff(sess)
+                    sess.handoff_to_human = True
+                    store.save(sess)
+            except Exception:
+                pass
         accepted.append(msg)
         if on_inbound is not None:
             on_inbound(msg)
