@@ -74,6 +74,12 @@ class Session:
     history: list = field(default_factory=list)  # [{"role":"user"|"assistant","text":...}]
     amo_lead_id: int | None = None
     amo_responsible_user_id: int | None = None
+    last_start_applied_at: str = ""
+    last_pause_at: str = ""
+    last_start_absent_at: str = ""
+    amo_tags_checked_at: str = ""
+    cached_amo_tag_names: list = field(default_factory=list)
+    amo_start_tag_present: bool = False
     language: str = "ru"
     # Publication reference (Agent 4 mapping → Agent 6 resolver)
     source_platform: str = ""
@@ -195,13 +201,15 @@ class Qualifier:
         if not should_bot_respond(session):
             return Turn(reply_draft="", events=events, silent=True, skip_polish=True)
 
-        quiet = self._quiet_repair_turn(session, policy, events, message)
-        if quiet is not None:
-            return quiet
-
+        # Threshold handoff beats quiet repair — otherwise a consolidated
+        # ask swallows §14 escalation.
         handoff_turn = self._repair_handoff_turn(session, policy, events, message)
         if handoff_turn is not None:
             return handoff_turn
+
+        quiet = self._quiet_repair_turn(session, policy, events, message)
+        if quiet is not None:
+            return quiet
 
         intent = policy.forced_intent
         if intent is None:

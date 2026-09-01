@@ -150,7 +150,7 @@ scenarios:
   - id: OS03
     tier: baseline
     category: OPEN_SEARCH
-    session: { chat_id: os03, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 100000 } }
+    session: { chat_id: os03, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 100000, districts: [Раваи] } }
     steps:
       - message: "давайте"
         update: {}
@@ -160,7 +160,7 @@ scenarios:
   - id: OS04
     tier: baseline
     category: OPEN_SEARCH
-    session: { chat_id: os04, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 1000 } }
+    session: { chat_id: os04, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 1000, districts: [Раваи] } }
     steps:
       - message: "ок"
         update: {}
@@ -564,7 +564,7 @@ scenarios:
   - id: MT02
     tier: baseline
     category: MATCHING
-    session: { chat_id: mt02, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 1000 } }
+    session: { chat_id: mt02, wants_selection: true, asked_core: true, lead: { check_in: "2026-08-01", guests: 2, budget: 1000, districts: [Раваи] } }
     steps:
       - message: "ок"
         update: {}
@@ -1040,7 +1040,7 @@ scenarios:
       - message: "Хочу подобрать новый объект"
         update: {}
         assert:
-          silent: false
+          silent: true
 
   # Structured summary lands in the amoCRM note, not in the client reply.
   - id: HH05
@@ -1072,7 +1072,7 @@ scenarios:
       - message: "снова здесь ищу дом"
         update: {}
         assert:
-          silent: false
+          silent: true
 
   - id: RE02
     tier: post_merge
@@ -1096,7 +1096,7 @@ scenarios:
       - message: "я готов продолжить сам"
         update: {}
         assert:
-          silent: false
+          silent: true
 
   # --- REPAIR (4) ---
   - id: RP01

@@ -252,9 +252,9 @@ async def process_whatsapp_client_turn(
     session_early = _get_or_load_session(session_store, session_chat_id, phone=phone)
     if amo is not None and session_early.amo_lead_id:
         try:
-            from agent6_qualifier.handoff_control import sync_from_amo_lead
+            from agent6_qualifier.handoff_control import sync_from_amo_tags
 
-            sync_from_amo_lead(amo, session_early, state)
+            sync_from_amo_tags(amo, session_early, state)
         except Exception:
             pass
     if session_early.human_handoff_active and state.bot_may_reply():
@@ -266,7 +266,9 @@ async def process_whatsapp_client_turn(
             lead_id=session_early.amo_lead_id,
         )
 
-    if not state.bot_may_reply():
+    from agent6_qualifier.handoff_control import chat_is_paused
+
+    if chat_is_paused(session_early, state) or not state.bot_may_reply():
         result.notes.append(f"handoff/ownership block owner={state.owner.value}")
         result.handoff = True
         result.outbound_mode = "blocked"

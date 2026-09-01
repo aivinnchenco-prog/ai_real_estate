@@ -222,23 +222,34 @@ def process_wazzup_webhook(
         )
         ownership_by_chat[msg.chat_id] = apply_inbound_to_ownership(state, msg)
         stopped = ownership_by_chat[msg.chat_id]
-        if stopped.manager_takeover or stopped.owner == ConversationOwner.HUMAN_HANDOFF:
+        if msg.direction == "outbound" and (
+            stopped.manager_takeover or stopped.owner == ConversationOwner.HUMAN_HANDOFF
+        ):
             try:
-                from agent6_qualifier.handoff_control import persist_ownership
+                from agent6_qualifier.handoff_control import (
+                    activate_stop,
+                    persist_ownership,
+                )
                 from agent6_qualifier.messaging.wa_client_runtime import (
                     default_session_store,
                     whatsapp_session_chat_id,
                 )
-                from agent6_qualifier.session_ownership import activate_human_handoff
 
                 persist_ownership(stopped, phone=msg.phone or "")
-                store = default_session_store()
+                session_store = default_session_store()
                 cid = whatsapp_session_chat_id(msg.phone, chat_id=msg.chat_id)
-                sess = store.load(cid)
-                if sess is not None:
-                    activate_human_handoff(sess)
-                    sess.handoff_to_human = True
-                    store.save(sess)
+                sess = session_store.load(cid)
+                if sess is None:
+                    from agent6_qualifier.qualifier import Session
+
+                    sess = Session(chat_id=cid)
+                activate_stop(
+                    sess,
+                    stopped,
+                    reason=stopped.reason or "C: chat",
+                    lead_id=sess.amo_lead_id,
+                )
+                session_store.save(sess)
             except Exception:
                 pass
         accepted.append(msg)

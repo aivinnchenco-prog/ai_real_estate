@@ -114,14 +114,21 @@ def apply_inbound_to_ownership(
         return state
 
     if kind in ("HUMAN_OUTBOUND", "UNKNOWN_EXTERNAL_OUTBOUND"):
-        # C: any outbound not marked agent6-* is a human intervention.
-        reason = (
-            "outbound not from Agent 6 (explicit is_from_bot=false)"
-            if kind == "HUMAN_OUTBOUND"
-            else "UNKNOWN_EXTERNAL_OUTBOUND (not agent6-*)"
+        from agent6_qualifier.handoff_control import (
+            apply_external_outbound_stop,
+            is_greeting_allowlisted,
         )
-        from agent6_qualifier.handoff_control import apply_external_outbound_stop
 
+        if kind == "UNKNOWN_EXTERNAL_OUTBOUND" and is_greeting_allowlisted(
+            message.text
+        ):
+            state.reason = "UNKNOWN_EXTERNAL_OUTBOUND allowlisted greeting"
+            return state
+        reason = (
+            "C: chat"
+            if kind == "HUMAN_OUTBOUND"
+            else "C: chat (UNKNOWN_EXTERNAL_OUTBOUND)"
+        )
         apply_external_outbound_stop(state, reason=reason)
         state.last_human_message_id = message.message_id
         ts = (

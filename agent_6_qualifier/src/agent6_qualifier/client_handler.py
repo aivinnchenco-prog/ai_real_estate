@@ -76,13 +76,23 @@ async def process_client_message(
     session = get_session(chat_id)
     text = event.raw_text or ""
     print(f"[in] {chat_id}: {text[:80]}")
+    # Tags only (START/STOP). Do not sync amo responsible_user_id — that
+    # used to auto-resume whenever the lead owner was still the AI user.
     if amo is not None and session.amo_lead_id:
         try:
-            from .handoff_control import sync_from_amo_lead
+            from .handoff_control import sync_from_amo_tags
 
-            sync_from_amo_lead(amo, session)
+            sync_from_amo_tags(amo, session)
         except Exception:
             pass
+
+    from .handoff_control import chat_is_paused
+
+    if chat_is_paused(session):
+        session.history.append({"role": "user", "text": text})
+        store.save(session)
+        print(f"[out] {chat_id}: (paused — no qualify / no amo / no send)", flush=True)
+        return
 
     tasks = _amo_tasks(amo, notify_error)
     if tasks is not None:
