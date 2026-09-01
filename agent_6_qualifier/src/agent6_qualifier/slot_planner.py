@@ -147,13 +147,24 @@ def plan_qualification(session: Session, chosen: Listing | None = None) -> SlotP
                     missing_optional.append(label)
 
     next_slots: list[Slot] = []
+    open_critical = {Slot.CHECK_IN, Slot.GUESTS, Slot.DISTRICTS}
+    specific_critical = {Slot.CHECK_IN, Slot.STAY_MONTHS}
     for slot in order:
         if not _slot_known(session, slot):
             if flow == SourceFlow.SPECIFIC_OBJECT and slot in (Slot.DISTRICTS, Slot.BUDGET):
                 continue
             next_slots.append(slot)
-            if len(next_slots) >= 2:
-                break
+            critical = (
+                open_critical if flow == SourceFlow.OPEN_SEARCH else specific_critical
+            )
+            # Ask every missing critical slot in one turn; hold optionals back.
+            still_missing_critical = any(
+                s in critical and not _slot_known(session, s) and s not in next_slots
+                for s in order
+            )
+            if still_missing_critical:
+                continue
+            break
 
     if flow == SourceFlow.SPECIFIC_OBJECT:
         mvc = _specific_mvc_ready(session, chosen)
