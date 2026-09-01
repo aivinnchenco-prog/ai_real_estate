@@ -122,19 +122,31 @@ class AmoClient:
         return list((data or {}).get("_embedded", {}).get("contacts", []) or [])
 
     def find_open_lead(self, contact_id: int) -> int | None:
-        """Открытая сделка контакта в нашей воронке — чтобы не плодить дубли.
+        """Открытая сделка контакта в любой воронке (Wazzup «Воронка» тоже).
 
         Открытая = не в системных стадиях «Успешно» (142) / «Закрыто» (143).
-        Требует вызова ensure_pipeline() до этого (нужен self.pipeline_id).
+        При нескольких открытых берём самую свежую по updated_at/created_at.
         """
         data = self._req("GET", f"/contacts/{contact_id}?with=leads")
         lead_ids = [l["id"] for l in (data or {}).get("_embedded", {}).get("leads", [])]
+        open_leads: list[dict] = []
         for lid in lead_ids:
             lead = self._req("GET", f"/leads/{lid}")
-            if (lead.get("pipeline_id") == self.pipeline_id
-                    and lead.get("status_id") not in (142, 143)):
-                return lid
-        return None
+            if lead.get("status_id") not in (142, 143):
+                open_leads.append(lead)
+        if not open_leads:
+            return None
+        open_leads.sort(
+            key=lambda item: item.get("updated_at") or item.get("created_at") or 0,
+            reverse=True,
+        )
+        chosen = open_leads[0]
+        print(
+            f"[amo] bind lead #{chosen.get('id')} "
+            f"pipeline={chosen.get('pipeline_id')} status={chosen.get('status_id')}",
+            flush=True,
+        )
+        return int(chosen["id"])
 
     def create_contact(self, name: str, phone: str = "", tg_username: str = "") -> int:
         cf = []
@@ -194,13 +206,10 @@ class AmoClient:
     def update_lead_status(self, lead_id: int, status_id: int) -> None:
         self._req("PATCH", f"/leads/{lead_id}", json={"status_id": status_id})
 
-    def update_lead_fields(self, lead_id: int, lead: LeadProfile,
-                           field_ids: dict[str, int]) -> None:
-        """Дозаполняет карточку сделки фактами из профиля лида.
-
-        Сделка создаётся при первом сообщении, когда известен только объект;
-        даты/гости/бюджет/район появляются позже — синхронизируем их сюда.
-        """
+    def build_lead_fields_payload(
+        self, lead: LeadProfile, field_ids: dict[str, int],
+    ) -> dict:
+        """PATCH body for a qualification update. Never writes price:0."""
         from datetime import datetime, time
 
         def fv(name: str, value) -> dict:
@@ -210,29 +219,46 @@ class AmoClient:
             return int(datetime.combine(d, time(12, 0)).timestamp())
 
         cf = []
-        if lead.preferred_object_id:
+        if lead.preferred_object_id and "Объект ID" in field_ids:
             cf.append(fv("Объект ID", lead.preferred_object_id))
-        if lead.check_in:
+        if lead.check_in and "Дата заезда" in field_ids:
             cf.append(fv("Дата заезда", ts(lead.check_in)))
             # Дата выезда не названа = годовой контракт (анкета квалификатора).
             # Пишем и снятие галочки: клиент мог назвать выезд позже.
-            cf.append(fv("Контракт на год", not lead.check_out))
-        if lead.check_out:
+            if "Контракт на год" in field_ids:
+                cf.append(fv("Контракт на год", not lead.check_out))
+        if lead.check_out and "Дата выезда" in field_ids:
             cf.append(fv("Дата выезда", ts(lead.check_out)))
-        if lead.budget is not None:
+        if lead.budget is not None and "Бюджет (мес)" in field_ids:
             cf.append(fv("Бюджет (мес)", int(lead.budget)))
-            cf.append(fv("Допуск по бюджету %", int(lead.budget_tolerance_pct)))
-        if lead.districts:
+            if "Допуск по бюджету %" in field_ids:
+                cf.append(fv("Допуск по бюджету %", int(lead.budget_tolerance_pct)))
+        if lead.districts and "Район" in field_ids:
             cf.append(fv("Район", ", ".join(lead.districts)))
-        if lead.guests:
+        if lead.guests and "Гостей" in field_ids:
             cf.append(fv("Гостей", lead.guests))
-        if lead.whatsapp:
+        if lead.whatsapp and "WhatsApp" in field_ids:
             cf.append(fv("WhatsApp", lead.whatsapp))
+        if lead.pets is not None and "Животные" in field_ids:
+            # Select enums in LEAD_FIELDS / PETS_OPTIONS: да / нет / не указано
+            cf.append(fv("Животные", "да" if lead.pets else "нет"))
         if not cf:
-            return
+            return {}
         body: dict = {"custom_fields_values": cf}
         if lead.budget:
             body["price"] = int(lead.budget)
+        return body
+
+    def update_lead_fields(self, lead_id: int, lead: LeadProfile,
+                           field_ids: dict[str, int]) -> None:
+        """Дозаполняет карточку сделки фактами из профиля лида.
+
+        Сделка создаётся при первом сообщении, когда известен только объект;
+        даты/гости/бюджет/район появляются позже — синхронизируем их сюда.
+        """
+        body = self.build_lead_fields_payload(lead, field_ids)
+        if not body:
+            return
         self._req("PATCH", f"/leads/{lead_id}", json=body)
 
     def attach_file(self, lead_id: int, path) -> None:

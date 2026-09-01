@@ -62,6 +62,20 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
         "Пока в рамках бюджета вариантов мало. Подскажите, какая погрешность "
         "по бюджету для вас допустима — рассмотрим чуть шире?"
     ),
+    "client_ask_relax_criteria": (
+        "По вашему району и датам сейчас нет свободных вариантов. "
+        "Расширим район или сдвинем даты?"
+    ),
+    "client_no_new_alternatives": (
+        "Новых вариантов под ваши критерии пока нет — те, что уже присылал, "
+        "остаются в силе. Могу расширить район или даты."
+    ),
+    "client_deposit_known": (
+        "Залог по объекту — {amount} ฿."
+    ),
+    "client_deposit_unknown": (
+        "По депозиту точную сумму уточню у владельца — в карточке её сейчас нет."
+    ),
     "client_no_alternatives": (
         "Пока похожих вариантов по вашим критериям в базе нет — "
         "сосредоточусь на вашем варианте {object_id}. "
@@ -219,6 +233,9 @@ def client_price_line(quote: str) -> str:
     return _T["client_price_line"].format(quote=quote)
 CLIENT_ASK_ALTERNATIVES = _T["client_ask_alternatives"]
 CLIENT_ASK_BUDGET_TOLERANCE = _T["client_ask_budget_tolerance"]
+CLIENT_ASK_RELAX_CRITERIA = _T["client_ask_relax_criteria"]
+CLIENT_NO_NEW_ALTERNATIVES = _T["client_no_new_alternatives"]
+CLIENT_DEPOSIT_UNKNOWN = _T["client_deposit_unknown"]
 CLIENT_BOOKING_FIO = _T["client_booking_fio"]
 CLIENT_BOOKING_CITIZENSHIP = _T["client_booking_citizenship"]
 CLIENT_BOOKING_WHATSAPP = _T["client_booking_whatsapp"]
@@ -305,6 +322,20 @@ def client_object_partial(
         busy_until=busy_until,
         free_from=free_from,
     )
+
+
+def client_deposit_answer(listing: Listing | None) -> str:
+    amount = getattr(listing, "deposit", None) if listing is not None else None
+    if amount:
+        pretty = f"{int(amount):,}".replace(",", " ")
+        return _T["client_deposit_known"].format(amount=pretty)
+    return CLIENT_DEPOSIT_UNKNOWN
+
+
+def client_empty_shortlist(reason: str, *, budget_set: bool) -> str:
+    if reason == "budget" and budget_set:
+        return CLIENT_ASK_BUDGET_TOLERANCE
+    return CLIENT_ASK_RELAX_CRITERIA
 
 
 def client_offer_line(listing: Listing, reason: str = "", check_in=None) -> str:

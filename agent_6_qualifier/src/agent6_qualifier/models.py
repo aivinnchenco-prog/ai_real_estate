@@ -59,6 +59,7 @@ class Listing:
     # Цены по месяцам от Агента 1/2 (колонка monthly_prices, JSON):
     # {"2026-09": {"price": 107100, "status": "monthly|prorated|insufficient_data", ...}}
     monthly_prices: dict = field(default_factory=dict)
+    deposit: Optional[float] = None  # Notion «Залог», THB
 
     def get_price_for_month(self, month: date | str | None = None) -> tuple[Optional[float], str]:
         """Цена для месяца заезда клиента: (price, status).
@@ -92,8 +93,12 @@ class Listing:
 
     def price_quote(self, check_in: date | str | None = None) -> str:
         """Формулировка цены для клиента. Prorated — как ориентировочная."""
+        from .matching import PRICE_FLOOR, price_sane
+
+        if not price_sane(self):
+            return ""
         price, status = self.get_price_for_month(check_in)
-        if price is None:
+        if price is None or price < PRICE_FLOOR:
             return ""
         text = f"{price:,.0f} THB/мес".replace(",", " ")
         if status in ("prorated", "insufficient_data"):
@@ -170,6 +175,7 @@ class LeadProfile:
     budget: Optional[float] = None
     budget_tolerance_pct: float = DEFAULT_BUDGET_TOLERANCE_PCT  # ±%, можно уточнить у клиента
     districts: list[str] = field(default_factory=list)
+    any_district: bool = False        # клиент явно сказал «любой» / «или иные»
     bedrooms: Optional[int] = None    # сколько спален нужно клиенту
     guests: Optional[int] = None
     pets: Optional[bool] = None

@@ -316,6 +316,8 @@ def test_clarification_never_reopens_whole_questionnaire(session):
         ("этот нравится", ReactionType.LIKE),
         ("этот вариант нормальный", ReactionType.LIKE),
         ("слишком дорого", ReactionType.TOO_EXPENSIVE),
+        ("почему так дешево", ReactionType.TOO_CHEAP),
+        ("слишком дёшево", ReactionType.TOO_CHEAP),
         ("не нравится интерьер", ReactionType.STYLE_DISLIKE),
         ("хочу современнее", ReactionType.STYLE_LIKE),
         ("далеко", ReactionType.BAD_LOCATION),

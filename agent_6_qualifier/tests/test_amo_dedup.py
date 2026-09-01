@@ -35,12 +35,66 @@ def test_find_open_lead_returns_active(amo, monkeypatch):
     assert amo.find_open_lead(10) == 2
 
 
-def test_find_open_lead_ignores_other_pipeline(amo, monkeypatch):
+def test_find_open_lead_reuses_other_pipeline(amo, monkeypatch):
+    """Wazzup creates leads on «Воронка» — bind that card, do not skip it."""
     monkeypatch.setattr(amo, "_req", make_req({
         "/contacts/10": {"_embedded": {"leads": [{"id": 5}]}},
-        "/leads/5": {"id": 5, "pipeline_id": 999, "status_id": 100},  # чужая воронка
+        "/leads/5": {"id": 5, "pipeline_id": 999, "status_id": 100},
     }))
-    assert amo.find_open_lead(10) is None
+    assert amo.find_open_lead(10) == 5
+
+
+def test_find_open_lead_picks_freshest_open(amo, monkeypatch):
+    monkeypatch.setattr(amo, "_req", make_req({
+        "/contacts/10": {"_embedded": {"leads": [{"id": 1}, {"id": 2}]}},
+        "/leads/1": {"id": 1, "pipeline_id": 1, "status_id": 10, "updated_at": 100},
+        "/leads/2": {"id": 2, "pipeline_id": 9, "status_id": 10, "updated_at": 200},
+    }))
+    assert amo.find_open_lead(10) == 2
+
+
+def test_update_lead_fields_payload_has_qualification_and_skips_zero_price(amo):
+    from datetime import date
+
+    from agent6_qualifier.models import LeadProfile
+
+    field_ids = {
+        "Объект ID": 820023,
+        "Дата заезда": 820025,
+        "Дата выезда": 820027,
+        "Бюджет (мес)": 820029,
+        "Допуск по бюджету %": 820031,
+        "Район": 820033,
+        "Гостей": 820035,
+        "Животные": 820037,
+        "Контракт на год": 846349,
+    }
+    lead = LeadProfile(
+        districts=["Rawai"],
+        guests=4,
+        pets=True,
+        check_in=date(2026, 10, 15),
+        check_out=date(2027, 1, 15),
+    )
+    body = amo.build_lead_fields_payload(lead, field_ids)
+    names = []
+    values = {}
+    for item in body["custom_fields_values"]:
+        fid = item["field_id"]
+        inv = {v: k for k, v in field_ids.items()}
+        names.append(inv[fid])
+        values[inv[fid]] = item["values"][0]["value"]
+    assert "Район" in names
+    assert values["Район"] == "Rawai"
+    assert values["Гостей"] == 4
+    assert values["Животные"] == "да"
+    assert "Дата заезда" in names
+    assert "price" not in body
+
+    lead.budget = 0
+    body0 = amo.build_lead_fields_payload(lead, field_ids)
+    assert body0.get("price") in (None, 0) or "price" not in body0
+    assert "price" not in body0
 
 
 def test_find_open_lead_no_leads(amo, monkeypatch):

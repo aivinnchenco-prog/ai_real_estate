@@ -33,6 +33,7 @@ EXTRACT_SCHEMA = {
         "bedrooms": {"type": "INTEGER", "description": "сколько спален нужно клиенту"},
         "guests": {"type": "INTEGER", "description": "сколько человек будет проживать"},
         "pets": {"type": "BOOLEAN", "description": "есть ли животные"},
+        "asks_deposit": {"type": "BOOLEAN", "description": "клиент спрашивает про депозит/залог"},
         "wants_alternatives": {"type": "BOOLEAN", "description": "клиент согласился посмотреть другие варианты"},
         "declines_alternatives": {"type": "BOOLEAN", "description": "клиент отказался от других вариантов"},
         "prefers_chosen_only": {"type": "BOOLEAN", "description": "клиент хочет только выбранный объект"},
@@ -129,8 +130,9 @@ def extract_lead_update(
     return json.loads(_text(_call(payload)))
 
 
-def apply_update(lead: LeadProfile, update: dict) -> LeadProfile:
+def apply_update(lead: LeadProfile, update: dict, *, message: str = "") -> LeadProfile:
     """Аккуратно вносит извлечённые факты в профиль (пустое не затирает)."""
+    from agent6_qualifier.districts import apply_districts_update
     from agent6_qualifier.qualification_hints import parse_flexible_date
 
     if update.get("name"):
@@ -157,10 +159,10 @@ def apply_update(lead: LeadProfile, update: dict) -> LeadProfile:
         lead.budget = float(update["budget"])
     if update.get("budget_tolerance_pct"):
         lead.budget_tolerance_pct = float(update["budget_tolerance_pct"])
-    if update.get("districts"):
-        for d in update["districts"]:
-            if d and d not in lead.districts:
-                lead.districts.append(d)
+    if update.get("districts") is not None or message:
+        apply_districts_update(lead, update.get("districts"), message=message)
+    if update.get("any_district"):
+        lead.any_district = True
     if update.get("bedrooms"):
         lead.bedrooms = int(update["bedrooms"])
     if update.get("guests"):

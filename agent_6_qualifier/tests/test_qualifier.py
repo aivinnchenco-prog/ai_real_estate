@@ -349,6 +349,57 @@ def test_utm_link_resolves_listing():
     assert "Вилла UTM" in turn.reply_draft
 
 
+def test_too_cheap_does_not_repeat_shortlist():
+    q = make_qualifier()
+    s = Session(chat_id="cheap")
+    s.wants_selection = True
+    s.lead.districts = ["Rawai"]
+    s.lead.check_in = date(2026, 10, 15)
+    s.lead.guests = 2
+    s.shown_object_ids = ["20260708_001"]
+    turn = q.handle_message(s, "почему так дешево ?", {})
+    assert "длинной аренды" in turn.reply_draft.lower() or "точную цифру" in turn.reply_draft.lower()
+    assert "Вот что могу предложить" not in turn.reply_draft
+
+
+def test_deposit_question_uses_listing_amount():
+    listing = Listing(
+        object_id="20260708_001", title="Вилла", district="Rawai",
+        price_month=40000, rooms=2, deposit=10000,
+    )
+    q = make_qualifier([listing])
+    s = Session(chat_id="dep")
+    s.chosen = listing
+    s.lead.check_in = date(2026, 10, 15)
+    turn = q.handle_message(s, "нужен ли депозит", {"asks_deposit": True})
+    assert "10 000" in turn.reply_draft
+
+
+def test_deposit_unknown_when_field_empty():
+    q = make_qualifier()
+    s = Session(chat_id="dep2")
+    s.chosen = CHOSEN
+    turn = q.handle_message(s, "нужен ли депозит", {"asks_deposit": True})
+    assert "уточню у владельца" in turn.reply_draft.lower()
+
+
+def test_empty_shortlist_mentions_area_not_budget():
+    listing = Listing(
+        object_id="K1", title="Kata villa", district="Kata",
+        price_month=40000, rooms=2,
+    )
+    q = make_qualifier([listing])
+    s = Session(chat_id="empty")
+    s.wants_selection = True
+    s.asked_object_source = True
+    s.lead.check_in = date(2026, 10, 15)
+    s.lead.guests = 4
+    s.lead.districts = ["Rawai"]
+    turn = q.handle_message(s, "покажите варианты", {})
+    assert "бюджет" not in turn.reply_draft.lower()
+    assert "район" in turn.reply_draft.lower() or "дат" in turn.reply_draft.lower()
+
+
 def test_no_object_goes_straight_to_matching():
     q = make_qualifier()
     s = Session(chat_id="2")

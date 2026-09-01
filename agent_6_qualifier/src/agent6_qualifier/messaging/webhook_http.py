@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
@@ -22,7 +24,12 @@ from agent6_qualifier.messaging.wazzup_errors import (
     WazzupMalformedPayload,
     WazzupWebhookDisabled,
 )
-from agent6_qualifier.messaging.webhook import MAX_BODY_BYTES, process_wazzup_webhook
+from agent6_qualifier.messaging.inbound_debounce import InboundDebounceBuffer
+from agent6_qualifier.messaging.webhook import (
+    MAX_BODY_BYTES,
+    flush_debounced_client_turns,
+    process_wazzup_webhook,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +71,10 @@ def handle_wazzup_webhook_request(
             run_qualification_dry_run=run_qualification_dry_run,
             amo=amo,
             qualifier=qualifier,
+            debounce=getattr(WazzupWebhookHandler, "debounce", None),
+            defer_client_turns=getattr(
+                WazzupWebhookHandler, "defer_client_turns", False
+            ),
         )
     except WazzupWebhookDisabled as exc:
         return 503, {"ok": False, "error": exc.code, "message": str(exc)}
@@ -163,6 +174,29 @@ def serve_wazzup_webhook(
     path = Path(store_path) if store_path else Path("data/wazzup_processed.sqlite")
     WazzupWebhookHandler.store = ProcessedEventStore(path)
     WazzupWebhookHandler.run_qualification_dry_run = True
+    debounce = None
+    if cfg.debounce_sec > 0:
+        debounce = InboundDebounceBuffer(window_sec=cfg.debounce_sec)
+        WazzupWebhookHandler.debounce = debounce
+        WazzupWebhookHandler.defer_client_turns = True
+
+        def _flush_loop() -> None:
+            while True:
+                wait = debounce.min_remaining()
+                if wait is None:
+                    time.sleep(min(1.0, cfg.debounce_sec))
+                    continue
+                if wait > 0:
+                    time.sleep(wait)
+                flush_debounced_client_turns(
+                    debounce,
+                    config=cfg,
+                    store=WazzupWebhookHandler.store,
+                    amo=WazzupWebhookHandler.amo,
+                    qualifier=WazzupWebhookHandler.qualifier,
+                )
+
+        threading.Thread(target=_flush_loop, name="wa-debounce", daemon=True).start()
     server = HTTPServer((host, port), WazzupWebhookHandler)
     logger.info(
         "Wazzup webhook listening on http://%s:%s%s "

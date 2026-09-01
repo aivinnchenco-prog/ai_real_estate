@@ -95,13 +95,33 @@ def _to_float(raw: str) -> float:
     return float(cleaned)
 
 
+_DEPOSIT_RE = re.compile(
+    r"(?:deposit|депозит|залог)"
+    r"(?:(?!\d).){0,80}?"
+    r"(?:в\s+размере|of|:)?\s*(?:до\s+)?"
+    r"([$€฿]?)\s*(\d[\d\s\u00a0\u202f,]*)\s*"
+    r"(usd|\$|eur|€|thb|฿|бат|baht)?",
+    re.I | re.S,
+)
+
+_PRICE_AMOUNT_RE = re.compile(
+    r"(\d[\d\s\u00a0\u202f,]*)\s*(?:THB|฿|бат|baht)(?=\s|[.,;:/]|$)",
+    re.I,
+)
+_NON_RENT_PRICE_RE = re.compile(
+    r"квт|кВт|kwh|kw[\s/·⋅∙]|электричеств|залог|депозит|deposit|сохранност",
+    re.I,
+)
+_RENT_PRICE_RE = re.compile(
+    r"месяц|помесячн|/мес|мес\.|per\s+month|monthly|\bmonths?\b|"
+    r"аренд|\brent\b|цена\s*[:]|price\s*[:]",
+    re.I,
+)
+
+
 def _parse_deposit(text: str, fx: dict | None = None) -> float | None:
     """Залог всегда в THB. Если в описании сумма в USD/EUR — конвертируем по курсу."""
-    m = re.search(
-        r"(?:deposit|депозит|залог)\s*[:\s]*([$€฿]?)\s*(\d[\d\s\u00a0\u202f,]*)\s*(usd|\$|eur|€|thb|฿|бат|baht)?",
-        text,
-        re.I,
-    )
+    m = _DEPOSIT_RE.search(text or "")
     if not m:
         return None
     amount = _to_float(m.group(2))
@@ -112,6 +132,27 @@ def _parse_deposit(text: str, fx: dict | None = None) -> float | None:
     if currency in ("eur", "€"):
         return float(round(amount * float(rates["eur_to_thb"]), -2))
     return amount
+
+
+def _window_around(text: str, start: int, end: int, radius: int = 70) -> str:
+    return text[max(0, start - radius):min(len(text), end + radius)]
+
+
+def _parse_monthly_price(description: str) -> float | None:
+    """First rent/month THB amount; skip kWh, deposit, and other non-rent figures."""
+    rent_hit = None
+    for m in _PRICE_AMOUNT_RE.finditer(description or ""):
+        window = _window_around(description, m.start(), m.end())
+        if _NON_RENT_PRICE_RE.search(window):
+            continue
+        if re.search(r"год|year", window, re.I) and not _RENT_PRICE_RE.search(window):
+            continue
+        value = _to_float(m.group(1))
+        if _RENT_PRICE_RE.search(window):
+            return value
+        if rent_hit is None:
+            rent_hit = value
+    return rent_hit
 
 
 _MAX_GUESTS_RES = [
@@ -187,13 +228,7 @@ def parse_listing(
     m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:m²|m2|кв\.?\s*м|sqm)", description, re.I)
     if m:
         area = float(m.group(1).replace(",", "."))
-    m = re.search(
-        r"(\d[\d\s\u00a0\u202f,]*)\s*(?:THB|฿|бат)(?!.*(?:год|year))",
-        description,
-        re.I,
-    )
-    if m:
-        price_monthly = _to_float(m.group(1))
+    price_monthly = _parse_monthly_price(description)
     m = re.search(
         r"(\d[\d\s\u00a0\u202f,]*)\s*(?:THB|฿).*(?:год|year)",
         description,

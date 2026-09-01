@@ -48,6 +48,7 @@ class WazzupConfig:
     live_allowlist_enabled: bool = True
     live_allowlist_phones: tuple[str, ...] = ()
     stage_mode: bool = True
+    debounce_sec: float = 4.0
 
     @property
     def api_key_set(self) -> bool:
@@ -83,6 +84,7 @@ class WazzupConfig:
             "live_allowlist_enabled": self.live_allowlist_enabled,
             "live_allowlist_count": len(self.live_allowlist_phones),
             "stage_mode": self.stage_mode,
+            "debounce_sec": self.debounce_sec,
         }
 
 
@@ -120,6 +122,7 @@ def load_wazzup_config() -> WazzupConfig:
             os.getenv("WAZZUP_LIVE_ALLOWLIST_PHONES")
         ),
         stage_mode=_env_bool("WAZZUP_STAGE_MODE", True),
+        debounce_sec=_env_float("WAZZUP_DEBOUNCE_SEC", 4.0),
     )
 
 

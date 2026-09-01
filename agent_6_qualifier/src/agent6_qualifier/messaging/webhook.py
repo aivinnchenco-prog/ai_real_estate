@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -84,6 +85,73 @@ def _is_status_only(msg: CanonicalInboundMessage) -> bool:
     return "status" in raw and not (msg.text or "").strip()
 
 
+def _run_shared_client_turn(
+    msg: CanonicalInboundMessage,
+    *,
+    cfg: WazzupConfig,
+    ownership_by_chat: dict[str, ConversationOwnershipState],
+    store: ProcessedEventStore | None,
+    amo: Any | None,
+    qualifier: Any | None,
+    force_dry: bool | None,
+) -> Any:
+    from agent6_qualifier.messaging.wa_client_runtime import (
+        default_session_store,
+        process_whatsapp_client_turn,
+    )
+
+    turn = asyncio.run(
+        process_whatsapp_client_turn(
+            msg,
+            config=cfg,
+            ownership=ownership_by_chat[msg.chat_id],
+            event_store=store,
+            amo=amo,
+            qualifier=qualifier,
+            force_dry_run_send=force_dry,
+        )
+    )
+    print("\n".join(turn.to_log_lines()), flush=True)
+    return turn
+
+
+def flush_debounced_client_turns(
+    debounce,
+    *,
+    config: WazzupConfig,
+    store: ProcessedEventStore | None = None,
+    ownership_by_chat: dict[str, ConversationOwnershipState] | None = None,
+    amo: Any | None = None,
+    qualifier: Any | None = None,
+    replied: bool = False,
+) -> list[Any]:
+    """Process coalesced chats whose debounce window has elapsed."""
+    from agent6_qualifier.messaging.inbound_debounce import coalesce_messages
+
+    ownership_by_chat = ownership_by_chat if ownership_by_chat is not None else {}
+    turns: list[Any] = []
+    for group in debounce.pop_ready():
+        coal = coalesce_messages(group)
+        if coal.chat_id not in ownership_by_chat:
+            ownership_by_chat[coal.chat_id] = ConversationOwnershipState(
+                chat_id=coal.chat_id
+            )
+        force_dry = True if (config.stage_mode and replied) else None
+        turn = _run_shared_client_turn(
+            coal,
+            cfg=config,
+            ownership_by_chat=ownership_by_chat,
+            store=store,
+            amo=amo,
+            qualifier=qualifier,
+            force_dry=force_dry,
+        )
+        turns.append(turn)
+        if getattr(turn, "outbound_mode", "") == "live":
+            replied = True
+    return turns
+
+
 def process_wazzup_webhook(
     body: bytes | dict[str, Any],
     *,
@@ -96,6 +164,8 @@ def process_wazzup_webhook(
     use_shared_core: bool = True,
     amo: Any | None = None,
     qualifier: Any | None = None,
+    debounce: Any | None = None,
+    defer_client_turns: bool = False,
 ) -> WebhookProcessResult:
     cfg = config or load_wazzup_config()
     if not cfg.webhook_enabled:
@@ -162,7 +232,6 @@ def process_wazzup_webhook(
         if use_shared_core:
             from agent6_qualifier.messaging.wa_client_runtime import (
                 default_session_store,
-                process_whatsapp_client_turn,
             )
             from agent6_qualifier.messaging.wa_owner_runtime import (
                 is_whatsapp_owner_inbound,
@@ -191,24 +260,25 @@ def process_wazzup_webhook(
                     pass
                 continue
 
+            if debounce is not None:
+                debounce.add(msg)
+                continue
+
             # Stage mode: at most one bot reply per webhook batch.
             force_dry = None
             if cfg.stage_mode and replied:
                 force_dry = True
 
-            turn = asyncio.run(
-                process_whatsapp_client_turn(
-                    msg,
-                    config=cfg,
-                    ownership=ownership_by_chat[msg.chat_id],
-                    event_store=store,
-                    amo=amo,
-                    qualifier=qualifier,
-                    force_dry_run_send=force_dry,
-                )
+            turn = _run_shared_client_turn(
+                msg,
+                cfg=cfg,
+                ownership_by_chat=ownership_by_chat,
+                store=store,
+                amo=amo,
+                qualifier=qualifier,
+                force_dry=force_dry,
             )
             turns.append(turn)
-            print("\n".join(turn.to_log_lines()), flush=True)
             if turn.outbound_mode == "live":
                 replied = True
             continue
@@ -227,6 +297,22 @@ def process_wazzup_webhook(
             )
             dry_runs.append(dry)
             print("\n".join(dry.to_log_lines()), flush=True)
+
+    if debounce is not None and not defer_client_turns:
+        wait = debounce.min_remaining()
+        if wait:
+            time.sleep(wait)
+        turns.extend(
+            flush_debounced_client_turns(
+                debounce,
+                config=cfg,
+                store=store,
+                ownership_by_chat=ownership_by_chat,
+                amo=amo,
+                qualifier=qualifier,
+                replied=replied,
+            )
+        )
 
     ignored = ""
     if not accepted and not duplicates:

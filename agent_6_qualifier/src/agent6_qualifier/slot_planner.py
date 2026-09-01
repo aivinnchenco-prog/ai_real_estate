@@ -61,7 +61,7 @@ def _slot_known(session: Session, slot: Slot) -> bool:
     if slot == Slot.GUESTS:
         return lead.guests is not None
     if slot == Slot.DISTRICTS:
-        return bool(lead.districts)
+        return bool(lead.districts) or bool(getattr(lead, "any_district", False))
     if slot == Slot.BUDGET:
         return lead.budget is not None
     if slot == Slot.BEDROOMS:
@@ -95,6 +95,8 @@ def _open_search_mvc_ready(session: Session) -> bool:
     if not _has_date_window(session):
         return False
     if lead.guests is None:
+        return False
+    if not lead.districts and not getattr(lead, "any_district", False):
         return False
     return True
 
@@ -137,9 +139,9 @@ def plan_qualification(session: Session, chosen: Listing | None = None) -> SlotP
                 else:
                     missing_optional.append(label)
             else:
-                if slot in (Slot.CHECK_IN, Slot.GUESTS):
+                if slot in (Slot.CHECK_IN, Slot.GUESTS, Slot.DISTRICTS):
                     missing_critical.append(label)
-                elif slot in (Slot.DISTRICTS, Slot.BUDGET, Slot.BEDROOMS):
+                elif slot in (Slot.BUDGET, Slot.BEDROOMS):
                     missing_optional.append(label)
                 else:
                     missing_optional.append(label)

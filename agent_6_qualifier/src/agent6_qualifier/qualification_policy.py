@@ -161,7 +161,7 @@ def preprocess_turn(session: Session, message: str, update: dict) -> TurnPolicy:
     )
 
     # 3. Write values: extract first, deterministic correction on top.
-    apply_update(session.lead, policy.effective_update)
+    apply_update(session.lead, policy.effective_update, message=message)
     policy.corrected_slots = apply_correction(session.lead, policy.correction)
     if policy.corrected_slots:
         policy.events.append(
@@ -317,5 +317,6 @@ def reaction_owns_turn(policy: TurnPolicy) -> bool:
         return True
     return reaction.reaction_type in (
         reactions_mod.ReactionType.STYLE_LIKE,
+        reactions_mod.ReactionType.TOO_CHEAP,
         reactions_mod.ReactionType.OTHER,
     )
