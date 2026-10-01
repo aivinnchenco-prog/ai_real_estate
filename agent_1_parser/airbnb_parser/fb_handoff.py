@@ -44,9 +44,21 @@ FB_PARSER_ENSURE_VENV = (
 
 # Коды выхода fb_parser.py → подсказка пользователю
 _FB_ERROR_HINTS = {
-    2: "Нужен логин FB: в папке fb_parser запусти login_fb.py и повтори.",
+    2: (
+        "Сессия Facebook истекла: лента вместо карточки. "
+        "Обнови логин на сервере (не коммить cookies): "
+        "sudo systemctl stop openhome-agent1; "
+        "на компьютере python agent1b/login_fb.py && python agent1b/export_fb_state.py; "
+        "на VPS python agent1b/import_fb_state.py; "
+        "cd /opt/openhome/app && git pull && sudo systemctl start openhome-agent1. "
+        "Шаги: agent_1_parser/fb_parser/README.md (Refresh Facebook login on the server)."
+    ),
     3: "Карточка без фото галереи — Агенту 2 нечего грузить.",
-    4: "FB открыл ленту вместо карточки или заблокировал бота. Перелогинься через login_fb.py.",
+    4: (
+        "Браузер открыл не карточку объявления. "
+        "Если это лента Marketplace — сессия FB протухла: см. подсказку code 2 "
+        "и README fb_parser (Refresh Facebook login on the server)."
+    ),
 }
 
 

@@ -25,6 +25,20 @@ try:
 except ImportError:
     pass
 
+from agent1b.fb_page import (
+    assert_crawled_item_page,
+    attach_html_sanitizer,
+    canonical_item_url,
+    exit_code_for_parser_error,
+    html_has_listing_card,
+    install_lxml_html_sanitizer,
+    item_id_from_navigation_url,
+    looks_like_login_wall,
+    resolve_share_target,
+    sanitize_html,
+    session_expired_message,
+    share_wait_failed,
+)
 from agent1b.fb_session import (
     build_browser_kwargs,
     ensure_facebook_session,
@@ -255,10 +269,6 @@ _SHARE_PATH_RE = re.compile(
     r"(?:(?:www|m|mbasic)\.)?facebook\.com/share/([A-Za-z0-9][A-Za-z0-9/_-]*)",
     re.I,
 )
-_ITEM_ID_RE = re.compile(
-    r"(?:(?:www|m|mbasic)\.)?facebook\.com/marketplace/item/(\d+)",
-    re.I,
-)
 
 
 def is_share_url(url: str) -> bool:
@@ -279,14 +289,13 @@ def normalize_marketplace_url(url: str) -> str:
 
     m.facebook.com often returns "Facebook is not available on this browser";
     parsing always goes through www.facebook.com/marketplace/item/{id}/.
+    The id is read from the path only, so a login URL with the item in ?next=
+    is not treated as the listing.
     """
-    match = _ITEM_ID_RE.search(url)
-    if not match:
-        # Fallback: path-only (covers odd hosts / pasted fragments)
-        match = re.search(r"/marketplace/item/(\d+)", url)
-    if not match:
+    item_id = item_id_from_navigation_url(url)
+    if not item_id:
         raise ValueError("URL does not look like Facebook Marketplace item URL.")
-    return f"https://www.facebook.com/marketplace/item/{match.group(1)}/"
+    return canonical_item_url(item_id)
 
 
 def prepare_listing_url(url: str) -> str:
@@ -296,21 +305,8 @@ def prepare_listing_url(url: str) -> str:
     return normalize_marketplace_url(url)
 
 
-def try_extract_item_id(*candidates: str) -> Optional[str]:
-    for text in candidates:
-        if not text:
-            continue
-        match = _ITEM_ID_RE.search(text)
-        if match:
-            return match.group(1)
-        match = re.search(r"/marketplace/item/(\d+)", text)
-        if match:
-            return match.group(1)
-    return None
-
-
 def extract_item_id(url: str) -> str:
-    item_id = try_extract_item_id(url)
+    item_id = item_id_from_navigation_url(url)
     if not item_id:
         raise ValueError("Cannot extract Marketplace item id.")
     return item_id
@@ -376,15 +372,6 @@ def parse_housing_type(text: str) -> str:
         if needle in lower:
             return label
     return ""
-
-
-def looks_like_login_wall(text: str) -> bool:
-    lower = (text or "").lower()
-    return (
-        "log into facebook" in lower
-        or "увійти" in lower and "password" in lower
-        or ("email or mobile number" in lower and "forgot password" in lower)
-    )
 
 
 def is_listing_page_content(text: str, item_id: str) -> bool:
@@ -674,6 +661,7 @@ def extract_listing_text_from_html(html: str, item_id: str) -> dict[str, str]:
     around occurrences of the target item id.
     """
     out: dict[str, str] = {}
+    html = sanitize_html(html)
     if not html:
         return out
 
@@ -815,19 +803,100 @@ def enrich_from_text(listing: ListingData, text: str) -> None:
         )
 
 
+def make_sanitized_scraping_strategy():
+    """crawl4ai scraping strategy that strips XML-illegal characters before lxml."""
+    from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
+
+    install_lxml_html_sanitizer()
+    return attach_html_sanitizer(LXMLWebScrapingStrategy)()
+
+
+def _crawler_run_config(*, strategy, share: bool):
+    from crawl4ai import CacheMode, CrawlerRunConfig
+
+    page_delay = float(os.getenv("FB_PAGE_DELAY_SEC", "4"))
+    if share:
+        # Client-side redirect from /share/{code}/ to /marketplace/item/{id}/.
+        page_delay = max(page_delay, 6.0)
+    run_kwargs: dict[str, Any] = {
+        "cache_mode": CacheMode.BYPASS,
+        "wait_until": "domcontentloaded",
+        "page_timeout": 90000,
+        "delay_before_return_html": page_delay,
+        "js_code": [MARKETPLACE_JS_EXTRACT],
+        "scraping_strategy": strategy,
+    }
+    if share:
+        # Path only: a login URL with the item id in ?next= must not count.
+        run_kwargs["wait_for"] = (
+            "js:() => /\\/marketplace\\/item\\/\\d+/.test(window.location.pathname)"
+        )
+        run_kwargs["wait_for_timeout"] = 35000
+    return CrawlerRunConfig(**run_kwargs)
+
+
+def _crawl_html(result) -> str:
+    return sanitize_html(getattr(result, "html", "") or "")
+
+
+def _result_markdown(result) -> str:
+    if not hasattr(result, "markdown"):
+        return ""
+    markdown_obj = result.markdown
+    if isinstance(markdown_obj, str):
+        return markdown_obj
+    if hasattr(markdown_obj, "raw_markdown"):
+        return markdown_obj.raw_markdown or ""
+    return ""
+
+
+async def _resolve_share_in_crawler(crawler, share_url: str, strategy) -> tuple[str, Any]:
+    """Follow a share link in the logged-in browser and return (canonical_url, result_or_none).
+
+    When the browser lands on the item card, `result` is that page and the caller
+    can parse it directly. When the share document only names the item (og:url)
+    or the card did not render, `result` is None and the caller must open the
+    canonical /marketplace/item/{id}/ URL.
+    """
+    try:
+        probe = await crawler.arun(
+            url=share_url,
+            config=_crawler_run_config(strategy=strategy, share=True),
+        )
+    except RuntimeError as exc:
+        if "Wait condition failed" not in str(exc):
+            raise
+        probe = None
+    if share_wait_failed(probe):
+        # Redirect never reached /marketplace/item/{id}/ in the location path.
+        # Load the page anyway so og:url can still name the listing, or so a
+        # feed/login landing becomes a session-expired error instead of a timeout.
+        probe = await crawler.arun(
+            url=share_url,
+            config=_crawler_run_config(strategy=strategy, share=False),
+        )
+    final_url = getattr(probe, "redirected_url", None) or getattr(probe, "url", None) or ""
+    html = _crawl_html(probe)
+    canonical = resolve_share_target(final_url, html)
+    item_id = item_id_from_navigation_url(canonical)
+    if item_id_from_navigation_url(final_url) == item_id and html_has_listing_card(html, item_id):
+        return canonical, probe
+    return canonical, None
+
+
 async def crawl_with_crawl4ai(url: str) -> ListingData:
-    from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+    from crawl4ai import AsyncWebCrawler, BrowserConfig
 
     share = is_share_url(url)
     listing = ListingData(source_url=url, backend="crawl4ai")
-    item_id = None if share else extract_item_id(url)
     listing.debug["share_url"] = share
 
     profile_path = get_profile_path()
     if not has_saved_session(profile_path):
         raise RuntimeError(
-            "AUTH_REQUIRED: No saved Facebook session. "
-            "Set FB_EMAIL/FB_PASSWORD in .env and run: python agent1b/login_fb.py"
+            session_expired_message(
+                "No saved Facebook session (c_user cookie missing)."
+            )
         )
 
     await human_delay()
@@ -838,30 +907,25 @@ async def crawl_with_crawl4ai(url: str) -> ListingData:
     listing.debug["proxy"] = bool(browser_kwargs.get("proxy_config"))
 
     browser_config = BrowserConfig(**browser_kwargs)
-    page_delay = float(os.getenv("FB_PAGE_DELAY_SEC", "4"))
-    # Share links need time for client-side redirect to /marketplace/item/{id}.
-    if share:
-        page_delay = max(page_delay, 6.0)
-    run_kwargs: dict[str, Any] = {
-        "cache_mode": CacheMode.BYPASS,
-        "wait_until": "domcontentloaded",
-        "page_timeout": 90000,
-        "delay_before_return_html": page_delay,
-        "js_code": [MARKETPLACE_JS_EXTRACT],
-    }
-    if share:
-        run_kwargs["wait_for"] = (
-            "js:() => /\\/marketplace\\/item\\/\\d+/.test(window.location.href)"
-        )
-        run_kwargs["wait_for_timeout"] = 45000
-    run_config = CrawlerRunConfig(**run_kwargs)
+    strategy = make_sanitized_scraping_strategy()
 
     async with profile_lock():
         await human_delay()
         async with AsyncWebCrawler(config=browser_config) as crawler:
-            result = await crawler.arun(url=url, config=run_config)
+            if share:
+                url, prefetched = await _resolve_share_in_crawler(crawler, url, strategy)
+                listing.debug["resolved_item_url"] = url
+            else:
+                prefetched = None
+            if prefetched is not None:
+                result = prefetched
+            else:
+                result = await crawler.arun(
+                    url=url,
+                    config=_crawler_run_config(strategy=strategy, share=False),
+                )
 
-    html = getattr(result, "html", "") or ""
+    html = _crawl_html(result)
     error_message = str(getattr(result, "error_message", "") or "")
     listing.debug["crawl_error"] = error_message[:500]
     redirected = getattr(result, "redirected_url", None) or ""
@@ -870,44 +934,31 @@ async def crawl_with_crawl4ai(url: str) -> ListingData:
 
     if "anti-bot" in error_message.lower() or ("<body" not in html.lower() and len(html) < 20000):
         raise RuntimeError(
-            "AUTH_REQUIRED: Facebook blocked crawler (anti-bot). "
-            "Check FB_EMAIL/FB_PASSWORD, FB_PROXY, set FB_HEADLESS=false."
+            session_expired_message(
+                "Facebook blocked the crawler (anti-bot) or returned an empty page."
+            )
         )
-    markdown = ""
-    if hasattr(result, "markdown"):
-        markdown_obj = result.markdown
-        if isinstance(markdown_obj, str):
-            markdown = markdown_obj
-        elif hasattr(markdown_obj, "raw_markdown"):
-            markdown = markdown_obj.raw_markdown or ""
+    markdown = _result_markdown(result)
 
     js_payload = parse_js_payload(getattr(result, "js_execution_result", None))
     if not js_payload:
         # Some crawl4ai versions put console / extracted content here.
         js_payload = parse_js_payload(getattr(result, "extracted_content", None))
 
-    item_id = item_id or try_extract_item_id(redirected, result_url, html, markdown)
-    if not item_id:
-        raise RuntimeError(
-            "WRONG_PAGE: share/link did not resolve to a Marketplace item. "
-            "Open the link in a browser — it must land on /marketplace/item/{id}/."
-        )
-    listing.source_url = f"https://www.facebook.com/marketplace/item/{item_id}/"
+    # Item id comes from the browser location, never from feed-card links in HTML.
+    landed = redirected or result_url or url
+    listing.source_url = assert_crawled_item_page(url, landed, html)
+    item_id = extract_item_id(listing.source_url)
 
-    combined_guard = "\n".join(
-        [
-            markdown,
-            html[:20000],
-            json.dumps(js_payload, ensure_ascii=False),
-        ]
-    )
-    if looks_like_login_wall(combined_guard):
-        raise RuntimeError("AUTH_REQUIRED: Facebook returned login wall. Use logged-in browser profile.")
-
-    if not is_listing_page_content(combined_guard, item_id) and not js_payload.get("title"):
+    if (
+        not html_has_listing_card(html, item_id)
+        and not (js_payload.get("title") or "").strip()
+        and not is_listing_page_content(html[:150000], item_id)
+    ):
         raise RuntimeError(
-            "WRONG_PAGE: got Marketplace feed/browse instead of item card. "
-            "Need authenticated profile or open exact item URL while logged in."
+            session_expired_message(
+                "The item URL opened a Marketplace feed shell instead of the listing card."
+            )
         )
 
     listing.debug["crawl4ai_success"] = getattr(result, "success", None)
@@ -1207,12 +1258,7 @@ def main() -> int:
             listing = crawl_with_scrapegraph(crawl_url)
     except RuntimeError as e:
         print(str(e), file=sys.stderr)
-        code = 2 if str(e).startswith("AUTH_REQUIRED") else 1
-        if str(e).startswith("NO_PHOTOS"):
-            code = 3
-        if str(e).startswith("WRONG_PAGE"):
-            code = 4
-        return code
+        return exit_code_for_parser_error(str(e))
     except Exception as e:
         print(f"PARSER_FAILED: {e}", file=sys.stderr)
         return 1
