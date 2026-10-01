@@ -304,16 +304,19 @@ async def main() -> None:
 
         hint = {
             2: (
-                "Нужен логин FB / anti-bot.\n"
-                "1) `source .venv311/bin/activate`\n"
-                "2) `python agent1b/login_fb.py` — войти в Facebook\n"
-                "3) В `.env` поставить `FB_HEADLESS=false`\n"
-                "4) Отправить ссылку снова"
+                "Сессия Facebook истекла или нет логина: открылась лента, а не карточка.\n"
+                "Обнови cookies (не коммить .env / .fb_profile / fb_storage_state.json):\n"
+                "1) sudo systemctl stop openhome-agent1\n"
+                "2) На компьютере: python agent1b/login_fb.py && python agent1b/export_fb_state.py\n"
+                "3) На VPS: python agent1b/import_fb_state.py\n"
+                "4) cd /opt/openhome/app && git pull && sudo systemctl start openhome-agent1\n"
+                "Подробно: README fb_parser, раздел Refresh Facebook login on the server."
             ),
             3: "Карточка без фото галереи (или все превью отфильтрованы).",
             4: (
-                "FB открыл ленту вместо карточки или заблокировал бота.\n"
-                "Запусти `python agent1b/login_fb.py`, войди в аккаунт, затем повтори."
+                "Браузер открыл не карточку объявления.\n"
+                "Если это лента Marketplace — сессия FB протухла, смотри подсказку для code 2 "
+                "и README (Refresh Facebook login on the server)."
             ),
         }.get(code, "")
         safe_output = (output or "Unknown parser error")[:900]

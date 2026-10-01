@@ -147,6 +147,14 @@ class FbHandoffEnvTest(unittest.TestCase):
     def test_required_modules_include_openhome_shared(self):
         self.assertIn("openhome_shared", fb_handoff._required_fb_modules("crawl4ai"))
 
+    def test_auth_hint_explains_how_to_refresh_the_server_session(self):
+        hint = fb_handoff._FB_ERROR_HINTS[2]
+        self.assertIn("openhome-agent1", hint)
+        self.assertIn("import_fb_state.py", hint)
+        self.assertIn("login_fb.py", hint)
+        self.assertIn("git pull", hint)
+        self.assertIn("README", hint)
+
 
 if __name__ == "__main__":
     unittest.main()
