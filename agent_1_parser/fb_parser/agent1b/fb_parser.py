@@ -34,10 +34,29 @@ from agent1b.fb_page import (
     install_lxml_html_sanitizer,
     item_id_from_navigation_url,
     looks_like_login_wall,
+    page_is_login_wall,
+    public_facebook_url,
     resolve_share_target,
     sanitize_html,
     session_expired_message,
     share_wait_failed,
+)
+from agent1b.fb_post import (  # noqa: F401  (re-exported for tests and callers)
+    POST_PAGE_JS,
+    POST_SHARE_WAIT_JS,
+    _looks_like_facebook_post_url,
+    apply_post_listing,
+    apply_swiped_gallery,
+    canonicalize_facebook_post_url,
+    extract_injected_post_gallery,
+    extract_post_images_from_html,
+    extract_post_text_from_html,
+    facebook_pcb_photo_url,
+    facebook_post_anchor,
+    fallback_post_image_urls,
+    is_post_share_url,
+    merge_gallery_swipe,
+    resolve_share_redirect,
 )
 from agent1b.fb_session import (
     build_browser_kwargs,
@@ -299,9 +318,14 @@ def normalize_marketplace_url(url: str) -> str:
 
 
 def prepare_listing_url(url: str) -> str:
-    """Accept Marketplace item or /share/ short link; return crawl-ready www URL."""
+    """Accept Marketplace item, /share/ item link, or /share/p/ post; return crawl URL.
+
+    HTTP 302 is followed when Facebook publishes one (item card or page post).
+    /share/p/ that does not redirect stays a post URL for the post crawler.
+    """
     if is_share_url(url):
-        return normalize_share_url(url)
+        cleaned = normalize_share_url(url)
+        return resolve_share_redirect(cleaned)
     return normalize_marketplace_url(url)
 
 
@@ -835,6 +859,37 @@ def _crawler_run_config(*, strategy, share: bool):
     return CrawlerRunConfig(**run_kwargs)
 
 
+def _post_page_config(strategy, *, wait: bool):
+    from crawl4ai import CacheMode, CrawlerRunConfig
+
+    page_delay = max(float(os.getenv("FB_PAGE_DELAY_SEC", "4")), 8.0)
+    run_kwargs: dict[str, Any] = {
+        "cache_mode": CacheMode.BYPASS,
+        "wait_until": "domcontentloaded",
+        "page_timeout": 120000,
+        "delay_before_return_html": page_delay,
+        "js_code": [POST_PAGE_JS],
+        "scraping_strategy": strategy,
+    }
+    if wait:
+        run_kwargs["wait_for"] = POST_SHARE_WAIT_JS
+        run_kwargs["wait_for_timeout"] = 25000
+    return CrawlerRunConfig(**run_kwargs)
+
+
+async def _fetch_post_page(crawler, url: str, strategy):
+    """Open a post share. A failed wait still returns the rendered HTML."""
+    try:
+        probe = await crawler.arun(url=url, config=_post_page_config(strategy, wait=True))
+    except RuntimeError as exc:
+        if "Wait condition failed" not in str(exc):
+            raise
+        probe = None
+    if share_wait_failed(probe) or not _crawl_html(probe):
+        probe = await crawler.arun(url=url, config=_post_page_config(strategy, wait=False))
+    return probe
+
+
 def _crawl_html(result) -> str:
     return sanitize_html(getattr(result, "html", "") or "")
 
@@ -888,8 +943,10 @@ async def crawl_with_crawl4ai(url: str) -> ListingData:
     from crawl4ai import AsyncWebCrawler, BrowserConfig
 
     share = is_share_url(url)
+    post_mode = is_post_share_url(url) or _looks_like_facebook_post_url(url)
     listing = ListingData(source_url=url, backend="crawl4ai")
     listing.debug["share_url"] = share
+    listing.debug["post_share"] = post_mode
 
     profile_path = get_profile_path()
     if not has_saved_session(profile_path):
@@ -912,7 +969,10 @@ async def crawl_with_crawl4ai(url: str) -> ListingData:
     async with profile_lock():
         await human_delay()
         async with AsyncWebCrawler(config=browser_config) as crawler:
-            if share:
+            if post_mode:
+                result = await _fetch_post_page(crawler, url, strategy)
+                prefetched = result
+            elif share:
                 url, prefetched = await _resolve_share_in_crawler(crawler, url, strategy)
                 listing.debug["resolved_item_url"] = url
             else:
@@ -945,8 +1005,36 @@ async def crawl_with_crawl4ai(url: str) -> ListingData:
         # Some crawl4ai versions put console / extracted content here.
         js_payload = parse_js_payload(getattr(result, "extracted_content", None))
 
-    # Item id comes from the browser location, never from feed-card links in HTML.
     landed = redirected or result_url or url
+    if post_mode or is_post_share_url(landed) or _looks_like_facebook_post_url(landed):
+        if page_is_login_wall(html):
+            raise RuntimeError(
+                session_expired_message(
+                    "Facebook showed a login wall instead of the post "
+                    f"({public_facebook_url(landed)})."
+                )
+            )
+        filled = apply_post_listing(
+            listing,
+            html=html,
+            js_payload=js_payload,
+            result=result,
+            fallback_url=landed or url,
+        )
+        # Swipe is best when the post has a viewer. Zero or one frame keeps
+        # attachment / og:image / <img> URLs already on the listing.
+        await merge_gallery_swipe(
+            filled,
+            filled.source_url or landed or url,
+            prefer_swipe=True,
+        )
+        if not filled.image_urls:
+            raise RuntimeError(
+                "NO_PHOTOS: Facebook post opened, but gallery swipe found no photos."
+            )
+        return filled
+
+    # Item id comes from the browser location, never from feed-card links in HTML.
     listing.source_url = assert_crawled_item_page(url, landed, html)
     item_id = extract_item_id(listing.source_url)
 
@@ -1303,7 +1391,8 @@ def main() -> int:
     canonical_url = listing.source_url
     print(f"OK: {session_dir}")
     print(f"photos: {len(saved_photos)}")
-    print(f"SOURCE: Facebook Marketplace {canonical_url}")
+    label = "post" if listing.source_type == "facebook_post" else "Marketplace"
+    print(f"SOURCE: Facebook {label} {canonical_url}")
     return 0
 
 
